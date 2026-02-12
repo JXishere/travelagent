@@ -7,15 +7,21 @@
 
 ### What We're Building
 A WhatsApp-based travel intelligence service that delivers:
-1. **Pre-trip** (80% focus): Conversational profile learning → personalized tiered dossier
-2. **On-trip** (20% focus): Weather-aware replanning + basic context adaptation
-3. **Post-trip**: Feedback loop for knowledge validation
+1. **Pre-trip** (40% focus): Conversational profile learning → strategic decisions + 3-5 anchor spots
+2. **On-trip** (50% focus): Day-by-day conversational guidance (PRIMARY value delivery)
+3. **Post-trip** (10% focus): Feedback loop for knowledge validation
+
+**The Message**: "Don't over-plan. I'll guide you when you're there."
+
+**The Model**: We're not an itinerary generator. We're a guide who walks with you.
 
 ### What Success Looks Like
 - 100-200 spots with operational depth for one city
 - Contribution flow easy enough to use daily
-- Dossier quality noticeably better than Google/Layla
-- 70%+ of test travelers would pay for this
+- Strategic decisions prove depth without overwhelming
+- On-trip engagement: Travelers actively text us for guidance (not just read pre-trip info)
+- 70%+ feel "guided throughout trip" (not just given info upfront)
+- 50%+ would pay for this
 - Knowledge stays fresh through feedback loop
 
 ---
@@ -51,8 +57,9 @@ A WhatsApp-based travel intelligence service that delivers:
 │  1. Contribution Flow           │
 │  2. Query Flow                  │
 │  3. Profile Learning Flow       │
-│  4. Dossier Generation Flow     │
-│  5. On-Trip Adaptation Flow     │
+│  4. Strategic Decisions Flow    │
+│  5. On-Trip Guidance Flow       │
+│  6. Feedback Loop Flow          │
 └──────┬──────────────────────────┘
        │
        ↓
@@ -238,11 +245,12 @@ Bot → Sends to user with correct pins, tips
 
 ---
 
-### **Week 3-4: Profile Learning + Dossier Generation**
+### **Week 3-4: Profile Learning + Strategic Decisions Generation**
 
 #### Goals
 - Build conversational profile learning (infer preferences)
-- Generate personalized tiered dossier from knowledge graph
+- Generate strategic decisions message (where to stay, what to book, 3-5 anchor spots)
+- Build Process Plan + Agreement Plan messaging templates
 - Expand knowledge graph to 50-100 spots via 10-20 friends
 
 #### Deliverables
@@ -280,7 +288,7 @@ Bot → "Got it. Let me put together your Bangkok guide..."
 - [ ] Save profile to database
 - [ ] Handle edge cases (group travel, returning visitors)
 
-**Day 18-21: Dossier Generation**
+**Day 18-21: Strategic Decisions Generation**
 
 **Algorithm**:
 1. Load traveler profile
@@ -288,15 +296,17 @@ Bot → "Got it. Let me put together your Bangkok guide..."
    - City = their city
    - Category matches interests
    - Budget tier matches budget level
-   - Indoor/outdoor based on trip dates (weather)
-3. Organize by tier (must/should/nice-to-have)
-4. Within each tier, organize by: meal type, neighborhood, activity type
-5. Format as text-based dossier with rich operational details
+3. Generate strategic decisions:
+   - WHERE TO STAY: Best neighborhood + specific hotel/area recommendation with full reasoning
+   - WHAT TO BOOK AHEAD: 2-3 spots that fill up (with timing + reservation guidance)
+   - ANCHOR SPOTS (3-5 only): Essential experiences with full operational intel
+   - WHAT TO EXPECT: Weather, logistics, cultural context, what to prepare
+4. End with clear message: "Everything else? I'll guide you when you're there."
 
-**Dossier Template**:
+**Strategic Decisions Template**:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BANGKOK - YOUR PERSONAL GUIDE
+BANGKOK - YOUR TRIP GUIDE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Based on your profile:
@@ -306,70 +316,149 @@ Based on your profile:
 • Budget: Moderate
 • Pace: Not rushed, not slow
 
-━━━ TIER 1: CAN'T MISS ━━━
+━━━ 📍 WHERE TO STAY ━━━
 
-🍜 Jay Fai - The Michelin Street Food Legend
-   📍 Correct pin: [link] (Google Maps shows wrong location!)
-   💰 $$$ (~800-1200 THB per person)
+Stay in Sukhumvit (Soi 11-15 area)
+
+Book [Hotel X] - here's why:
+• Walking distance to BTS Nana station (5 min)
+• Surrounded by best street food Bangkok has to offer
+• Rooftop bar is where locals actually go (not touristy)
+• Quiet at night despite central location
+• $$$ (~$80-120/night)
+
+Don't stay in Riverside - you'll waste half your trip in taxis.
+Don't stay near Khao San - too backpacker-heavy for your vibe.
+
+━━━ 🍽️ WHAT TO BOOK AHEAD ━━━
+
+These fill up 1-2 weeks out. Book NOW:
+
+1. Jay Fai (Michelin street food)
+   • Book: 2 weeks ahead via [phone/website]
+   • Best for: Dinner Day 2 or 3
+   • Budget: ~800-1200 THB per person
+
+2. Paste (Modern Thai fine dining)
+   • Book: 1 week ahead via website
+   • Best for: Day 3 dinner
+   • Budget: ~1500-2000 THB per person
+
+Everything else is walk-in friendly. I'll guide you day-by-day.
+
+━━━ 🎯 YOUR ANCHOR SPOTS ━━━
+
+These 3 spots are essential for Bangkok:
+
+1. 🍜 Jay Fai - The Michelin Street Food Legend
+   📍 Correct pin: [link] (Google Maps wrong by 200m!)
    🕐 9am-2pm daily (closed Sundays)
    💳 Cash only - ATM 50m away on Maha Chai Rd
-   🎯 Order: Crab omelet (signature, 30min wait, absolutely worth it)
-   ⚠️  Tip: Go at 9am opening or after 1pm to avoid peak crowds
-   🌦  Indoor seating (safe if raining)
+   🎯 Order: Crab omelet (signature, 30min wait, worth it)
+   ⚠️ Go at 9am opening or after 1pm to avoid peak
+   🌦 Indoor seating (rain-safe)
 
-[4-5 more Tier 1 spots with same depth]
+2. 🛕 Wat Pho + Thai Massage
+   📍 Pin: [link] - enter through main gate, not tourist trap side entrance
+   🕐 8am-6:30pm, go before 10am to beat crowds
+   💳 100 THB entrance + 300 THB for 1hr massage (cash)
+   🎯 After seeing temple, massage school in back (not touristy, locals use it)
+   ⚠️ Dress code: shoulders + knees covered
+   🌦 Indoor/covered walkways
 
-━━━ TIER 2: SHOULD DO ━━━
+3. 🍛 Or Tor Kor Market
+   📍 Pin: [link] - take BTS to Saphan Kwai, 5min walk
+   🕐 Best: 8am-11am (fresh produce, breakfast stalls)
+   💳 Cash only, most stalls ~50-150 THB
+   🎯 Stall #47 (khao man gai), Stall #89 (mango sticky rice)
+   ⚠️ This is where Bangkok locals shop, not Chatuchak (tourist trap)
+   🌦 Covered market (rain-safe)
 
-🍳 BREAKFAST (organized by area)
-• [3-4 spots with operational intel]
+━━━ 💡 WHAT TO EXPECT ━━━
 
-🍛 LUNCH & DINNER
-• [5-6 spots organized by neighborhood]
+🌦 Weather in March:
+• Hot + humid (32-35°C daily)
+• Occasional afternoon rain (15-30 min bursts)
+• Pack: Light clothes, sunscreen, small umbrella
 
-🏛 ACTIVITIES & CULTURE
-• [3-4 spots with timing/weather notes]
+💰 Money:
+• Keep 2000-3000 THB cash on hand
+• Most street food = cash only
+• 7-Eleven ATMs everywhere (220 THB fee)
 
-━━━ TIER 3: GOOD TO KNOW ━━━
+🚕 Getting Around:
+• Grab is cheap + reliable (50-150 THB most rides)
+• BTS Skytrain for longer distances
+• Don't use tuk-tuks near tourist spots (overpriced)
 
-🔄 WEATHER BACKUPS (if it rains)
-• [Indoor options]
+🍽️ Food Safety:
+• Street food is safe (actually safer than some restaurants)
+• Follow the crowds - busy stall = fresh food
+• Avoid pre-cut fruit sitting out
 
-🕐 TIME FILLERS (got 2 hours to kill?)
-• [Quick activities by area]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💎 HIDDEN GEMS (off the beaten path)
-• [Local favorites, less touristy]
+That's it for now.
 
-━━━ SUGGESTED FLOW ━━━
+Don't over-plan the rest.
 
-Day 1 (Mar 15): Chinatown Immersion
-Morning: Arrive, settle in, breakfast at [spot]
-Afternoon: Walk Yaowarat Road, Wat Traimit
-Evening: Dinner at Jay Fai or [backup]
+When you land, text me:
+"I'm checked in" → I'll send you to your first spot
+"I'm hungry in [area]" → I'll build your meal
+"What should I do today?" → I'll guide you
 
-Day 2: Riverside & Temples
-[Suggested flow based on knowledge graph]
+Everything else? I'll build your days with you in real-time.
 
-Day 3-4: [Continue...]
-
-━━━ IMPORTANT NOTES ━━━
-
-🌦 Weather: March is hot (35°C), occasional rain
-💰 Cash: Keep 2000-3000 THB on hand
-🚕 Getting around: Grab is cheap and reliable
-📱 Let me know on-trip if you need adjustments!
+See you in Bangkok 🇹🇭
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
 **Implementation**:
-- [ ] Dossier generation logic (filter + organize spots)
-- [ ] Text formatter (clean, scannable, rich details)
-- [ ] Send as WhatsApp message (might be multiple messages if long)
-- [ ] Include map pins as separate messages
+- [ ] Strategic decisions generation logic (smart filtering + prioritization)
+- [ ] Text formatter (clean, actionable, proves depth without overwhelming)
+- [ ] Process Plan messaging template
+- [ ] Agreement Plan messaging template
+- [ ] Send as WhatsApp message (single cohesive message, map pins follow)
 
-**Day 22-28: Knowledge Graph Expansion**
+**Day 22-24: Process Plan + Agreement Plan Templates**
+
+**Process Plan Message** (sent before profile learning):
+```
+Hey! I'm here to guide you through your trip.
+
+Here's how this works:
+
+1️⃣ Tell me your trip (where, when, who)
+2️⃣ I'll ask a few questions about your style
+3️⃣ I'll give you strategic decisions (where to stay, what to book ahead)
+4️⃣ When you land, text me - I'll guide you day-by-day
+5️⃣ After your trip, tell me how spots were (keeps knowledge fresh)
+
+You don't need to plan everything now. I've got you from start to finish.
+```
+
+**Agreement Plan Message** (sent with strategic decisions):
+```
+━━━ WHAT YOU CAN COUNT ON ━━━
+
+✅ I'm available 24/7 while you travel
+   Text anytime during your trip, response in minutes
+
+✅ If you don't like a spot, I'll fix it immediately
+   No questions asked - your trip, your call
+
+✅ No rigid schedules, zero pressure
+   Use what works, ignore what doesn't
+
+✅ Knowledge stays fresh
+   Every spot verified within last 3 months
+
+✅ Your data is private
+   Conversations never shared, no spam
+```
+
+**Day 25-28: Knowledge Graph Expansion**
 - [ ] Recruit 10-20 travel-loving friends
 - [ ] Each contributes 3-5 spots for cities they know
 - [ ] Founders manually verify quality
@@ -377,24 +466,112 @@ Day 3-4: [Continue...]
 
 **Week 3-4 Success Criteria**:
 - ✅ Profile learning feels natural (not interrogation)
-- ✅ Dossier has 20-40 curated spots with operational depth
-- ✅ Organized clearly (tier + type + neighborhood)
+- ✅ Strategic decisions prove depth (3-5 spots with full operational intel)
+- ✅ Messaging is clear: "Don't over-plan, I'll guide you when you're there"
+- ✅ Process Plan + Agreement Plan build trust without overwhelming
 - ✅ Knowledge quality noticeably better than what Google/Layla would give
 - ✅ 50-100 spots in knowledge graph from multiple contributors
 
 ---
 
-### **Week 5-6: On-Trip Adaptation + Feedback Loop**
+### **Week 5-6: On-Trip Conversational Guidance + Feedback Loop**
 
 #### Goals
-- Add weather awareness (context-aware recommendations)
-- Simple replanning based on user state (tired, nearby, etc)
+- Build "I'm hungry" → recommend next spot flow (PRIMARY on-trip value)
+- Add weather awareness + real-time adaptation
+- 24/7 availability pattern (<5 min response time)
 - Post-trip feedback collection
 - Polish for external testing
 
 #### Deliverables
 
-**Day 29-31: Weather Integration**
+**Day 29-31: On-Trip Conversational Guidance (Core Feature)**
+
+This is the PRIMARY on-trip value delivery. Build conversational flows for:
+
+**Flow 1: "I'm hungry" → Build the meal**
+```
+User → "I'm hungry"
+Bot → Detects context:
+      - Current location (ask or infer from previous messages)
+      - Time of day (breakfast, lunch, dinner, late night)
+      - Previous preferences (what they've liked so far)
+      - Weather (raining? outdoor/indoor)
+
+Bot → Queries knowledge graph:
+      WHERE city = Bangkok
+      AND category = [detected meal type]
+      AND neighborhood = [near user]
+      AND (weather conditions match)
+      ORDER BY tier ASC, user_preference_match DESC
+      LIMIT 3
+
+Bot → "You're in Sukhumvit, it's lunch time. Here are 3 great options nearby:
+
+      1. [Spot A] - 5 min walk
+         [Full operational intel: what to order, payment, tips]
+
+      2. [Spot B] - 10 min walk (more local vibe)
+         [Full operational intel]
+
+      3. [Spot C] - 7 min Grab ride (if you want something special)
+         [Full operational intel]
+
+      Which vibe feels right?"
+
+User → "Let's do Spot A"
+Bot → Sends correct pin, specific directions
+Bot → "Perfect. Text me after - curious how it is!"
+```
+
+**Flow 2: "What should I do today?" → Build the day**
+```
+User → "What should we do today?"
+Bot → "What's your energy level? Packed day or chill vibe?"
+User → "Chill, we're tired from yesterday"
+
+Bot → Builds loose structure:
+      "Cool, here's a chill day:
+
+      Morning (9-11am):
+      Start with breakfast at [Spot A] - easy walk from hotel
+      Then walk through [Neighborhood], end up at [Temple/Market]
+
+      Midday (12-2pm):
+      Lunch at [Spot B] - you'll be nearby
+      Then chill at [Cafe with AC] if you need a break
+
+      Afternoon (3-6pm):
+      Your call - want suggestions or just wing it?
+
+      Evening:
+      You have dinner booked at [Restaurant] at 7pm
+
+      Text me when you're hungry or want to adjust!"
+```
+
+**Flow 3: "I'm near X, what's worth seeing?"**
+```
+User → "We're near Wat Pho, what else is around here?"
+Bot → Filters by location + interests:
+      "Great area! Here's what's within walking distance:
+
+      🍜 [Food spot] - 3 min walk
+      🛕 [Temple] - 5 min walk (less crowded than Wat Pho)
+      🛥️ [River ferry] - 7 min walk (scenic ride to Chinatown)
+
+      What sounds good?"
+```
+
+**Implementation**:
+- [ ] Intent detection (hungry, what to do, where am I, etc)
+- [ ] Context extraction (location, time, energy level, weather)
+- [ ] Query builder (dynamic filters based on context)
+- [ ] Response formatter (conversational, actionable, not overwhelming)
+- [ ] Conversation memory (remember what they've done, what they liked)
+- [ ] Quick response time optimization (<5 min target)
+
+**Day 32-34: Weather Integration**
 
 ```
 User (on-trip) → "It's raining, what should we do?"
@@ -469,8 +646,11 @@ User → "Go early, the line gets crazy"
 - [ ] Test all flows end-to-end
 
 **Week 5-6 Success Criteria**:
-- ✅ Weather-aware recommendations work
-- ✅ Simple replanning feels useful (not gimmicky)
+- ✅ "I'm hungry" flow feels natural and helpful (not robotic)
+- ✅ "Build the day" guidance feels like a friend, not a search engine
+- ✅ Response time <5 minutes during testing
+- ✅ Weather-aware recommendations work seamlessly
+- ✅ Context memory works (remembers what they've done/liked)
 - ✅ Feedback loop captures quality + freshness
 - ✅ System handles edge cases gracefully
 - ✅ Ready for external testing
@@ -485,26 +665,31 @@ User → "Go early, the line gets crazy"
 - Cities where we have knowledge graph coverage
 
 ### What We Give Them
-1. **Pre-trip**: Conversational profile learning → personalized dossier
-2. **On-trip**: "Text me if you need help adjusting the plan"
+1. **Pre-trip**: Conversational profile learning → strategic decisions + anchor spots
+2. **On-trip**: Active day-by-day conversational guidance (THIS IS THE MAIN TEST)
 3. **Post-trip**: "How was it?" feedback collection
 
 ### What We Measure
 
 | Metric | Target | What It Tells Us |
 |--------|--------|------------------|
-| Dossier quality | 70%+ say "noticeably better than Google/Layla" | Is quality differentiated enough? |
-| On-trip engagement | 50%+ text during trip | Is on-trip value real or just nice-to-have? |
+| Strategic decisions quality | 70%+ say "proves depth without overwhelming" | Does pre-trip format work? |
+| On-trip engagement | 70%+ actively text during trip (not just read pre-trip) | Is on-trip guidance the real value? |
+| Messages per trip | 10+ messages per traveler during trip | Are they relying on us or just referencing? |
+| Guided feeling | 70%+ say "felt guided throughout trip" | Does "guide model" deliver on promise? |
 | Follow-through | 60%+ visited recommended spots | Do they trust our recommendations? |
-| Willingness to pay | 50%+ would pay ~$7 for this | Is this valuable enough to monetize? |
+| Willingness to pay | 50%+ would pay $50-100 for this | Is this valuable enough to monetize? |
 | Contribution willingness | 30%+ share spots back | Does post-trip contribution loop work? |
 
 ### What We Learn
-- Which knowledge depth matters most? (payment methods? ordering tips? vibe?)
-- What's missing from the dossier?
-- When do travelers engage on-trip? (weather changes? need help? or proactive check-ins?)
-- What kills the experience? (wrong info? overwhelming? confusing?)
+- Which knowledge depth matters most? (payment methods? ordering tips? vibe? directions?)
+- Does "strategic decisions only" feel valuable or do they want more upfront?
+- When do travelers text us? (hungry? lost? weather change? daily check-in?)
+- Do they prefer conversational guidance or comprehensive planning?
+- Does on-trip guidance feel like a friend or a search engine?
+- What kills the experience? (wrong info? slow response? overwhelming? confusing?)
 - Would they use this again for next trip?
+- Do Process Plan + Agreement Plan build trust effectively?
 
 ---
 
@@ -560,7 +745,9 @@ OPENWEATHER_API_KEY=...
 │   │   ├── contribution.js     # Contribution flow logic
 │   │   ├── query.js            # Query flow logic
 │   │   ├── profile.js          # Profile learning logic
-│   │   └── dossier.js          # Dossier generation logic
+│   │   ├── strategic.js        # Strategic decisions generation logic
+│   │   ├── ontrip.js           # On-trip conversational guidance logic
+│   │   └── feedback.js         # Feedback loop logic
 │   ├── /services
 │   │   ├── whatsapp.js         # WhatsApp API wrapper
 │   │   ├── database.js         # Supabase queries
@@ -570,7 +757,9 @@ OPENWEATHER_API_KEY=...
 │   ├── /prompts
 │   │   ├── extraction.txt      # Prompt for data extraction
 │   │   ├── profile.txt         # Prompt for profile learning
-│   │   └── dossier.txt         # Prompt for dossier formatting
+│   │   ├── strategic.txt       # Prompt for strategic decisions generation
+│   │   ├── ontrip.txt          # Prompt for on-trip guidance
+│   │   └── process_agreement.txt # Process Plan + Agreement Plan templates
 │   └── /utils
 │       ├── formatting.js       # Text formatting helpers
 │       └── distance.js         # Geographic distance calc
@@ -638,11 +827,15 @@ OPENWEATHER_API_KEY=...
 **By end of Week 10, we should know**:
 1. Can we build a knowledge graph with real operational depth via contributions?
 2. Is the quality noticeably better than Google/Layla?
-3. Do travelers engage pre-trip AND on-trip?
-4. Would they pay for this?
-5. What's the next most important thing to build?
+3. Does "guide model" (strategic decisions + on-trip guidance) deliver more value than "itinerary model" (comprehensive dossier)?
+4. Do travelers actively engage on-trip (10+ messages) or just read pre-trip info?
+5. Do Process Plan + Agreement Plan build trust effectively?
+6. Would they pay $50-100 for this?
+7. What's the next most important thing to build?
 
-**If we can answer YES to #1-4, we have product-market fit for MVP. Then we scale.**
+**If we can answer YES to #1-4 and #6, we have product-market fit for MVP. Then we scale.**
+
+**The key question**: Does "guide who walks with you" beat "map you execute alone"?
 
 ---
 

@@ -73,76 +73,165 @@ We will NOT try to cover every city. We will be exceptional in a few. 300 verifi
 - No memory between trips
 - Optimized for booking commissions
 
-**Our approach** (Living Plan):
-- **Pre-trip**: Create adaptable framework based on who you are
+**Our approach** (Guide Model):
+- **Pre-trip**: Strategic decisions only
   - Learn preferences through conversation (not questionnaire)
-  - Generate tiered dossier (not rigid schedule)
-  - Personalized but flexible
+  - Where to stay, what to book ahead, what to expect
+  - 3-5 anchor spots with full operational intel
+  - Message: "Don't over-plan, I'll guide you when you're there"
 
-- **On-trip**: Plan adapts in real-time
-  - Weather changes → swap outdoor for indoor options
-  - You're exhausted → suggest something nearby and chill
+- **On-trip**: PRIMARY value delivery
+  - Build your days through conversation ("I'm hungry" → "Here's your next spot")
+  - Weather changes → swap outdoor for indoor options instantly
+  - You're exhausted → filter nearby + chill options
   - You loved hawker food → find more similar spots
-  - Behavioral learning → gets smarter about your taste
+  - Real-time adaptation based on what's actually happening
+  - Available 24/7 - text anytime, we're here
 
 - **Post-trip**: Close the validation loop
   - "How was that spot?" → captures freshness
   - "What did you discover?" → adds new knowledge
   - Travelers become contributors naturally
 
-**The insight**: This is what a real human travel expert would do. Framework upfront, adapt based on reality.
+**The insight**: This is what a real human travel expert would do. They don't send you a research document. They walk with you and guide you day-by-day.
 
-### The Tiered Dossier Format
+**Map vs Guide**:
+- Mindtrip/Layla give you a MAP (comprehensive itinerary to execute alone)
+- We ARE your GUIDE (walk with you, adapt in real-time, fix problems immediately)
 
-Instead of a rigid itinerary, we deliver a **personalized intelligence dossier**:
+### Strategic Decisions + Anchor Spots
 
-**Structure**:
+We don't give you a comprehensive itinerary. We give you **strategic decisions** and **just enough** to get started.
+
+**Pre-trip, you get**:
 ```
-BANGKOK - Your Personal Guide
+📍 WHERE TO STAY
+Book [Hotel/Neighborhood] - here's exactly why with full operational intel
 
-━━━ TIER 1: CAN'T MISS ━━━
-(3-5 spots you absolutely shouldn't skip)
-• Each with full operational intelligence
-• Why it matters, when to go, what to order, pro tips
+🍽️ WHAT TO BOOK AHEAD
+2-3 spots that fill up (with reservation links + timing guidance)
 
-━━━ TIER 2: SHOULD DO ━━━
-(10-15 spots organized by type + neighborhood)
-• Breakfast | Lunch/Dinner | Activities | Evening
-• Filtered for your preferences and trip length
+🎯 YOUR ANCHOR SPOTS (3-5 only)
+The essential experiences with full operational intelligence:
+• Why it matters, when to go, what to order, how to find it, pro tips
 
-━━━ TIER 3: GOOD TO KNOW ━━━
-(20+ backup spots and hidden gems)
-• "If you're in the area" options
-• Weather backups
-• Time-of-day alternatives
+💡 WHAT TO EXPECT
+Context on weather, pace, logistics, cultural notes, what to prepare
 
-━━━ SUGGESTED FLOW ━━━
-Day 1: Chinatown immersion
-Day 2: Riverside & temples
-Day 3: Modern Bangkok
-Day 4: Revisit favorites
+━━━━━━━━━━━━━━━━━━
+Everything else?
+Don't over-plan. I'll guide you when you're there.
+```
 
-(But we'll adapt this on-trip based on reality)
+**Example pre-trip message**:
+```
+📍 Stay in Sukhumvit (Soi 11-15 area)
+Book [Hotel X]. Why: Walking distance to BTS, surrounded by best
+street food, rooftop bar is where locals go. Don't stay Riverside -
+you'll waste half your trip in traffic.
+
+🍽️ Book These Now:
+• [Jay Fai] - Michelin street food, books 2 weeks out
+• [Paste] - Modern Thai, reserve for Day 3 dinner
+
+🎯 First Stop When You Land:
+Text me when checked in. I'm sending you to [Spot A] for lunch.
+It'll orient you to Bangkok street food properly.
+
+💡 Bangkok in June: Hot + humid. Pace yourself. Most places cash only.
+Grab is your friend. Don't trust Google Maps for small sois.
+
+Everything else? I'll build your days with you in real-time.
 ```
 
 **Why this works**:
-- Substantial enough to feel valuable
-- Flexible enough to adapt
-- Shows knowledge depth (the differentiation)
-- Works in WhatsApp (text + links)
-- Prioritization is clear
+- Removes decision paralysis (clear actions to take now)
+- Proves depth without overwhelming (3-5 spots with full intel)
+- Permission to relax (don't stress about planning)
+- Forces on-trip engagement (can't screenshot and leave)
+- Intelligence stays in the system (can't be copied)
+
+### The Process Plan: How This Works
+
+**StoryBrand principle**: Clear process removes confusion. Here's the exact journey:
+
+**Step 1: Tell Us Your Trip**
+- Where, when, who you're with
+- Quick conversation (5-10 questions, feels natural)
+- We learn your style: pace, budget, dietary needs, interests
+
+**Step 2: Strategic Decisions (Pre-Trip)**
+- Where to stay (with full reasoning + operational intel)
+- What to book ahead (restaurants that fill up, experiences that sell out)
+- 3-5 anchor spots (your essential experiences with complete guidance)
+- What to expect (weather, logistics, cultural context)
+
+**Step 3: Text When You Land (On-Trip Begins)**
+- "I'm checked in" → We send your first spot
+- "I'm hungry" → We build your next meal based on where you are, time, vibe
+- "It's raining" → We swap to covered/indoor options
+- "We're exhausted" → We find something close and chill
+
+**Step 4: We Build Your Days Together**
+- No rigid itinerary - loose structure, responsive to reality
+- "Start here for breakfast, walk through this neighborhood, you'll end up near X for lunch"
+- Real-time adaptation based on weather, energy, what you loved
+- Text us anytime - we're always here
+
+**Step 5: Help Us Improve (Post-Trip)**
+- "How was that spot?" → Keeps knowledge fresh
+- "What did you discover?" → Adds to knowledge graph
+- You naturally become a contributor for future travelers
+
+**The message**: You don't need to plan everything now. We've got you from start to finish.
+
+### The Agreement Plan: What We Promise
+
+**StoryBrand principle**: Clear agreements remove fear. Here's what you can count on:
+
+**1. We're Available 24/7 While You Travel**
+- Text anytime during your trip
+- Response within minutes (not hours)
+- No "business hours" - we're here when you need us
+
+**2. If You Don't Like a Spot, We'll Fix It Immediately**
+- "This isn't working" → We find you something better right now
+- No questions asked, no defending our recommendation
+- Your trip, your call - we adapt
+
+**3. No Rigid Schedules, Zero Pressure**
+- Use what works, ignore what doesn't
+- Want to wing it today? Fine, we're here if you change your mind
+- Want more structure tomorrow? We'll guide you step-by-step
+- This is YOUR trip - we're just here to help
+
+**4. Knowledge Stays Fresh**
+- Every spot verified within last 3 months
+- If something's changed (closed, moved, quality dropped), we know
+- If we send you somewhere disappointing, we make it right
+
+**5. Your Data Is Private**
+- Conversations never shared
+- No selling your preferences to booking platforms
+- No spam, no marketing - just guidance when you need it
+
+**The message**: This is a partnership. We're not selling you a product - we're guiding you through your trip.
 
 ### Mercedes vs Toyota
 
-Even though we compete with Mindtrip/Layla in the same space (pre-trip + on-trip planning), **we're fundamentally different quality**:
+Even though we compete with Mindtrip/Layla in the same space (pre-trip + on-trip planning), **we're fundamentally different**:
 
 | Dimension | Them (Toyota) | Us (Mercedes) |
 |-----------|---------------|---------------|
-| Knowledge source | Scraped Google/Yelp | Human-sourced from locals |
-| Quality | "Good enough" generic | Deep operational intelligence |
-| Optimization | Booking commissions | Actual quality |
-| Memory | Forgets you each trip | Learns your taste over time |
-| Adaptation | Static plans | Real-time replanning |
+| **Category** | Trip planning tool | Travel companion |
+| **What they give you** | Complete itinerary upfront | Strategic decisions + on-demand guidance |
+| **Trust model** | "Here's everything, go execute" | "I've got your back, let's do this together" |
+| **If something goes wrong** | You're on your own | Text me, I'll fix it immediately |
+| **Knowledge source** | Scraped Google/Yelp | Human-sourced from locals |
+| **Quality** | "Good enough" generic | Deep operational intelligence |
+| **Optimization** | Booking commissions | Actual quality |
+| **Memory** | Forgets you each trip | Learns your taste over time |
+| **Adaptation** | Static plans | Real-time replanning |
 
 **The market reality**: "Good enough" doesn't exist yet. Mindtrip still hallucinates (suggests closed hotels). Layla is booking-focused with rigid itineraries. GuideGeek has no memory. **The window for quality is still open.**
 
@@ -152,23 +241,24 @@ Even though we compete with Mindtrip/Layla in the same space (pre-trip + on-trip
 
 ## How to Execute
 
-### MVP Approach: Pre-Trip Heavy, On-Trip Light
+### MVP Approach: Pre-Trip + On-Trip Co-Equal
 
 **The Strategy**: Build and use it ourselves first (dogfooding), then test with external travelers.
 
 **Phase 1: Build & Dogfood (Weeks 1-6)**
 
-**Pre-trip focus (80% of effort)**:
+**Pre-trip focus (40% of effort)**:
 1. **Conversational profile learning**
    - Natural conversation infers preferences
    - Not rigid questionnaire
    - Learns: travel style, budget, pace, dietary needs, interests
 
-2. **Tiered dossier generation**
+2. **Strategic decisions generation**
    - Pull from knowledge graph
    - Personalize based on profile
-   - Generate must-do / should-do / nice-to-have tiers
-   - 20-40 curated spots with full operational intel
+   - Generate: where to stay, what to book ahead, 3-5 anchor spots
+   - Each recommendation with full operational intel
+   - Clear messaging: "Don't over-plan, I'll guide you when you're there"
 
 3. **Knowledge graph seeding**
    - Founders contribute 50-100 spots via voice notes
@@ -176,24 +266,33 @@ Even though we compete with Mindtrip/Layla in the same space (pre-trip + on-trip
    - Target: 100-200 spots with depth for one city
    - Test contribution flow while building
 
-**On-trip focus (20% of effort)**:
-1. **Basic context awareness**
-   - Weather API integration
-   - "It's raining → here are covered/indoor options"
+**On-trip focus (50% of effort)**:
+1. **Conversational day-building**
+   - "I'm hungry" → recommend next spot based on location, time, vibe, preferences
+   - "What should I do today?" → build loose day structure
+   - "I'm near X" → suggest what's nearby worth seeing
 
-2. **Simple replanning**
-   - User: "We're tired, need something close"
-   - Agent: Filter by location + vibe, suggest accordingly
+2. **Real-time adaptation**
+   - Weather API integration: "It's raining" → filter indoor/covered options
+   - Energy level: "We're exhausted" → filter nearby + chill spots
+   - Taste learning: "Loved that hawker food" → find similar spots
 
-3. **Feedback loop**
+3. **24/7 availability pattern**
+   - Fast response time (<5 min during trip)
+   - Context-aware recommendations (remember what they've done, what they liked)
+   - Conversational tone (friend, not search engine)
+
+**Post-trip focus (10% of effort)**:
+1. **Feedback loop**
    - "How was it?" → captures quality + freshness
+   - "What did you discover?" → adds new knowledge
    - Builds post-trip validation data
 
 **Phase 2: Test with External Travelers (Weeks 7-10)**
-- Give 20-30 friends pre-trip dossiers
-- Light on-trip support
+- Give 20-30 friends pre-trip strategic decisions
+- Active on-trip guidance (this is the main test)
 - Collect feedback post-trip
-- Validate: Is quality noticeably better? Would they pay?
+- Validate: Do they feel guided throughout trip? Is quality noticeably better? Would they pay?
 
 ### The Playing To Win Cascade
 
@@ -250,21 +349,24 @@ Even though we compete with Mindtrip/Layla in the same space (pre-trip + on-trip
 ### What We Build / Don't Build (MVP Boundaries)
 
 **We Build**:
-- ✅ Pre-trip profile learning + dossier generation
-- ✅ On-trip weather awareness + basic replanning
+- ✅ Pre-trip profile learning + strategic decisions generation
+- ✅ On-trip conversational day-building (primary value delivery)
+- ✅ Real-time adaptation (weather, energy, taste learning)
+- ✅ 24/7 availability during trip (<5 min response time)
 - ✅ Post-trip feedback loop (validation)
 - ✅ One city with depth (100-200 spots)
 - ✅ Conversational knowledge contribution (voice notes)
 - ✅ WhatsApp exclusively (no app, no website)
+- ✅ Process Plan + Agreement Plan (trust-building framework)
 
 **We Don't Build Yet**:
-- ❌ Complex behavioral learning (tracking patterns over multiple interactions)
+- ❌ Complex behavioral learning (tracking patterns over multiple trips)
 - ❌ Proactive notifications ("leave in 15 min")
 - ❌ Full orchestration (Grab booking, flight tracking, calendar)
 - ❌ Multiple cities (prove it in one city first)
 - ❌ Group coordination features (solo/couples first)
 - ❌ Post-trip memory/recap (just feedback loop)
-- ❌ Rigid itinerary generator (we're NOT competing on that)
+- ❌ Comprehensive itineraries/dossiers (we're NOT competing on that)
 
 ---
 
@@ -364,29 +466,32 @@ Thatch ($5.2M funding, 36 employees) tried to build a marketplace for travel gui
 - Founders add 20-30 spots themselves
 - **Success**: Easy enough to use daily? Does schema capture what matters?
 
-**Week 3-4: Add Profile Learning + Dossier Generation**
+**Week 3-4: Add Profile Learning + Strategic Decisions Generation**
 - Build conversational interview (learns preferences naturally)
-- Generate tiered dossier from knowledge graph (must/should/nice-to-have)
+- Generate strategic decisions message (where to stay, what to book, 3-5 anchor spots)
+- Build Process Plan + Agreement Plan messaging templates
 - Knowledge graph target: 50-100 spots with depth
-- **Success**: Dossier feels valuable? Knowledge quality noticeably better?
+- **Success**: Strategic decisions feel valuable? Proves depth without overwhelming?
 
-**Week 5-6: Add Light On-Trip Adaptation**
+**Week 5-6: Add On-Trip Conversational Guidance**
+- Build "I'm hungry" → recommend next spot flow (location, time, vibe, preferences)
 - Weather API integration ("it's raining" → filter indoor options)
-- Basic replanning ("we're tired" → nearby + chill options)
+- Context-aware guidance ("we're tired" → nearby + chill spots)
 - Feedback loop ("how was it?" → validate quality)
-- **Success**: Adaptation feels useful or gimmicky?
+- **Success**: Does day-building feel guided or gimmicky? Is response time <5 min?
 
 **Week 7-10: Test with External Travelers**
 - 20-30 friends planning trips
-- Give them pre-trip dossiers
-- Light on-trip support
+- Give them pre-trip strategic decisions
+- Active on-trip guidance (this is the main test)
 - Post-trip feedback collection
-- **Success**: 70%+ say noticeably better than Google/Layla? 50%+ would pay?
+- **Success**: Do they feel guided throughout trip? 70%+ say noticeably better? 50%+ would pay?
 
 **By Week 10, we know**:
 - Does the contribution model work?
 - Is the knowledge quality actually differentiated?
-- Do travelers engage on-trip or just use the pre-trip dossier?
+- Do travelers engage on-trip or just use pre-trip info?
+- Does "guide model" feel valuable or do they want comprehensive dossier?
 - Can we capture validation feedback?
 - What's missing? What's next?
 

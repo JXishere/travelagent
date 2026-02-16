@@ -2,7 +2,7 @@
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN!;
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID!;
-const GRAPH_API = "https://graph.facebook.com/v21.0";
+const GRAPH_API = "https://graph.facebook.com/v22.0";
 
 export interface IncomingMessage {
   from: string; // sender phone number
@@ -50,7 +50,7 @@ export async function sendMessage(to: string, text: string): Promise<void> {
   // WhatsApp has a ~4096 char limit per message. Split if needed.
   const chunks = splitMessage(text, 4000);
   for (const chunk of chunks) {
-    await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/messages`, {
+    const res = await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${WHATSAPP_TOKEN}`,
@@ -63,6 +63,12 @@ export async function sendMessage(to: string, text: string): Promise<void> {
         text: { body: chunk },
       }),
     });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("WhatsApp API error:", JSON.stringify(data, null, 2));
+    } else {
+      console.log("Message sent to", to, "— response:", JSON.stringify(data));
+    }
   }
 }
 

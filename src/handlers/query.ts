@@ -71,13 +71,12 @@ export async function handleQuery(
   });
 
   if (spots.length === 0) {
-    // No spots found — Claude responds conversationally
     return await chat(
       systemPrompt,
       [
         {
           role: "user",
-          content: message,
+          content: `The traveler says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
         },
       ],
       { maxTokens: 512 }

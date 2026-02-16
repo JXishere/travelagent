@@ -3,11 +3,12 @@
 
 import express from "express";
 import { parseWebhook, sendMessage } from "./whatsapp.js";
-import { chatAsP, classifyIntent } from "./llm.js";
+import { chatAsP, classifyIntent, extractJSON } from "./llm.js";
 import {
   getOrCreateConversation,
   updateConversation,
   appendMessages,
+  insertSpot,
 } from "./database.js";
 import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
@@ -15,6 +16,7 @@ import { handleProfile, startProfileLearning } from "./handlers/profile.js";
 import { handleStrategic } from "./handlers/strategic.js";
 import { handleHungry, handleDayPlan, handleNearby } from "./handlers/ontrip.js";
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
+import { startGenerate, handleGenerate } from "./handlers/generate.js";
 
 const app = express();
 app.use(express.json());
@@ -43,11 +45,16 @@ app.get("/webhook", (req, res) => {
 // Receives all WhatsApp messages and routes to the right flow
 // ============================================
 app.post("/webhook", async (req, res) => {
+  console.log("Webhook POST received:", JSON.stringify(req.body, null, 2));
   // Always respond 200 quickly — WhatsApp retries on timeout
   res.sendStatus(200);
 
   const message = parseWebhook(req.body);
-  if (!message) return;
+  if (!message) {
+    console.log("parseWebhook returned null — not a user message");
+    return;
+  }
+  console.log("Parsed message:", JSON.stringify(message, null, 2));
 
   try {
     await processMessage(message);
@@ -101,6 +108,63 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   }
 
   if (!text) return;
+
+  const ADMIN_PHONE = process.env.ADMIN_PHONE_NUMBER;
+
+  // Admin rapid-add: "add: Fatty Crab, Taman Megah, dinner, tier 1. ..."
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.toLowerCase().startsWith("add:")) {
+    const spotText = text.slice(4).trim();
+    const extracted = await extractJSON<Record<string, any>>("extraction", spotText);
+
+    const criticalMissing = (extracted.missing_fields ?? []).filter((f: string) =>
+      ["name", "category", "neighborhood"].includes(f)
+    );
+
+    if (criticalMissing.length > 0) {
+      // Ask one clarifying question, then save on next message
+      await updateConversation(from, {
+        current_flow: "contribution",
+        flow_state: { stage: "clarifying", extracted, missing: criticalMissing },
+      });
+      const question = criticalMissing
+        .map((f: string) => {
+          if (f === "name") return "Name?";
+          if (f === "category") return "Category? (breakfast/lunch/dinner/cafe/activity/nightlife/market)";
+          if (f === "neighborhood") return "Neighborhood?";
+          return f + "?";
+        })
+        .join(" ");
+      const response = `Almost — missing: ${question}`;
+      await appendMessages(from, [
+        { role: "user", content: text },
+        { role: "assistant", content: response },
+      ]);
+      await sendMessage(from, response);
+      return;
+    }
+
+    const { missing_fields, ...spotData } = extracted;
+    await insertSpot({ ...spotData, source: "text" });
+    const response = `Added *${extracted.name}* (${extracted.neighborhood}, ${extracted.category}) to the graph.`;
+    await appendMessages(from, [
+      { role: "user", content: text },
+      { role: "assistant", content: response },
+    ]);
+    await sendMessage(from, response);
+    return;
+  }
+
+  // Admin /generate command: "/generate bangsar dinner"
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/generate")) {
+    const args = text.slice("/generate".length).trim();
+    const response = await startGenerate(from, args);
+    await appendMessages(from, [
+      { role: "user", content: text },
+      { role: "assistant", content: response },
+    ]);
+    await sendMessage(from, response);
+    return;
+  }
 
   // Classify intent
   const recentContext = conversation.messages
@@ -208,6 +272,9 @@ async function routeToCurrentFlow(
 
     case "feedback":
       return handleFeedback(phoneNumber, text, conversation);
+
+    case "generate":
+      return handleGenerate(phoneNumber, text, conversation);
 
     default:
       // Unknown flow — reset to general

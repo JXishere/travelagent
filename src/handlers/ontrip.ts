@@ -66,6 +66,19 @@ export async function handleHungry(
     incrementSpotUseCount(spot.id);
   }
 
+  // No spots in DB — be honest
+  if (toRecommend.length === 0) {
+    const prompt = `The traveler says: "${message}"
+
+You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have recommendations yet. Ask them about their trip so you can help when your knowledge grows, or suggest they contribute spots they discover.
+
+Keep it short — this is WhatsApp.`;
+
+    return await chat(systemPrompt, [{ role: "user", content: prompt }], {
+      maxTokens: 512,
+    });
+  }
+
   const spotsContext = formatSpotsForLLM(toRecommend);
   const weatherNote = weather?.is_raining
     ? "It's raining right now — prioritize indoor/covered spots."
@@ -88,7 +101,7 @@ Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-Recommend naturally. Include full operational details. End by asking which one appeals or if they want something different.`;
+Recommend naturally. Include full operational details. End by asking which one appeals or if they want something different. Keep it concise — this is WhatsApp, not email.`;
 
   return await chat(systemPrompt, [{ role: "user", content: prompt }], {
     maxTokens: 1024,

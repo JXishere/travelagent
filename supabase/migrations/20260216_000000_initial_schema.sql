@@ -1,5 +1,5 @@
--- Paul Travel Intelligence — Database Schema
--- Run this in your Supabase SQL editor to set up all tables.
+-- Initial schema: contributors, spots, travelers, conversations, feedback
+-- Run against Supabase SQL editor or via: psql $DATABASE_URL -f this_file.sql
 
 -- Enable UUID generation
 create extension if not exists "uuid-ossp";
@@ -8,7 +8,7 @@ create extension if not exists "uuid-ossp";
 -- CONTRIBUTORS — Who added knowledge
 -- (Must be created before spots due to FK reference)
 -- ============================================
-create table contributors (
+create table if not exists contributors (
   id uuid primary key default uuid_generate_v4(),
   whatsapp_number text unique not null,
   name text,
@@ -20,7 +20,7 @@ create table contributors (
 -- ============================================
 -- SPOTS — The knowledge graph
 -- ============================================
-create table spots (
+create table if not exists spots (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   city text not null default 'Kuala Lumpur',
@@ -60,14 +60,13 @@ create table spots (
 -- ============================================
 -- TRAVELERS — User profiles
 -- ============================================
-create table travelers (
+create table if not exists travelers (
   id uuid primary key default uuid_generate_v4(),
   whatsapp_number text unique not null,
   name text,
 
   -- Learned preferences
   preferences jsonb default '{}',
-  -- e.g. { "budget": "mid", "pace": "moderate", "interests": ["food", "culture"], "style": "adventurous" }
 
   dietary_restrictions text[] default '{}',
 
@@ -89,7 +88,7 @@ create table travelers (
 -- ============================================
 -- CONVERSATIONS — State management
 -- ============================================
-create table conversations (
+create table if not exists conversations (
   id uuid primary key default uuid_generate_v4(),
   whatsapp_number text unique not null,
   current_flow text default 'general',
@@ -108,7 +107,7 @@ create table conversations (
 -- ============================================
 -- FEEDBACK — Post-trip validation
 -- ============================================
-create table feedback (
+create table if not exists feedback (
   id uuid primary key default uuid_generate_v4(),
   spot_id uuid references spots(id),
   traveler_id uuid references travelers(id),
@@ -122,13 +121,13 @@ create table feedback (
 -- ============================================
 -- INDEXES
 -- ============================================
-create index idx_spots_city on spots(city);
-create index idx_spots_neighborhood on spots(neighborhood);
-create index idx_spots_category on spots(category);
-create index idx_spots_tier on spots(tier);
-create index idx_conversations_phone on conversations(whatsapp_number);
-create index idx_travelers_phone on travelers(whatsapp_number);
-create index idx_feedback_spot on feedback(spot_id);
+create index if not exists idx_spots_city on spots(city);
+create index if not exists idx_spots_neighborhood on spots(neighborhood);
+create index if not exists idx_spots_category on spots(category);
+create index if not exists idx_spots_tier on spots(tier);
+create index if not exists idx_conversations_phone on conversations(whatsapp_number);
+create index if not exists idx_travelers_phone on travelers(whatsapp_number);
+create index if not exists idx_feedback_spot on feedback(spot_id);
 
 -- ============================================
 -- ROW LEVEL SECURITY (basic — tighten for production)
@@ -139,7 +138,7 @@ alter table travelers enable row level security;
 alter table conversations enable row level security;
 alter table feedback enable row level security;
 
--- Allow service role full access (used by server)
+-- Allow anon/service role full access (used by server)
 create policy "Service role full access" on spots for all using (true);
 create policy "Service role full access" on contributors for all using (true);
 create policy "Service role full access" on travelers for all using (true);

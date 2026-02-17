@@ -6,6 +6,7 @@ const GRAPH_API = "https://graph.facebook.com/v22.0";
 
 export interface IncomingMessage {
   from: string; // sender phone number
+  messageId: string; // WhatsApp message ID
   type: "text" | "audio" | "image" | "location" | "interactive";
   text?: string;
   audioId?: string;
@@ -24,6 +25,7 @@ export function parseWebhook(body: any): IncomingMessage | null {
 
     const base: IncomingMessage = {
       from: msg.from,
+      messageId: msg.id,
       type: msg.type,
       timestamp: parseInt(msg.timestamp, 10),
     };
@@ -100,6 +102,25 @@ export async function markAsRead(messageId: string): Promise<void> {
       messaging_product: "whatsapp",
       status: "read",
       message_id: messageId,
+    }),
+  });
+}
+
+/** Show typing indicator (...) to the user */
+export async function showTyping(messageId: string): Promise<void> {
+  await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: messageId,
+      typing_indicator: {
+        type: "text",
+      },
     }),
   });
 }

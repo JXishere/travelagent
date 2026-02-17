@@ -90,6 +90,7 @@ export interface Spot {
   contributor_id?: string;
   confidence_score?: number;
   use_count?: number;
+  source?: string;
 }
 
 export async function querySpots(filters: {

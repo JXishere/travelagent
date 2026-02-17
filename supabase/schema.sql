@@ -53,6 +53,7 @@ create table spots (
   contributor_id uuid references contributors(id),
   confidence_score decimal default 0.7,
   use_count integer default 0,
+  source text default 'manual', -- seed, voice, text, llm_verified, manual
   last_verified timestamp with time zone default now(),
   created_at timestamp with time zone default now()
 );

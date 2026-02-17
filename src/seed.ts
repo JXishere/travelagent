@@ -632,7 +632,11 @@ async function seed() {
   console.log(`Seeding ${spots.length} KL spots...`);
 
   for (const spot of spots) {
-    const { error } = await supabase.from("spots").insert(spot);
+    // Try with source column first; fall back without if column doesn't exist yet
+    let { error } = await supabase.from("spots").insert({ ...spot, source: "seed" });
+    if (error?.message?.includes("source")) {
+      ({ error } = await supabase.from("spots").insert(spot));
+    }
     if (error) {
       console.error(`Failed to insert ${spot.name}:`, error.message);
     } else {

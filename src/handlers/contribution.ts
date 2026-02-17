@@ -1,7 +1,8 @@
-// Contribution flow — voice note → structured spot in knowledge graph
+// Contribution flow — conversational accumulation of spot knowledge
+// Two stages: collecting → confirming
 
 import { transcribeVoiceNote } from "../transcription.js";
-import { extractJSON, chat } from "../llm.js";
+import { extractJSON } from "../llm.js";
 import {
   insertSpot,
   getOrCreateContributor,
@@ -30,83 +31,80 @@ interface ExtractedSpot {
   missing_fields?: string[];
 }
 
+interface ContributionState {
+  stage: "collecting" | "confirming";
+  extracted: Partial<ExtractedSpot>;
+  source: "voice" | "text";
+  messagesReceived: number;
+}
+
+const SAVE_PATTERNS = /^(save|yes|done|looks good|looks right|perfect|yep|👍|lgtm)$/i;
+
 export async function handleContribution(
   phoneNumber: string,
   message: string,
   audioId: string | undefined,
   conversation: Conversation
 ): Promise<string> {
-  const state = conversation.flow_state;
+  const state = conversation.flow_state as Partial<ContributionState>;
 
-  // Step 1: User said they want to contribute — ask for voice note
+  // First message — initialize collecting stage
   if (!state.stage) {
+    const initialState: ContributionState = {
+      stage: "collecting",
+      extracted: {},
+      source: audioId ? "voice" : "text",
+      messagesReceived: 0,
+    };
+
     await updateConversation(phoneNumber, {
       current_flow: "contribution",
-      flow_state: { stage: "awaiting_voice_note" },
+      flow_state: initialState,
     });
-    return "Nice! Send me a voice note describing the spot — talk about it like you're telling a friend. Include the name, what kind of place it is, where it is, what to order, and any tips.";
-  }
 
-  // Step 2: Received a voice note — transcribe and extract
-  if (state.stage === "awaiting_voice_note" && audioId) {
-    await sendMessage(phoneNumber, "Got your voice note — transcribing now...");
-
-    const transcript = await transcribeVoiceNote(audioId);
-    const extracted = await extractJSON<ExtractedSpot>("extraction", transcript);
-
-    // Check for critical missing fields
-    const criticalMissing = (extracted.missing_fields ?? []).filter((f) =>
-      ["name", "category", "neighborhood"].includes(f)
-    );
-
-    if (criticalMissing.length > 0) {
-      await updateConversation(phoneNumber, {
-        flow_state: {
-          stage: "clarifying",
-          extracted,
-          transcript,
-          missing: criticalMissing,
-        },
-      });
-
-      const questions = criticalMissing
-        .map((f) => {
-          if (f === "name") return "What's the name of the spot?";
-          if (f === "category")
-            return "What kind of place is it? (breakfast, lunch, dinner, cafe, activity, nightlife, market)";
-          if (f === "neighborhood")
-            return "What neighborhood is it in? (e.g. Bangsar, TTDI, Bukit Bintang)";
-          return `What's the ${f}?`;
-        })
-        .join("\n");
-
-      return `Got most of it! Just need a few more details:\n\n${questions}`;
+    // Try to extract info from the triggering message
+    const input = await resolveInput(phoneNumber, message, audioId);
+    if (input && input.trim()) {
+      return await collectInfo(phoneNumber, input, initialState);
     }
 
-    // All critical fields present — save it
-    return await saveSpot(phoneNumber, extracted);
+    return "Nice! What's the spot? Just tell me about it — I'll piece it together.";
   }
 
-  // Step 2b: Voice note expected but got text — remind them
-  if (state.stage === "awaiting_voice_note" && !audioId) {
-    return "Send me a voice note about the spot! It's easier than typing — just talk about it like you're recommending it to a friend. 🎙️";
+  // Collecting stage
+  if (state.stage === "collecting") {
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const currentState: ContributionState = {
+      stage: "collecting",
+      extracted: state.extracted ?? {},
+      source: audioId ? "voice" : (state.source ?? "text"),
+      messagesReceived: state.messagesReceived ?? 0,
+    };
+    return await collectInfo(phoneNumber, input, currentState);
   }
 
-  // Step 3: Clarifying missing fields
-  if (state.stage === "clarifying") {
-    const extracted = state.extracted as ExtractedSpot;
+  // Confirming stage
+  if (state.stage === "confirming") {
+    // Check for save confirmation (text only — voice is treated as more info)
+    if (!audioId && SAVE_PATTERNS.test(message.trim())) {
+      return await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text");
+    }
 
-    // Use Claude to parse their text response into the missing fields
-    const parsed = await extractJSON<Record<string, string>>(
-      "extraction",
-      message,
-      `We already know about this spot: ${JSON.stringify(extracted)}\nThe user is providing missing information. Extract the relevant fields.`
-    );
+    // Treat as more info — merge and re-show summary
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const newData = await extractWithContext(input, state.extracted ?? {});
+    const merged = smartMerge(state.extracted ?? {}, newData);
 
-    const merged = { ...extracted, ...parsed };
-    delete merged.missing_fields;
+    await updateConversation(phoneNumber, {
+      flow_state: {
+        stage: "confirming",
+        extracted: merged,
+        source: audioId ? "voice" : (state.source ?? "text"),
+        messagesReceived: (state.messagesReceived ?? 0) + 1,
+      },
+    });
 
-    return await saveSpot(phoneNumber, merged);
+    return formatSummary(merged);
   }
 
   // Fallback
@@ -117,9 +115,181 @@ export async function handleContribution(
   return "Something went wrong with the contribution. Want to try again? Just say 'add a spot'.";
 }
 
+/** Resolve input text — transcribe voice notes, return text otherwise */
+async function resolveInput(
+  phoneNumber: string,
+  message: string,
+  audioId: string | undefined
+): Promise<string> {
+  if (audioId) {
+    await sendMessage(phoneNumber, "Got your voice note — let me listen...");
+    return await transcribeVoiceNote(audioId);
+  }
+  return message;
+}
+
+/** Extract structured data from user input, with context of what we already know */
+async function extractWithContext(
+  input: string,
+  existing: Partial<ExtractedSpot>
+): Promise<Partial<ExtractedSpot>> {
+  const hasExisting = Object.keys(existing).length > 0;
+  const context = hasExisting
+    ? `We already know about this spot: ${JSON.stringify(existing)}. The user is providing more details. Extract ONLY the new information from their message.`
+    : undefined;
+
+  try {
+    return await extractJSON<ExtractedSpot>("extraction", input, context);
+  } catch {
+    return {};
+  }
+}
+
+/** Process a message during the collecting stage */
+async function collectInfo(
+  phoneNumber: string,
+  input: string,
+  state: ContributionState
+): Promise<string> {
+  const previous = state.extracted;
+  const newData = await extractWithContext(input, previous);
+  const merged = smartMerge(previous, newData);
+  const messagesReceived = state.messagesReceived + 1;
+
+  // Check if we have enough to show a summary
+  if (isReady(merged)) {
+    await updateConversation(phoneNumber, {
+      flow_state: {
+        stage: "confirming",
+        extracted: merged,
+        source: state.source,
+        messagesReceived,
+      },
+    });
+    return formatSummary(merged);
+  }
+
+  // Not ready — save progress and ask a follow-up
+  await updateConversation(phoneNumber, {
+    flow_state: {
+      stage: "collecting",
+      extracted: merged,
+      source: state.source,
+      messagesReceived,
+    },
+  });
+
+  return buildFollowUp(merged, previous);
+}
+
+/** Merge new extracted data into existing, preserving non-empty values */
+function smartMerge(
+  existing: Partial<ExtractedSpot>,
+  incoming: Partial<ExtractedSpot>
+): Partial<ExtractedSpot> {
+  const merged = { ...existing };
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === "missing_fields") continue;
+    if (value === null || value === undefined || value === "") continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) continue;
+
+    // For arrays, merge unique items rather than replace
+    if (Array.isArray(value) && Array.isArray((merged as any)[key])) {
+      const existingArr = (merged as any)[key] as string[];
+      const newItems = value.filter((v: string) => !existingArr.includes(v));
+      (merged as any)[key] = [...existingArr, ...newItems];
+    } else {
+      (merged as any)[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+/** Check if we have enough data to show a confirmation summary */
+function isReady(data: Partial<ExtractedSpot>): boolean {
+  const hasCritical = Boolean(data.name && data.category && data.neighborhood);
+  const hasOperational = Boolean(
+    (data.what_to_order && data.what_to_order.length > 0) ||
+    (data.pro_tips && data.pro_tips.length > 0) ||
+    (data.payment_methods && data.payment_methods.length > 0)
+  );
+  return hasCritical && hasOperational;
+}
+
+/** Build a natural follow-up question with a warm prefix */
+function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
+  // If extraction yielded nothing, give a warm opening prompt
+  const meaningfulKeys = Object.keys(merged).filter((k) => k !== "missing_fields");
+  if (meaningfulKeys.length === 0) {
+    return "Nice! What's the spot? Just tell me about it — I'll piece it together.";
+  }
+
+  const prefix = buildWarmPrefix(merged, previous);
+
+  if (!merged.name) return `${prefix}What's it called?`;
+  if (!merged.neighborhood) return `${prefix}What area of KL is it in?`;
+  if (!merged.category) return `${prefix}What kind of spot? (breakfast, lunch, dinner, cafe, activity, nightlife, market)`;
+  if (!merged.what_to_order?.length) return `${prefix}What should people order there?`;
+  return `${prefix}Any tips? Like payment, hours, or insider tricks?`;
+}
+
+/** Acknowledge what Paul just learned */
+function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
+  const learnedName = merged.name && !previous.name;
+  const learnedNeighborhood = merged.neighborhood && !previous.neighborhood;
+
+  if (learnedName && learnedNeighborhood) return `*${merged.name}* in ${merged.neighborhood}, nice! `;
+  if (learnedName) return `Got it — *${merged.name}*. `;
+  if (learnedNeighborhood) return `${merged.neighborhood}, nice! `;
+  return "Got it. ";
+}
+
+/** Format a summary of the accumulated spot data */
+function formatSummary(data: Partial<ExtractedSpot>): string {
+  const lines: string[] = ["Here's what I've got:", ""];
+
+  lines.push(`*${data.name}* — ${data.neighborhood}`);
+
+  const meta: string[] = [];
+  if (data.category) meta.push(capitalize(data.category));
+  if (data.price_range) meta.push(data.price_range);
+  if (data.payment_methods?.length) meta.push(data.payment_methods.join(", "));
+  if (meta.length) lines.push(meta.join(" | "));
+
+  if (data.what_to_order?.length) {
+    lines.push(`🍽 Order: ${data.what_to_order.join(", ")}`);
+  }
+
+  if (data.pro_tips?.length) {
+    lines.push(`💡 ${data.pro_tips.join(". ")}`);
+  }
+
+  if (data.opening_hours && Object.keys(data.opening_hours).length > 0) {
+    const hours = Object.values(data.opening_hours)[0];
+    lines.push(`🕐 ${hours}`);
+  }
+
+  if (data.vibe) {
+    lines.push(`✨ Vibe: ${data.vibe}`);
+  }
+
+  lines.push("");
+  lines.push(`Anything to add or fix? Say "save" when it looks right.`);
+
+  return lines.join("\n");
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 async function saveSpot(
   phoneNumber: string,
-  data: Partial<ExtractedSpot>
+  data: Partial<ExtractedSpot>,
+  source: "voice" | "text"
 ): Promise<string> {
   const contributor = await getOrCreateContributor(phoneNumber);
 
@@ -127,6 +297,7 @@ async function saveSpot(
   await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
+    source,
   });
 
   await incrementContributorCount(phoneNumber);

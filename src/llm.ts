@@ -6,6 +6,9 @@ import { join } from "path";
 
 const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 
+export const SONNET = "claude-sonnet-4-5-20250929";
+export const HAIKU = "claude-haiku-4-5-20251001";
+
 const PROMPTS_DIR = join(__dirname, "prompts");
 
 function loadPrompt(name: string): string {
@@ -23,10 +26,10 @@ export interface ChatMessage {
 export async function chat(
   systemPrompt: string,
   messages: ChatMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+  options?: { maxTokens?: number; temperature?: number; model?: string }
 ): Promise<string> {
   const response = await client.messages.create({
-    model: "claude-sonnet-4-5-20250929",
+    model: options?.model ?? SONNET,
     max_tokens: options?.maxTokens ?? 1024,
     system: systemPrompt,
     messages,
@@ -55,7 +58,8 @@ export async function chatAsP(
 export async function extractJSON<T>(
   promptName: string,
   input: string,
-  context?: string
+  context?: string,
+  options?: { model?: string }
 ): Promise<T> {
   const systemPrompt = loadPrompt(promptName);
   const userContent = context
@@ -64,6 +68,7 @@ export async function extractJSON<T>(
 
   const response = await chat(systemPrompt, [{ role: "user", content: userContent }], {
     temperature: 0.3,
+    model: options?.model ?? HAIKU,
   });
 
   // Parse JSON from the response — handle markdown code blocks
@@ -113,7 +118,7 @@ Respond in JSON only:
         ? `Recent conversation:\n${conversationContext}\n\nNew message: ${message}`
         : message,
     }],
-    { temperature: 0.2 }
+    { temperature: 0.2, model: HAIKU }
   );
 
   const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)```/);

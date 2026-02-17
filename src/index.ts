@@ -2,7 +2,7 @@
 // Main entry point: Express app + webhook routes + flow routing
 
 import express from "express";
-import { parseWebhook, sendMessage } from "./whatsapp.js";
+import { parseWebhook, sendMessage, showTyping } from "./whatsapp.js";
 import { chatAsP, classifyIntent, extractJSON } from "./llm.js";
 import {
   getOrCreateConversation,
@@ -57,6 +57,8 @@ app.post("/webhook", async (req, res) => {
   console.log("Parsed message:", JSON.stringify(message, null, 2));
 
   try {
+    // Show typing indicator immediately so user knows Paul is thinking
+    showTyping(message.messageId).catch(() => {});
     await processMessage(message);
   } catch (error) {
     console.error("Error processing message:", error);

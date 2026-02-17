@@ -2,7 +2,7 @@
 
 **A friend who lives in every city.**
 
-Sam is a WhatsApp travel intelligence bot. Text him like a friend and he'll tell you where to eat, what to order, when to go, and what to skip — all from a knowledge graph built by real locals, not scraped reviews.
+Sam is a travel intelligence bot — on WhatsApp and the web. Text him like a friend and he'll tell you where to eat, what to order, when to go, and what to skip — all from a knowledge graph built by real locals, not scraped reviews.
 
 Currently live in **Kuala Lumpur**. The architecture is city-aware and designed to expand.
 
@@ -55,7 +55,8 @@ Spots are added by local contributors via voice notes or text, verified by admin
 | Layer | Technology |
 |---|---|
 | Runtime | Node.js / TypeScript |
-| Framework | Express (WhatsApp Cloud API webhook) |
+| Bot framework | Express (WhatsApp Cloud API webhook) |
+| Web | Next.js 15 / React 19 (landing page + chat interface) |
 | Database | Supabase (PostgreSQL) |
 | LLM | Claude API — Haiku for conversations, Sonnet for strategic planning |
 | Voice | OpenAI Whisper (voice note transcription) |
@@ -64,38 +65,66 @@ Spots are added by local contributors via voice notes or text, verified by admin
 ## Project structure
 
 ```
-src/
-├── index.ts              — Express app, webhook routes, flow router
-├── database.ts           — Supabase client, all DB operations
-├── llm.ts                — Claude API wrapper, prompt loading
-├── whatsapp.ts           — WhatsApp Cloud API (send/receive/media)
-├── transcription.ts      — Whisper voice note transcription
-├── weather.ts            — OpenWeather integration
-├── scheduler.ts          — Proactive message engine (5-min interval)
-├── seed.ts               — Knowledge graph seeding (50+ KL spots)
-├── handlers/
-│   ├── query.ts           — Spot recommendations
-│   ├── ontrip.ts          — Hungry, day plan, nearby handlers
-│   ├── contribution.ts    — Voice/text spot ingestion
-│   ├── profile.ts         — Conversational profile interview
-│   ├── continuous-profile.ts — Background preference extraction
-│   ├── strategic.ts       — Pre-trip guide generation
-│   ├── feedback.ts        — Post-visit spot validation
-│   └── generate.ts        — Admin: LLM candidate spot generation
-├── prompts/
-│   ├── system.txt         — Sam's personality
-│   ├── extraction.txt     — Voice/text → structured spot data
-│   ├── profile.txt        — Profile interview conversation
-│   ├── continuous_profile.txt — Background extraction rules
-│   ├── strategic.txt      — Pre-trip guide format
-│   ├── proactive.txt      — Proactive message voice
-│   ├── feedback.txt       — Feedback response parsing
-│   └── generate.txt       — Admin spot generation
-└── utils/
-    └── city-defaults.ts   — Per-city coordinates, timezone, locale
+packages/
+├── bot/                          — WhatsApp bot (Express + Claude)
+│   ├── src/
+│   │   ├── index.ts              — Express app, webhook routes, flow router
+│   │   ├── database.ts           — Supabase client, all DB operations
+│   │   ├── llm.ts                — Claude API wrapper, prompt loading, SSE streaming
+│   │   ├── whatsapp.ts           — WhatsApp Cloud API (send/receive/media)
+│   │   ├── transcription.ts      — Whisper voice note transcription
+│   │   ├── weather.ts            — OpenWeather integration
+│   │   ├── scheduler.ts          — Proactive message engine (5-min interval)
+│   │   ├── seed.ts               — Knowledge graph seeding (50+ KL spots)
+│   │   ├── handlers/
+│   │   │   ├── query.ts              — Spot recommendations
+│   │   │   ├── ontrip.ts             — Hungry, day plan, nearby handlers
+│   │   │   ├── contribution.ts       — Voice/text spot ingestion
+│   │   │   ├── profile.ts            — Conversational profile interview
+│   │   │   ├── continuous-profile.ts — Background preference extraction
+│   │   │   ├── strategic.ts          — Pre-trip guide generation
+│   │   │   ├── feedback.ts           — Post-visit spot validation
+│   │   │   └── generate.ts           — Admin: LLM candidate spot generation
+│   │   ├── prompts/
+│   │   │   ├── system.txt             — Sam's personality
+│   │   │   ├── extraction.txt         — Voice/text → structured spot data
+│   │   │   ├── profile.txt            — Profile interview conversation
+│   │   │   ├── continuous_profile.txt — Background extraction rules
+│   │   │   ├── strategic.txt          — Pre-trip guide format
+│   │   │   ├── proactive.txt          — Proactive message voice
+│   │   │   ├── feedback.txt           — Feedback response parsing
+│   │   │   └── generate.txt           — Admin spot generation
+│   │   └── utils/
+│   │       ├── categories.ts          — Category mappings + synonyms
+│   │       └── city-defaults.ts       — Per-city coordinates, timezone, locale
+│   ├── vitest.config.ts
+│   ├── package.json
+│   └── tsconfig.json
+├── web/                          — Next.js web interface (landing page + chat)
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx             — Root layout (Geist Mono, dark theme)
+│   │   │   ├── page.tsx               — Counter page (server component, ISR)
+│   │   │   ├── globals.css            — Tailwind v4 + custom vars
+│   │   │   ├── chat/
+│   │   │   │   └── page.tsx           — Chat interface page
+│   │   │   └── api/
+│   │   │       └── chat/
+│   │   │           └── route.ts       — SSE streaming endpoint (imports @sam/bot handlers)
+│   │   ├── components/
+│   │   │   ├── chat-bubble.tsx        — Message bubble (user/Sam)
+│   │   │   ├── chat-input.tsx         — Message input bar
+│   │   │   ├── chat-messages.tsx      — Scrollable message list
+│   │   │   └── prompt-input.tsx       — Landing page prompt input
+│   │   └── lib/
+│   │       └── supabase.ts            — Supabase client + getCityStats()
+│   ├── next.config.ts                 — Env forwarding, @sam/bot transpilation
+│   ├── package.json
+│   └── tsconfig.json
 
 supabase/
-└── schema.sql             — Full database schema
+├── schema.sql                         — Full database schema (5 tables + RPC)
+└── migrations/                        — Incremental migration files
 ```
 
 ## Setup
@@ -108,6 +137,8 @@ supabase/
 - API keys: [Anthropic](https://console.anthropic.com), [OpenAI](https://platform.openai.com) (for Whisper), [OpenWeather](https://openweathermap.org/api)
 
 ### 1. Install dependencies
+
+This is an npm workspaces monorepo. A single `npm install` at the root installs dependencies for both `packages/bot` and `packages/web`.
 
 ```bash
 npm install
@@ -149,21 +180,29 @@ Populates 50+ curated KL spots with full operational intel.
 ### 5. Run
 
 ```bash
-npm run dev    # Development with auto-reload
-npm run build  # Compile TypeScript
-npm run start  # Production
+npm run dev      # Bot dev server (Express on :3000)
+npm run dev:web  # Web dev server (Next.js on :3001)
+npm run build    # Compile both packages
+npm run start    # Production bot
 ```
 
 ### 6. Connect WhatsApp
 
 Point your WhatsApp webhook URL to `https://your-domain.com/webhook`. The verify token must match `WHATSAPP_VERIFY_TOKEN`.
 
+### 7. Web chat (optional)
+
+The web chat at `packages/web/` reuses the same bot handlers via the `@sam/bot` workspace dependency. It streams responses over SSE instead of sending WhatsApp messages. Run `npm run dev:web` and visit `http://localhost:3001/chat`.
+
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (tsx watch)
-npm run build        # Compile TypeScript
-npm run start        # Run compiled app
+npm run dev          # Bot dev server (Express on :3000)
+npm run dev:web      # Web dev server (Next.js on :3001)
+npm run build        # Build both packages
+npm run build:bot    # Build bot only
+npm run build:web    # Build web only
+npm run start        # Run compiled bot
 npm run seed         # Seed knowledge graph
 npm test             # Run tests
 npm run test:watch   # Run tests in watch mode
@@ -188,6 +227,8 @@ Gated behind the `ADMIN_PHONE_NUMBER` env var:
 
 ## Architecture
 
+### WhatsApp flow
+
 ```
 WhatsApp message
   → webhook (POST /webhook)
@@ -200,9 +241,24 @@ WhatsApp message
   → WhatsApp
 ```
 
-Background systems run alongside:
+### Web flow
+
+```
+Browser message
+  → POST /api/chat
+  → classifyIntent() [Claude Haiku]
+  → handler (same set as WhatsApp)
+  → querySpots() / LLM formatting
+  → SSE stream
+  → Browser
+```
+
+Both flows share the same handlers via the `@sam/bot` workspace dependency. The web route imports handlers directly — no HTTP indirection.
+
+### Background systems
+
 - **Continuous profile extraction** — silently captures preferences from every message exchange
-- **Proactive scheduler** — checks every 5 minutes for travelers who should hear from Sam
+- **Proactive scheduler** — checks every 5 minutes for travelers who should hear from Sam (WhatsApp only, requires 24h messaging window, 8h cooldown between messages, daytime hours only, skips users mid-flow)
 
 ## Tests
 

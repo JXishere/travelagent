@@ -1,6 +1,6 @@
-# Sam — WhatsApp Travel Intelligence for KL
+# Sam — Travel Intelligence for KL
 
-Sam is a WhatsApp-based travel intelligence bot for Kuala Lumpur. He guides travelers with opinionated, operationally-detailed recommendations drawn from a proprietary knowledge graph built by real local contributors.
+Sam is a travel intelligence bot for Kuala Lumpur, available on WhatsApp and the web. He guides travelers with opinionated, operationally-detailed recommendations drawn from a proprietary knowledge graph built by real local contributors.
 
 ## Stack
 
@@ -22,10 +22,11 @@ packages/
 │   ├── src/
 │   │   ├── index.ts            — Express app, webhook routes, flow router
 │   │   ├── database.ts         — Supabase client + all DB operations
-│   │   ├── llm.ts              — Claude API wrapper, prompt loading
+│   │   ├── llm.ts              — Claude API wrapper, prompt loading, SSE streaming
 │   │   ├── whatsapp.ts         — WhatsApp Cloud API (send/receive/media)
 │   │   ├── transcription.ts    — Whisper voice note transcription
 │   │   ├── weather.ts          — OpenWeather integration
+│   │   ├── scheduler.ts        — Proactive message engine (5-min interval)
 │   │   ├── seed.ts             — Knowledge graph seeding (50+ KL spots)
 │   │   ├── handlers/
 │   │   │   ├── query.ts              — "I'm hungry" → spot recommendations
@@ -36,23 +37,40 @@ packages/
 │   │   │   ├── ontrip.ts             — Day-by-day guidance (hungry, day_plan, nearby)
 │   │   │   ├── feedback.ts           — Post-trip spot validation
 │   │   │   └── generate.ts           — Admin /generate command for spot content
-│   │   └── prompts/
-│   │       ├── system.txt             — Sam's personality + core rules
-│   │       ├── extraction.txt         — Voice note → JSON extraction
-│   │       ├── profile.txt            — Conversational profile learning
-│   │       ├── continuous_profile.txt — Background profile extraction rules
-│   │       ├── strategic.txt          — Strategic trip planning format
-│   │       └── generate.txt           — Spot content generation prompt
+│   │   ├── prompts/
+│   │   │   ├── system.txt             — Sam's personality + core rules
+│   │   │   ├── extraction.txt         — Voice note → JSON extraction
+│   │   │   ├── profile.txt            — Conversational profile learning
+│   │   │   ├── continuous_profile.txt — Background profile extraction rules
+│   │   │   ├── strategic.txt          — Strategic trip planning format
+│   │   │   ├── proactive.txt          — Proactive message voice + style
+│   │   │   ├── feedback.txt           — Feedback response parsing
+│   │   │   └── generate.txt           — Spot content generation prompt
+│   │   └── utils/
+│   │       ├── categories.ts          — Category mappings + synonyms
+│   │       └── city-defaults.ts       — Per-city coordinates, timezone, locale
+│   ├── vitest.config.ts
 │   ├── package.json
 │   └── tsconfig.json
-├── web/                — Next.js landing page
+├── web/                — Next.js web interface (landing page + chat)
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── layout.tsx       — Root layout (Geist Mono, dark theme)
-│   │   │   ├── page.tsx         — Counter page (server component, ISR)
-│   │   │   └── globals.css      — Tailwind v4 + custom vars
+│   │   │   ├── layout.tsx             — Root layout (Geist Mono, dark theme)
+│   │   │   ├── page.tsx               — Counter page (server component, ISR)
+│   │   │   ├── globals.css            — Tailwind v4 + custom vars
+│   │   │   ├── chat/
+│   │   │   │   └── page.tsx           — Chat interface page
+│   │   │   └── api/
+│   │   │       └── chat/
+│   │   │           └── route.ts       — SSE streaming endpoint (imports @sam/bot)
+│   │   ├── components/
+│   │   │   ├── chat-bubble.tsx        — Message bubble (user/Sam)
+│   │   │   ├── chat-input.tsx         — Message input bar
+│   │   │   ├── chat-messages.tsx      — Scrollable message list
+│   │   │   └── prompt-input.tsx       — Landing page prompt input
 │   │   └── lib/
-│   │       └── supabase.ts      — Supabase client + getCityStats()
+│   │       └── supabase.ts            — Supabase client + getCityStats()
+│   ├── next.config.ts                 — Env forwarding, @sam/bot transpilation
 │   ├── package.json
 │   └── tsconfig.json
 
@@ -109,13 +127,19 @@ function loadPrompt(name: string): string {
 ```
 
 - `chatAsSam()` loads `system.txt` for Sam's personality (default: Haiku)
+- `chatAsSamStream()` / `chatStream()` — SSE streaming variants used by the web chat
 - `extractJSON()` loads any prompt by name for structured extraction (default: Haiku)
 - `classifyIntent()` uses an inline prompt (not from file)
 - `classifyConfirmation()` classifies user response during contribution save confirmation
+- `setPromptsDir()` — lets the web package override the prompts directory path (needed because Next.js resolves from a different root)
 
 ## Flow Architecture
 
-User messages flow: WhatsApp → webhook → `processMessage()` → `classifyIntent()` → handler → DB query + LLM → `sendMessage()` → WhatsApp
+**WhatsApp**: WhatsApp → webhook → `processMessage()` → `classifyIntent()` → handler → DB query + LLM → `sendMessage()` → WhatsApp
+
+**Web**: Browser → `POST /api/chat` → `classifyIntent()` → handler → DB query + LLM → SSE stream → Browser
+
+Both flows share the same handlers. The web route imports them directly from `@sam/bot` via the workspace dependency — no HTTP indirection.
 
 Intents: hungry, day_plan, nearby, weather, contribute, profile, feedback, general
 
@@ -130,6 +154,7 @@ Gated behind `ADMIN_PHONE_NUMBER` env var:
 ### Background Processing
 
 - **Continuous profile extraction** — `maybeExtractProfile()` runs after every message exchange, silently extracting trip/preference info into the traveler profile without interrupting the conversation flow.
+- **Proactive scheduler** — `startScheduler()` runs on a 5-minute interval (WhatsApp only). Sends 4 message types: TRIP_WELCOME (day 1), MORNING_NUDGE (day 2+), DINNER_NUDGE (afternoon), FEEDBACK_CHECK (visited spots). Gates: requires 24h WhatsApp messaging window, 8h cooldown between messages, daytime hours only, skips users mid-flow.
 
 ## Environment Variables
 

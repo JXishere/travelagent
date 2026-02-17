@@ -282,8 +282,8 @@ function formatSummary(data: Partial<ExtractedSpot>): string {
   }
 
   if (data.opening_hours && Object.keys(data.opening_hours).length > 0) {
-    const hours = Object.values(data.opening_hours)[0];
-    lines.push(`🕐 ${hours}`);
+    const parts = Object.entries(data.opening_hours).map(([day, hrs]) => `${capitalize(day)}: ${hrs}`);
+    lines.push(`🕐 ${parts.join(", ")}`);
   }
 
   if (data.vibe) {

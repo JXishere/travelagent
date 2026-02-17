@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
-import { chat } from "../llm.js";
-import { querySpots, incrementSpotUseCount, type Spot } from "../database.js";
+import { chat, HAIKU } from "../llm.js";
+import { querySpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -76,24 +76,35 @@ export async function handleQuery(
       [
         {
           role: "user",
-          content: `The traveler says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
         },
       ],
-      { maxTokens: 512 }
+      { maxTokens: 512, model: HAIKU }
     );
   }
 
-  // Track usage
+  // Track usage and mark as visited
   for (const spot of spots.slice(0, 3)) {
     incrementSpotUseCount(spot.id);
   }
+  await markSpotsVisited(phoneNumber, spots.slice(0, 3).map(s => s.id));
+
+  // Load traveler preferences for context
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  const prefs = traveler.preferences ?? {};
+  const prefLines: string[] = [];
+  if (traveler.dietary_restrictions?.length) prefLines.push(`Dietary restrictions: ${traveler.dietary_restrictions.join(", ")}`);
+  if (prefs.budget) prefLines.push(`Budget: ${prefs.budget}`);
+  if (prefs.interests?.length) prefLines.push(`Interests: ${prefs.interests.join(", ")}`);
+  const prefContext = prefLines.length > 0 ? `\nUser preferences:\n${prefLines.join("\n")}` : "";
 
   // Format spots for Claude
   const spotContext = formatSpotsForLLM(spots.slice(0, 3));
   const weatherContext = weather ? `\nCurrent weather: ${weather.summary}` : "";
 
-  const prompt = `The traveler asked: "${message}"
-${travelerContext ? `\nTraveler context: ${travelerContext}` : ""}
+  const prompt = `The user asked: "${message}"
+${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
+${prefContext}
 ${weatherContext}
 
 Here are the matching spots from your knowledge graph. Recommend them naturally — include operational details (payment, what to order, tips). Don't list them robotically; make it feel like a friend's recommendation.
@@ -103,6 +114,13 @@ ${spotContext}`;
   return await chat(systemPrompt, [{ role: "user", content: prompt }], {
     maxTokens: 1024,
   });
+}
+
+function confidenceLabel(score: number | undefined): string {
+  const s = score ?? 0.7;
+  if (s >= 0.85) return "personal favorite";
+  if (s >= 0.6) return "well-vouched";
+  return "fresh intel";
 }
 
 export function formatSpotsForLLM(spots: Spot[]): string {
@@ -128,6 +146,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
       if (s.tier) lines.push(`   Tier: ${s.tier}`);
+      lines.push(`   Paul's take: ${confidenceLabel(s.confidence_score)}`);
       return lines.join("\n");
     })
     .join("\n\n");

@@ -26,6 +26,18 @@ interface IntentDetails {
   specific_place?: string;
 }
 
+/** Build a preference context string for LLM prompts */
+function buildPrefContext(traveler: { dietary_restrictions?: string[]; preferences?: Record<string, any> }): string {
+  const lines: string[] = [];
+  if (traveler.dietary_restrictions?.length)
+    lines.push(`Dietary restrictions: ${traveler.dietary_restrictions.join(", ")}`);
+  const prefs = traveler.preferences ?? {};
+  if (prefs.budget) lines.push(`Budget: ${prefs.budget}`);
+  if (prefs.interests?.length)
+    lines.push(`Interests: ${prefs.interests.join(", ")}`);
+  return lines.length > 0 ? lines.join("\n") : "";
+}
+
 /** "I'm hungry" flow — location + time + preferences → recommend spots */
 export async function handleHungry(
   phoneNumber: string,
@@ -101,19 +113,21 @@ Keep it short — this is WhatsApp.`;
       ? "They're feeling tired — recommend nearby and chill options."
       : "";
 
+  const prefContext = buildPrefContext(traveler);
+
   const prompt = `The user says: "${message}"
 
 Time: ${timeOfDay} (KL time)
 ${details.neighborhood ? `They're near: ${details.neighborhood}` : "Location not specified — you can ask."}
 ${weatherNote}
 ${tiredNote}
-Their interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food"}
+${prefContext}
 
 Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-Recommend naturally. Include full operational details. End by asking which one appeals or if they want something different. Keep it concise — this is WhatsApp, not email.`;
+Recommend naturally. Include full operational details. Respect their dietary restrictions — do NOT recommend dishes or spots that conflict. End by asking which one appeals or if they want something different. Keep it concise — this is WhatsApp, not email.`;
 
   return await chat(systemPrompt, [{ role: "user", content: prompt }], {
     maxTokens: 1024,
@@ -141,18 +155,20 @@ export async function handleDayPlan(
   // Mark all recommended spots as visited
   await markSpotsVisited(phoneNumber, allDaySpots.map(s => s.id));
 
+  const prefContext = buildPrefContext(traveler);
+
   const prompt = `The user asks: "${message}"
 
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
-Their interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food, culture"}
+${prefContext}
 Spots they've already visited: ${traveler.spots_visited?.length ?? 0}
 
 Available spots for building a day plan:
 
 ${spotsContext}
 
-Build a loose, conversational day structure. NOT a rigid itinerary — more like "here's a nice flow for today." Ask about their energy level if they didn't mention it. Include operational details for each spot. End with "text me when you're hungry or want to adjust!"`;
+Build a loose, conversational day structure. NOT a rigid itinerary — more like "here's a nice flow for today." Ask about their energy level if they didn't mention it. Include operational details for each spot. Respect their dietary restrictions — skip dishes that conflict. End with "text me when you're hungry or want to adjust!"`;
 
   return await chat(systemPrompt, [{ role: "user", content: prompt }], {
     maxTokens: 1500,
@@ -185,16 +201,19 @@ export async function handleNearby(
   }
   await markSpotsVisited(phoneNumber, spots.map(s => s.id));
 
+  const prefContext = buildPrefContext(traveler);
+
   const prompt = `The user says: "${message}"
 
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${neighborhood ? `They're near: ${neighborhood}` : "Location unclear — ask them."}
+${prefContext}
 
 Nearby spots from knowledge graph:
 
 ${spotsContext}
 
-Give them a quick, varied list of what's nearby — mix food and activities. Include walking distance estimates if you can infer from neighborhood. Keep it casual.`;
+Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions. Include walking distance estimates if you can infer from neighborhood. Keep it casual.`;
 
   return await chat(systemPrompt, [{ role: "user", content: prompt }], {
     maxTokens: 1024,

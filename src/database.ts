@@ -135,6 +135,23 @@ export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
   return data as Spot;
 }
 
+export async function findDuplicateSpot(
+  name: string,
+  neighborhood?: string
+): Promise<Spot | null> {
+  let query = supabase
+    .from("spots")
+    .select("*")
+    .ilike("name", name);
+
+  if (neighborhood) {
+    query = query.ilike("neighborhood", `%${neighborhood}%`);
+  }
+
+  const { data } = await query.limit(1).maybeSingle();
+  return (data as Spot) ?? null;
+}
+
 export async function incrementSpotUseCount(spotId: string): Promise<void> {
   const { data } = await supabase
     .from("spots")
@@ -145,7 +162,7 @@ export async function incrementSpotUseCount(spotId: string): Promise<void> {
   if (data) {
     await supabase
       .from("spots")
-      .update({ use_count: ((data as any).use_count ?? 0) + 1 })
+      .update({ use_count: ((data as Pick<Spot, 'use_count'>).use_count ?? 0) + 1 })
       .eq("id", spotId);
   }
 }
@@ -158,6 +175,8 @@ export interface Traveler {
   id: string;
   whatsapp_number: string;
   name?: string;
+  user_type: "local" | "traveler" | "unknown";
+  home_neighborhoods: string[];
   preferences: Record<string, any>;
   dietary_restrictions: string[];
   current_city?: string;
@@ -206,7 +225,17 @@ export async function markSpotVisited(
 ): Promise<void> {
   const traveler = await getOrCreateTraveler(phoneNumber);
   const visited = [...(traveler.spots_visited ?? []), spotId];
-  await updateTraveler(phoneNumber, { spots_visited: visited } as any);
+  await updateTraveler(phoneNumber, { spots_visited: visited });
+}
+
+export async function markSpotsVisited(
+  phoneNumber: string,
+  spotIds: string[]
+): Promise<void> {
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  const existing = new Set(traveler.spots_visited ?? []);
+  for (const id of spotIds) existing.add(id);
+  await updateTraveler(phoneNumber, { spots_visited: [...existing] });
 }
 
 // ============================================
@@ -242,14 +271,17 @@ export async function getOrCreateContributor(
 }
 
 export async function incrementContributorCount(
-  phoneNumber: string
+  phoneNumber: string,
+  city: string = "Kuala Lumpur"
 ): Promise<void> {
   const contributor = await getOrCreateContributor(phoneNumber);
+  const existing: string[] = (contributor as any).cities_contributed ?? [];
+  const cities = existing.includes(city) ? existing : [...existing, city];
   await supabase
     .from("contributors")
     .update({
       spots_contributed: contributor.spots_contributed + 1,
-      cities_contributed: ["Kuala Lumpur"],
+      cities_contributed: cities,
     })
     .eq("whatsapp_number", phoneNumber);
 }

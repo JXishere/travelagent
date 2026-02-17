@@ -5,6 +5,7 @@ import { transcribeVoiceNote } from "../transcription.js";
 import { extractJSON } from "../llm.js";
 import {
   insertSpot,
+  findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
   updateConversation,
@@ -16,6 +17,7 @@ interface ExtractedSpot {
   name?: string;
   category?: string;
   neighborhood?: string;
+  city?: string;
   address?: string;
   price_range?: string;
   payment_methods?: string[];
@@ -123,7 +125,12 @@ async function resolveInput(
 ): Promise<string> {
   if (audioId) {
     await sendMessage(phoneNumber, "Got your voice note — let me listen...");
-    return await transcribeVoiceNote(audioId);
+    try {
+      return await transcribeVoiceNote(audioId);
+    } catch (error) {
+      console.error("Voice note transcription failed:", error, "audioId:", audioId);
+      return message || "";
+    }
   }
   return message;
 }
@@ -140,7 +147,8 @@ async function extractWithContext(
 
   try {
     return await extractJSON<ExtractedSpot>("extraction", input, context);
-  } catch {
+  } catch (error) {
+    console.error("Spot extraction failed:", error, "input:", input.slice(0, 200));
     return {};
   }
 }
@@ -230,7 +238,7 @@ function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<Extract
   const prefix = buildWarmPrefix(merged, previous);
 
   if (!merged.name) return `${prefix}What's it called?`;
-  if (!merged.neighborhood) return `${prefix}What area of KL is it in?`;
+  if (!merged.neighborhood) return `${prefix}What area is it in? And what city if it's not KL?`;
   if (!merged.category) return `${prefix}What kind of spot? (breakfast, lunch, dinner, cafe, activity, nightlife, market)`;
   if (!merged.what_to_order?.length) return `${prefix}What should people order there?`;
   return `${prefix}Any tips? Like payment, hours, or insider tricks?`;
@@ -251,7 +259,7 @@ function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<Extra
 function formatSummary(data: Partial<ExtractedSpot>): string {
   const lines: string[] = ["Here's what I've got:", ""];
 
-  lines.push(`*${data.name}* — ${data.neighborhood}`);
+  lines.push(`*${data.name}* — ${data.neighborhood}, ${data.city || "Kuala Lumpur"}`);
 
   const meta: string[] = [];
   if (data.category) meta.push(capitalize(data.category));
@@ -294,13 +302,24 @@ async function saveSpot(
   const contributor = await getOrCreateContributor(phoneNumber);
 
   const { missing_fields, ...spotData } = data as any;
+
+  // Check for duplicate before inserting
+  const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
+  if (duplicate) {
+    await updateConversation(phoneNumber, {
+      current_flow: "general",
+      flow_state: {},
+    });
+    return `Looks like *${duplicate.name}* (${duplicate.neighborhood}) is already in the knowledge graph! If you have new tips or updates, just let me know.`;
+  }
+
   await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
     source,
   });
 
-  await incrementContributorCount(phoneNumber);
+  await incrementContributorCount(phoneNumber, data.city || "Kuala Lumpur");
   const updated = await getOrCreateContributor(phoneNumber);
 
   await updateConversation(phoneNumber, {
@@ -308,5 +327,5 @@ async function saveSpot(
     flow_state: {},
   });
 
-  return `Added *${data.name}* to the KL knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Paul gets for everyone.`;
+  return `Added *${data.name}* to the knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Paul gets for everyone.`;
 }

@@ -8,6 +8,7 @@ Return ONLY valid JSON in this exact format:
   "name": "Name of the spot",
   "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
   "neighborhood": "KL neighborhood (e.g. Bangsar, TTDI, Bukit Bintang)",
+  "city": "City name (e.g. Kuala Lumpur, Penang, Malacca)",
   "address": "Street address if mentioned",
   "price_range": "$|$$|$$$",
   "payment_methods": ["cash", "card"],
@@ -29,5 +30,5 @@ Rules:
 - Set "tier" based on how enthusiastically the contributor describes it (1 = "you MUST go here", 2 = recommended, 3 = nice to have).
 - "missing_fields" should list critical fields that were NOT mentioned: name, category, neighborhood are critical.
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
-- Default city is "Kuala Lumpur" — don't include it in the output, it's implied.
-- Normalize neighborhood names to standard KL neighborhoods.
+- Always extract the city if mentioned. If not mentioned, default to "Kuala Lumpur".
+- Normalize neighborhood names to well-known neighborhoods in that city.

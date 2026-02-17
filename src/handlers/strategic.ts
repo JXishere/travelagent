@@ -55,6 +55,7 @@ Profile:
 ${prefs.specific_requests?.length ? `- Specific requests: ${prefs.specific_requests.join(", ")}` : ""}
   `.trim();
 
+  const city = traveler.current_city ?? getDefaultCity();
   const prompt = `${profileSummary}
 
 Available spots in the knowledge graph (${allSpots.length} total, ${topSpots.length} tier-1 must-dos):
@@ -63,8 +64,9 @@ ${spotsContext}
 
 Generate the strategic decisions message. Pick the best 3-5 anchor spots based on their profile.`;
 
+  const filledPrompt = strategicPrompt.replace("{{CITY}}", city.toUpperCase());
   const strategicMessage = await chat(
-    strategicPrompt,
+    filledPrompt,
     [{ role: "user", content: prompt }],
     { maxTokens: 2048, model: SONNET }
   );

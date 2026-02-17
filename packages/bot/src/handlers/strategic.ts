@@ -1,6 +1,6 @@
 // Strategic decisions generation — profile + knowledge graph → pre-trip guide
 
-import { chat, SONNET } from "../llm.js";
+import { chat, loadPrompt, SONNET } from "../llm.js";
 import {
   getOrCreateTraveler,
   querySpots,
@@ -9,13 +9,12 @@ import {
 import { getCurrentWeather } from "../weather.js";
 import { formatSpotsForLLM } from "./query.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
-import { readFileSync } from "fs";
-import { join } from "path";
 
-const strategicPrompt = readFileSync(
-  join(__dirname, "..", "prompts", "strategic.txt"),
-  "utf-8"
-);
+let _strategicPrompt: string | null = null;
+function getStrategicPrompt(): string {
+  if (!_strategicPrompt) _strategicPrompt = loadPrompt("strategic");
+  return _strategicPrompt;
+}
 
 export async function handleStrategic(phoneNumber: string): Promise<string> {
   const traveler = await getOrCreateTraveler(phoneNumber);
@@ -64,7 +63,7 @@ ${spotsContext}
 
 Generate the strategic decisions message. Pick the best 3-5 anchor spots based on their profile.`;
 
-  const filledPrompt = strategicPrompt.replace("{{CITY}}", city.toUpperCase());
+  const filledPrompt = getStrategicPrompt().replace("{{CITY}}", city.toUpperCase());
   const strategicMessage = await chat(
     filledPrompt,
     [{ role: "user", content: prompt }],

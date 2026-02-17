@@ -6,7 +6,7 @@ import { downloadMedia } from "./whatsapp.js";
 const openai = new OpenAI(); // uses OPENAI_API_KEY env var
 
 /** Download a WhatsApp voice note and transcribe it via Whisper */
-export async function transcribeVoiceNote(mediaId: string): Promise<string> {
+export async function transcribeVoiceNote(mediaId: string, language = "en"): Promise<string> {
   const audioBuffer = await downloadMedia(mediaId);
 
   // Whisper needs a File-like object with a name
@@ -15,7 +15,7 @@ export async function transcribeVoiceNote(mediaId: string): Promise<string> {
   const transcription = await openai.audio.transcriptions.create({
     model: "whisper-1",
     file,
-    language: "en",
+    language,
   });
 
   return transcription.text;

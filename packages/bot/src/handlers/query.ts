@@ -1,15 +1,16 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
-import { chat, HAIKU } from "../llm.js";
+import { chat, loadPrompt, HAIKU } from "../llm.js";
 import { querySpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
-import { readFileSync } from "fs";
-import { join } from "path";
+import { resolveCategories } from "../utils/categories.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 
-const systemPrompt = readFileSync(
-  join(__dirname, "..", "prompts", "system.txt"),
-  "utf-8"
-);
+let _systemPrompt: string | null = null;
+function getSystemPrompt(): string {
+  if (!_systemPrompt) _systemPrompt = loadPrompt("system");
+  return _systemPrompt;
+}
 
 interface QueryDetails {
   neighborhood?: string;
@@ -19,51 +20,19 @@ interface QueryDetails {
   specific_place?: string;
 }
 
-/** Map time of day / meal type to spot categories */
-function resolveCategories(details: QueryDetails): string[] {
-  const meal = details.meal_type?.toLowerCase();
-  const time = details.time_of_day?.toLowerCase();
-
-  if (meal) {
-    const map: Record<string, string[]> = {
-      breakfast: ["breakfast", "cafe"],
-      brunch: ["breakfast", "cafe"],
-      lunch: ["lunch", "cafe"],
-      dinner: ["dinner", "nightlife"],
-      coffee: ["cafe"],
-      drinks: ["nightlife"],
-      dessert: ["cafe"],
-      "late night": ["nightlife", "dinner"],
-    };
-    return map[meal] ?? [meal];
-  }
-
-  if (time) {
-    const map: Record<string, string[]> = {
-      morning: ["breakfast", "cafe"],
-      afternoon: ["lunch", "cafe", "activity"],
-      evening: ["dinner", "nightlife", "activity"],
-      "late-night": ["nightlife", "dinner"],
-    };
-    return map[time] ?? [];
-  }
-
-  // Default to food categories
-  return ["breakfast", "lunch", "dinner", "cafe"];
-}
-
 export async function handleQuery(
   phoneNumber: string,
   message: string,
   details: QueryDetails,
   travelerContext?: string
 ): Promise<string> {
-  const categories = resolveCategories(details);
+  const categories = resolveCategories(details.meal_type, details.time_of_day);
+  const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
 
   // Build query filters
   const spots = await querySpots({
-    city: "Kuala Lumpur",
+    city: traveler.current_city ?? getDefaultCity(),
     neighborhood: details.neighborhood,
     categories,
     indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
@@ -72,7 +41,7 @@ export async function handleQuery(
 
   if (spots.length === 0) {
     return await chat(
-      systemPrompt,
+      getSystemPrompt(),
       [
         {
           role: "user",
@@ -89,13 +58,13 @@ export async function handleQuery(
   }
   await markSpotsVisited(phoneNumber, spots.slice(0, 3).map(s => s.id));
 
-  // Load traveler preferences for context
-  const traveler = await getOrCreateTraveler(phoneNumber);
+  // Build traveler preferences for context
   const prefs = traveler.preferences ?? {};
   const prefLines: string[] = [];
   if (traveler.dietary_restrictions?.length) prefLines.push(`Dietary restrictions: ${traveler.dietary_restrictions.join(", ")}`);
   if (prefs.budget) prefLines.push(`Budget: ${prefs.budget}`);
   if (prefs.interests?.length) prefLines.push(`Interests: ${prefs.interests.join(", ")}`);
+  if (prefs.cuisine_preferences?.length) prefLines.push(`Cuisine preferences: ${prefs.cuisine_preferences.join(", ")}`);
   const prefContext = prefLines.length > 0 ? `\nUser preferences:\n${prefLines.join("\n")}` : "";
 
   // Format spots for Claude
@@ -111,12 +80,18 @@ Here are the matching spots from your knowledge graph. Recommend them naturally 
 
 ${spotContext}`;
 
-  return await chat(systemPrompt, [{ role: "user", content: prompt }], {
+  return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {
     maxTokens: 1024,
   });
 }
 
-function confidenceLabel(score: number | undefined): string {
+export function formatOpeningHours(hours: Record<string, string>): string {
+  return Object.entries(hours)
+    .map(([day, time]) => `${day.charAt(0).toUpperCase() + day.slice(1)}: ${time}`)
+    .join(", ");
+}
+
+export function confidenceLabel(score: number | undefined): string {
   const s = score ?? 0.7;
   if (s >= 0.85) return "personal favorite";
   if (s >= 0.6) return "well-vouched";
@@ -134,7 +109,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       if (s.payment_methods?.length)
         lines.push(`   Payment: ${s.payment_methods.join(", ")}`);
       if (s.opening_hours)
-        lines.push(`   Hours: ${JSON.stringify(s.opening_hours)}`);
+        lines.push(`   Hours: ${formatOpeningHours(s.opening_hours)}`);
       if (s.what_to_order?.length)
         lines.push(`   Order: ${s.what_to_order.join(", ")}`);
       if (s.what_to_skip?.length)

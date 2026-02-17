@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0a0a;
+  --fg: #ededed;
+  --green: #4ade80;
+  --green-dark: #22c55e;
+  --muted: #737373;
+  --bar-bg: #262626;
+}

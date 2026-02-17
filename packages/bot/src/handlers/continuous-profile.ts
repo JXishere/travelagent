@@ -132,7 +132,7 @@ const TOP_LEVEL_FIELDS = new Set([
  * Merge a profile delta into the existing traveler, returning a partial update
  * ready for updateTraveler().
  */
-function mergeProfileDelta(
+export function mergeProfileDelta(
   existing: Traveler,
   delta: ProfileDelta
 ): Partial<Traveler> {
@@ -180,7 +180,7 @@ function getExistingArray(traveler: Traveler, field: string): string[] {
 }
 
 /** Merge arrays: append + deduplicate, !-prefixed items remove existing entries */
-function mergeArray(existing: string[], incoming: string[]): string[] {
+export function mergeArray(existing: string[], incoming: string[]): string[] {
   const removals = new Set(
     incoming
       .filter((item) => item.startsWith("!"))

@@ -6,41 +6,58 @@ Sam is a WhatsApp-based travel intelligence bot for Kuala Lumpur. He guides trav
 
 - **Runtime**: Node.js / TypeScript
 - **Framework**: Express (webhook server for WhatsApp Cloud API)
+- **Web**: Next.js 15 (landing page at `packages/web/`)
 - **Database**: Supabase (PostgreSQL)
 - **LLM**: Claude API via `@anthropic-ai/sdk` — default model is Haiku (`claude-haiku-4-5-20251001`), Sonnet (`claude-sonnet-4-5-20250929`) available for heavier tasks
 - **Voice**: OpenAI Whisper (voice note transcription)
 - **Weather**: OpenWeather API (context-aware recommendations)
 
-## Key Directories
+## Monorepo Structure
+
+npm workspaces monorepo with two packages:
 
 ```
-src/
-├── index.ts            — Express app, webhook routes, flow router
-├── database.ts         — Supabase client + all DB operations
-├── llm.ts              — Claude API wrapper, prompt loading
-├── whatsapp.ts         — WhatsApp Cloud API (send/receive/media)
-├── transcription.ts    — Whisper voice note transcription
-├── weather.ts          — OpenWeather integration
-├── seed.ts             — Knowledge graph seeding (50+ KL spots)
-├── handlers/
-│   ├── query.ts              — "I'm hungry" → spot recommendations
-│   ├── contribution.ts       — Voice note → structured spot ingestion
-│   ├── profile.ts            — Conversational trip profile learning
-│   ├── continuous-profile.ts — Background profile extraction from every message
-│   ├── strategic.ts          — Pre-trip strategic planning
-│   ├── ontrip.ts             — Day-by-day guidance (hungry, day_plan, nearby)
-│   ├── feedback.ts           — Post-trip spot validation
-│   └── generate.ts           — Admin /generate command for spot content
-└── prompts/
-    ├── system.txt             — Sam's personality + core rules
-    ├── extraction.txt         — Voice note → JSON extraction
-    ├── profile.txt            — Conversational profile learning
-    ├── continuous_profile.txt — Background profile extraction rules
-    ├── strategic.txt          — Strategic trip planning format
-    └── generate.txt           — Spot content generation prompt
+packages/
+├── bot/                — WhatsApp bot (Express + Claude)
+│   ├── src/
+│   │   ├── index.ts            — Express app, webhook routes, flow router
+│   │   ├── database.ts         — Supabase client + all DB operations
+│   │   ├── llm.ts              — Claude API wrapper, prompt loading
+│   │   ├── whatsapp.ts         — WhatsApp Cloud API (send/receive/media)
+│   │   ├── transcription.ts    — Whisper voice note transcription
+│   │   ├── weather.ts          — OpenWeather integration
+│   │   ├── seed.ts             — Knowledge graph seeding (50+ KL spots)
+│   │   ├── handlers/
+│   │   │   ├── query.ts              — "I'm hungry" → spot recommendations
+│   │   │   ├── contribution.ts       — Voice note → structured spot ingestion
+│   │   │   ├── profile.ts            — Conversational trip profile learning
+│   │   │   ├── continuous-profile.ts — Background profile extraction from every message
+│   │   │   ├── strategic.ts          — Pre-trip strategic planning
+│   │   │   ├── ontrip.ts             — Day-by-day guidance (hungry, day_plan, nearby)
+│   │   │   ├── feedback.ts           — Post-trip spot validation
+│   │   │   └── generate.ts           — Admin /generate command for spot content
+│   │   └── prompts/
+│   │       ├── system.txt             — Sam's personality + core rules
+│   │       ├── extraction.txt         — Voice note → JSON extraction
+│   │       ├── profile.txt            — Conversational profile learning
+│   │       ├── continuous_profile.txt — Background profile extraction rules
+│   │       ├── strategic.txt          — Strategic trip planning format
+│   │       └── generate.txt           — Spot content generation prompt
+│   ├── package.json
+│   └── tsconfig.json
+├── web/                — Next.js landing page
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx       — Root layout (Geist Mono, dark theme)
+│   │   │   ├── page.tsx         — Counter page (server component, ISR)
+│   │   │   └── globals.css      — Tailwind v4 + custom vars
+│   │   └── lib/
+│   │       └── supabase.ts      — Supabase client + getCityStats()
+│   ├── package.json
+│   └── tsconfig.json
 
 supabase/
-└── schema.sql          — Full database schema (5 tables)
+└── schema.sql          — Full database schema (5 tables + RPC)
 
 docs/                   — Strategy docs, competitive analysis, blueprints
 ```
@@ -48,10 +65,14 @@ docs/                   — Strategy docs, competitive analysis, blueprints
 ## Dev Commands
 
 ```bash
-npm run dev    # Start dev server with auto-reload (tsx watch)
-npm run build  # Compile TypeScript (tsc)
-npm run start  # Run compiled app (node dist/index.js)
-npm run seed   # Populate knowledge graph with KL spots
+npm run dev        # Start bot dev server (Express on :3000)
+npm run dev:web    # Start landing page dev server (Next.js on :3001)
+npm run build      # Build both packages
+npm run build:bot  # Build bot only
+npm run build:web  # Build web only
+npm run start      # Run compiled bot
+npm run seed       # Populate knowledge graph with KL spots
+npm test           # Run bot tests (vitest)
 ```
 
 ## Code Rules
@@ -78,7 +99,7 @@ npm run seed   # Populate knowledge graph with KL spots
 
 ## Prompt Loading
 
-Prompts live in `src/prompts/*.txt` and are loaded by `src/llm.ts`:
+Prompts live in `packages/bot/src/prompts/*.txt` and are loaded by `packages/bot/src/llm.ts`:
 
 ```typescript
 const PROMPTS_DIR = join(__dirname, "prompts");
@@ -112,4 +133,4 @@ Gated behind `ADMIN_PHONE_NUMBER` env var:
 
 ## Environment Variables
 
-See `.env.example` for all required vars: WhatsApp tokens, Supabase URL/key, Anthropic key, OpenAI key, OpenWeather key, `ADMIN_PHONE_NUMBER` (for admin features).
+Single root `.env.local` (gitignored) shared by both packages. See `.env.example` for the full list.

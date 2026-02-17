@@ -1,0 +1,3 @@
+Extract feedback from this message about a restaurant/spot visit. Return ONLY JSON:
+{ "rating": 1-5 or null, "did_they_go": true/false, "comments": "summary", "tips": ["any tips for future visitors"] }
+If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4, good=3, meh=2, bad=1).

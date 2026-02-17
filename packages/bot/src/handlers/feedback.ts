@@ -1,6 +1,6 @@
 // Feedback flow — post-trip validation and tip collection
 
-import { chat, HAIKU } from "../llm.js";
+import { chat, loadPrompt, HAIKU } from "../llm.js";
 import {
   getSpotsNeedingFeedback,
   markFeedbackAsked,
@@ -11,18 +11,12 @@ import {
   type Conversation,
   type Spot,
 } from "../database.js";
-import { readFileSync } from "fs";
-import { join } from "path";
 
-const systemPrompt = readFileSync(
-  join(__dirname, "..", "prompts", "system.txt"),
-  "utf-8"
-);
-
-const feedbackExtractionPrompt = readFileSync(
-  join(__dirname, "..", "prompts", "feedback.txt"),
-  "utf-8"
-);
+let _feedbackPrompt: string | null = null;
+function getFeedbackPrompt(): string {
+  if (!_feedbackPrompt) _feedbackPrompt = loadPrompt("feedback");
+  return _feedbackPrompt;
+}
 
 export async function handleFeedback(
   phoneNumber: string,
@@ -35,7 +29,7 @@ export async function handleFeedback(
   if (state.stage === "asking" && state.spot_id) {
     // Parse their response — extract rating and comments
     const parsed = await chat(
-      feedbackExtractionPrompt,
+      getFeedbackPrompt(),
       [{ role: "user", content: message }],
       { temperature: 0.2, model: HAIKU }
     );

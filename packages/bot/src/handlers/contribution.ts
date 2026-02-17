@@ -1,17 +1,19 @@
 // Contribution flow — conversational accumulation of spot knowledge
 // Two stages: collecting → confirming
 
-import { transcribeVoiceNote } from "../transcription.js";
 import { extractJSON, classifyConfirmation } from "../llm.js";
 import {
   insertSpot,
+  updateSpot,
+  getSpotById,
   findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
   updateConversation,
   type Conversation,
+  type Spot,
 } from "../database.js";
-import { sendMessage } from "../whatsapp.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 
 interface ExtractedSpot {
   name?: string;
@@ -34,10 +36,11 @@ interface ExtractedSpot {
 }
 
 interface ContributionState {
-  stage: "collecting" | "confirming";
+  stage: "collecting" | "confirming" | "update_existing";
   extracted: Partial<ExtractedSpot>;
   source: "voice" | "text";
   messagesReceived: number;
+  duplicateSpotId?: string;
 }
 
 
@@ -115,6 +118,48 @@ export async function handleContribution(
     return formatSummary(merged);
   }
 
+  // Update existing stage — user confirmed or declined updating a duplicate spot
+  if (state.stage === "update_existing") {
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const intent = await classifyConfirmation(input, "update this spot");
+
+    if (intent === "confirm" || intent === "unrelated") {
+      const spotId = state.duplicateSpotId!;
+      const existing = await getSpotById(spotId);
+      const updates = smartMergeForUpdate(state.extracted ?? {});
+      // Merge array fields: append new items to existing arrays
+      if (existing) {
+        const arrayFields = ["what_to_order", "what_to_skip", "pro_tips", "payment_methods"] as const;
+        for (const field of arrayFields) {
+          const incomingArr: string[] = (state.extracted as any)?.[field] ?? [];
+          if (incomingArr.length > 0) {
+            const existingArr: string[] = (existing as any)[field] ?? [];
+            const existingLower = new Set(existingArr.map(s => s.toLowerCase()));
+            const merged = [...existingArr, ...incomingArr.filter(s => !existingLower.has(s.toLowerCase()))];
+            (updates as any)[field] = merged;
+          }
+        }
+      }
+      await updateSpot(spotId, updates);
+      await updateConversation(phoneNumber, {
+        current_flow: "general",
+        flow_state: {},
+      });
+      const response = `Updated *${state.extracted?.name}* with your new intel! 🙏`;
+      if (intent === "unrelated") {
+        return `${response}\n\nNow — what's up?`;
+      }
+      return response;
+    }
+
+    // Declined — go back to general
+    await updateConversation(phoneNumber, {
+      current_flow: "general",
+      flow_state: {},
+    });
+    return "No worries, keeping it as is! What else can I help with?";
+  }
+
   // Fallback
   await updateConversation(phoneNumber, {
     current_flow: "general",
@@ -130,8 +175,12 @@ async function resolveInput(
   audioId: string | undefined
 ): Promise<string> {
   if (audioId) {
+    // Dynamic imports — only loaded when voice notes are present (keeps
+    // this module importable in contexts without WhatsApp deps, e.g. web)
+    const { sendMessage } = await import("../whatsapp.js");
     await sendMessage(phoneNumber, "Got your voice note — let me listen...");
     try {
+      const { transcribeVoiceNote } = await import("../transcription.js");
       return await transcribeVoiceNote(audioId);
     } catch (error) {
       console.error("Voice note transcription failed:", error, "audioId:", audioId);
@@ -200,7 +249,7 @@ async function collectInfo(
 }
 
 /** Merge new extracted data into existing, preserving non-empty values */
-function smartMerge(
+export function smartMerge(
   existing: Partial<ExtractedSpot>,
   incoming: Partial<ExtractedSpot>,
   replaceArrays = false
@@ -228,7 +277,7 @@ function smartMerge(
 }
 
 /** Check if we have enough data to show a confirmation summary */
-function isReady(data: Partial<ExtractedSpot>): boolean {
+export function isReady(data: Partial<ExtractedSpot>): boolean {
   const hasCritical = Boolean(data.name && data.category && data.neighborhood);
   const hasOperational = Boolean(
     (data.what_to_order && data.what_to_order.length > 0) ||
@@ -239,7 +288,7 @@ function isReady(data: Partial<ExtractedSpot>): boolean {
 }
 
 /** Build a natural follow-up question with a warm prefix */
-function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
+export function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
   // If extraction yielded nothing, give a warm opening prompt
   const meaningfulKeys = Object.keys(merged).filter((k) => k !== "missing_fields");
   if (meaningfulKeys.length === 0) {
@@ -256,7 +305,7 @@ function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<Extract
 }
 
 /** Acknowledge what Sam just learned */
-function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
+export function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
   const learnedName = merged.name && !previous.name;
   const learnedNeighborhood = merged.neighborhood && !previous.neighborhood;
 
@@ -267,10 +316,10 @@ function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<Extra
 }
 
 /** Format a summary of the accumulated spot data */
-function formatSummary(data: Partial<ExtractedSpot>): string {
+export function formatSummary(data: Partial<ExtractedSpot>): string {
   const lines: string[] = ["Here's what I've got:", ""];
 
-  lines.push(`*${data.name}* — ${data.neighborhood}, ${data.city || "Kuala Lumpur"}`);
+  lines.push(`*${data.name}* — ${data.neighborhood}, ${data.city || getDefaultCity()}`);
 
   const meta: string[] = [];
   if (data.category) meta.push(capitalize(data.category));
@@ -305,6 +354,49 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Describe what's new in the contributed data vs the existing spot */
+export function describeNewInfo(existing: Spot, incoming: Partial<ExtractedSpot>): string[] {
+  const lines: string[] = [];
+  const arrayFields = ["what_to_order", "what_to_skip", "pro_tips", "payment_methods"] as const;
+
+  for (const field of arrayFields) {
+    const existingArr = (existing as any)[field] ?? [];
+    const incomingArr = (incoming as any)[field] ?? [];
+    const newItems = incomingArr.filter((item: string) =>
+      !existingArr.some((e: string) => e.toLowerCase() === item.toLowerCase())
+    );
+    if (newItems.length > 0) {
+      const label = field.replace(/_/g, " ");
+      lines.push(`• New ${label}: ${newItems.join(", ")}`);
+    }
+  }
+
+  if (incoming.vibe && incoming.vibe !== existing.vibe) {
+    lines.push(`• Vibe: ${incoming.vibe} (was: ${existing.vibe ?? "unset"})`);
+  }
+  if (incoming.price_range && incoming.price_range !== existing.price_range) {
+    lines.push(`• Price: ${incoming.price_range} (was: ${existing.price_range ?? "unset"})`);
+  }
+
+  return lines;
+}
+
+/** Build a partial Spot update from contributed data — appends to arrays, overwrites scalars */
+export function smartMergeForUpdate(incoming: Partial<ExtractedSpot>): Partial<Spot> {
+  const updates: Partial<Spot> = {};
+  const { missing_fields, ...data } = incoming as any;
+
+  // Scalar fields — overwrite if present
+  const scalarFields = ["vibe", "price_range", "address", "best_time_of_day", "indoor_outdoor", "weather_dependent", "tier", "opening_hours"] as const;
+  for (const field of scalarFields) {
+    if (data[field] != null) {
+      (updates as any)[field] = data[field];
+    }
+  }
+
+  return updates;
+}
+
 async function saveSpot(
   phoneNumber: string,
   data: Partial<ExtractedSpot>,
@@ -314,14 +406,29 @@ async function saveSpot(
 
   const { missing_fields, ...spotData } = data as any;
 
-  // Check for duplicate before inserting
+  // Check for duplicate — offer to update instead of silently discarding
   const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
   if (duplicate) {
+    const newInfo = describeNewInfo(duplicate, data);
+    if (newInfo.length === 0) {
+      await updateConversation(phoneNumber, {
+        current_flow: "general",
+        flow_state: {},
+      });
+      return `*${duplicate.name}* (${duplicate.neighborhood}) is already in the knowledge graph and your info matches what we have!`;
+    }
+
     await updateConversation(phoneNumber, {
-      current_flow: "general",
-      flow_state: {},
+      current_flow: "contribution",
+      flow_state: {
+        stage: "update_existing",
+        extracted: data,
+        source,
+        messagesReceived: 0,
+        duplicateSpotId: duplicate.id,
+      },
     });
-    return `Looks like *${duplicate.name}* (${duplicate.neighborhood}) is already in the knowledge graph! If you have new tips or updates, just let me know.`;
+    return `*${duplicate.name}* is already in the graph, but you've got new intel:\n\n${newInfo.join("\n")}\n\nWant me to update it?`;
   }
 
   await insertSpot({
@@ -330,7 +437,7 @@ async function saveSpot(
     source,
   });
 
-  await incrementContributorCount(phoneNumber, data.city || "Kuala Lumpur");
+  await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
   const updated = await getOrCreateContributor(phoneNumber);
 
   await updateConversation(phoneNumber, {

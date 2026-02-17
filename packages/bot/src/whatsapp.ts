@@ -10,6 +10,8 @@ export interface IncomingMessage {
   type: "text" | "audio" | "image" | "location" | "interactive";
   text?: string;
   audioId?: string;
+  imageId?: string;
+  imageCaption?: string;
   location?: { latitude: number; longitude: number };
   timestamp: number;
 }
@@ -34,6 +36,9 @@ export function parseWebhook(body: any): IncomingMessage | null {
       base.text = msg.text.body;
     } else if (msg.type === "audio") {
       base.audioId = msg.audio.id;
+    } else if (msg.type === "image") {
+      base.imageId = msg.image.id;
+      if (msg.image.caption) base.imageCaption = msg.image.caption;
     } else if (msg.type === "location") {
       base.location = {
         latitude: msg.location.latitude,
@@ -90,22 +95,6 @@ export async function downloadMedia(mediaId: string): Promise<Buffer> {
   return Buffer.from(arrayBuffer);
 }
 
-/** Mark a message as read (shows blue ticks) */
-export async function markAsRead(messageId: string): Promise<void> {
-  await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      status: "read",
-      message_id: messageId,
-    }),
-  });
-}
-
 /** Show typing indicator (...) to the user */
 export async function showTyping(messageId: string): Promise<void> {
   await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/messages`, {
@@ -125,7 +114,7 @@ export async function showTyping(messageId: string): Promise<void> {
   });
 }
 
-function splitMessage(text: string, maxLen: number): string[] {
+export function splitMessage(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text];
   const chunks: string[] = [];
   let remaining = text;

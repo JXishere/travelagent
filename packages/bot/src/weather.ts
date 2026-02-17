@@ -1,11 +1,9 @@
 // OpenWeather API — current conditions and forecast
 
+import { getCityDefaults } from "./utils/city-defaults.js";
+
 const API_KEY = process.env.OPENWEATHER_API_KEY;
 const BASE_URL = "https://api.openweathermap.org/data/2.5";
-
-// Default coordinates: Kuala Lumpur city center
-const KL_LAT = 3.139;
-const KL_LON = 101.6869;
 
 export interface WeatherInfo {
   description: string; // "light rain", "clear sky"
@@ -17,10 +15,10 @@ export interface WeatherInfo {
   summary: string; // human-readable summary for Claude
 }
 
-export async function getCurrentWeather(
-  lat = KL_LAT,
-  lon = KL_LON
-): Promise<WeatherInfo | null> {
+export async function getCurrentWeather(city?: string): Promise<WeatherInfo | null> {
+  const defaults = getCityDefaults(city);
+  const lat = defaults.latitude;
+  const lon = defaults.longitude;
   if (!API_KEY) return null;
 
   try {

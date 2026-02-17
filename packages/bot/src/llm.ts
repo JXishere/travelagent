@@ -9,10 +9,16 @@ const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 export const SONNET = "claude-sonnet-4-5-20250929";
 export const HAIKU = "claude-haiku-4-5-20251001";
 
-const PROMPTS_DIR = join(__dirname, "prompts");
+let promptsDir = join(__dirname, "prompts");
 
-function loadPrompt(name: string): string {
-  return readFileSync(join(PROMPTS_DIR, `${name}.txt`), "utf-8");
+/** Override the prompts directory (for use outside the bot package, e.g. Next.js) */
+export function setPromptsDir(dir: string): void {
+  promptsDir = dir;
+}
+
+/** Load a prompt file by name */
+export function loadPrompt(name: string): string {
+  return readFileSync(join(promptsDir, `${name}.txt`), "utf-8");
 }
 
 export type MessageRole = "user" | "assistant";
@@ -52,6 +58,34 @@ export async function chatAsSam(
     { role: "user", content: userMessage },
   ];
   return chat(systemPrompt, messages);
+}
+
+/** Streaming chat — returns an Anthropic MessageStream for token-by-token output */
+export function chatStream(
+  systemPrompt: string,
+  messages: ChatMessage[],
+  options?: { maxTokens?: number; temperature?: number; model?: string }
+) {
+  return client.messages.stream({
+    model: options?.model ?? HAIKU,
+    max_tokens: options?.maxTokens ?? 1024,
+    system: systemPrompt,
+    messages,
+    temperature: options?.temperature ?? 0.7,
+  });
+}
+
+/** Streaming chat with Sam's personality */
+export function chatAsSamStream(
+  history: ChatMessage[],
+  userMessage: string
+) {
+  const systemPrompt = loadPrompt("system");
+  const messages: ChatMessage[] = [
+    ...history,
+    { role: "user", content: userMessage },
+  ];
+  return chatStream(systemPrompt, messages);
 }
 
 /** Extract structured JSON from text (for voice note extraction, profile learning, etc.) */

@@ -1,0 +1,33 @@
+{
+  "name": "@sam/bot",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "exports": {
+    "./llm": "./src/llm.ts",
+    "./database": "./src/database.ts",
+    "./handlers/*": "./src/handlers/*.ts",
+    "./utils/*": "./src/utils/*.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file ../../.env.local src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "seed": "tsx --env-file ../../.env.local src/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "express": "^4.21.2",
+    "openai": "^4.82.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.18"
+  }
+}

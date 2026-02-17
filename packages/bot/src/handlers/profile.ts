@@ -1,6 +1,6 @@
 // Profile learning flow — conversational interview to learn user preferences
 
-import { chat, chatAsSam, extractJSON, HAIKU } from "../llm.js";
+import { chat, chatAsSam, extractJSON, loadPrompt, HAIKU } from "../llm.js";
 import {
   getOrCreateTraveler,
   updateTraveler,
@@ -8,13 +8,12 @@ import {
   type Conversation,
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
-import { readFileSync } from "fs";
-import { join } from "path";
 
-const profilePrompt = readFileSync(
-  join(__dirname, "..", "prompts", "profile.txt"),
-  "utf-8"
-);
+let _profilePrompt: string | null = null;
+function getProfilePrompt(): string {
+  if (!_profilePrompt) _profilePrompt = loadPrompt("profile");
+  return _profilePrompt;
+}
 
 interface ExtractedProfile {
   name?: string;
@@ -44,7 +43,7 @@ export async function handleProfile(
 
   // Get Claude's response in Sam's profile-learning mode
   const response = await chat(
-    profilePrompt,
+    getProfilePrompt(),
     [...history, { role: "user" as const, content: message }],
     { maxTokens: 512, model: HAIKU }
   );
@@ -143,7 +142,7 @@ export async function startProfileLearning(
   // If the user's first message already has profile info, respond to it
   if (initialMessage) {
     return await chat(
-      profilePrompt,
+      getProfilePrompt(),
       [{ role: "user", content: initialMessage }],
       { maxTokens: 512, model: HAIKU }
     );

@@ -41,8 +41,8 @@ export async function chat(
   return "";
 }
 
-/** Chat with Paul's personality — the main conversation mode */
-export async function chatAsP(
+/** Chat with Sam's personality — the main conversation mode */
+export async function chatAsSam(
   history: ChatMessage[],
   userMessage: string
 ): Promise<string> {
@@ -132,7 +132,7 @@ Classify the user's message into exactly one intent:
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
 - "profile": They're telling you about their trip or preferences, or identifying themselves ("planning a trip", "going to KL", "I like...", "I live here", "I'm local", "just moved to KL", "I'm from KL")
 - "feedback": They're giving feedback about a spot they visited ("it was great", "didn't like it", rating)
-- "general": General conversation, greetings, questions about Paul, off-topic
+- "general": General conversation, greetings, questions about Sam, off-topic
 
 PRIORITY: If a message contains both profile information ("I live here", "I'm vegetarian", trip dates) AND an action request (food recommendation, day plan, what's nearby), classify by the ACTION — not "profile". Profile facts are captured automatically in the background.
 

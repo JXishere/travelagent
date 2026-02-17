@@ -146,7 +146,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
       if (s.tier) lines.push(`   Tier: ${s.tier}`);
-      lines.push(`   Paul's take: ${confidenceLabel(s.confidence_score)}`);
+      lines.push(`   Sam's take: ${confidenceLabel(s.confidence_score)}`);
       return lines.join("\n");
     })
     .join("\n\n");

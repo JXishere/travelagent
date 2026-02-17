@@ -1,6 +1,6 @@
 // Profile learning flow — conversational interview to learn user preferences
 
-import { chat, chatAsP, extractJSON, HAIKU } from "../llm.js";
+import { chat, chatAsSam, extractJSON, HAIKU } from "../llm.js";
 import {
   getOrCreateTraveler,
   updateTraveler,
@@ -41,7 +41,7 @@ export async function handleProfile(
     content: m.content,
   }));
 
-  // Get Claude's response in Paul's profile-learning mode
+  // Get Claude's response in Sam's profile-learning mode
   const response = await chat(
     profilePrompt,
     [...history, { role: "user" as const, content: message }],
@@ -122,7 +122,7 @@ export async function startProfileLearning(
     // Returning user — don't trap them in interview mode.
     // Continuous profile extraction will capture any updates from their message.
     if (initialMessage) {
-      return await chatAsP([], initialMessage);
+      return await chatAsSam([], initialMessage);
     }
     if (traveler.user_type === "local") {
       return "Hey, welcome back! Anything new you want to explore?";
@@ -145,7 +145,7 @@ export async function startProfileLearning(
     );
   }
 
-  return `Hey! I'm Paul — your KL insider.
+  return `Hey! I'm Sam — your KL insider.
 
 Whether you're visiting or you live here, I'll point you to the best spots. Quick question: are you planning a trip to KL, or do you live here?`;
 }

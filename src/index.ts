@@ -1,9 +1,9 @@
-// Paul — WhatsApp travel intelligence service for Kuala Lumpur
+// Sam — WhatsApp travel intelligence service for Kuala Lumpur
 // Main entry point: Express app + webhook routes + flow routing
 
 import express from "express";
 import { parseWebhook, sendMessage, showTyping } from "./whatsapp.js";
-import { chatAsP, classifyIntent, extractJSON } from "./llm.js";
+import { chatAsSam, classifyIntent, extractJSON } from "./llm.js";
 import {
   getOrCreateConversation,
   updateConversation,
@@ -59,7 +59,7 @@ app.post("/webhook", async (req, res) => {
   console.log("Parsed message:", JSON.stringify(message, null, 2));
 
   try {
-    // Show typing indicator immediately so user knows Paul is thinking
+    // Show typing indicator immediately so user knows Sam is thinking
     showTyping(message.messageId).catch(() => {});
     await processMessage(message);
   } catch (error) {
@@ -253,8 +253,8 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
 
     case "general":
     default:
-      // General conversation — Paul's personality via Claude
-      response = await chatAsP(
+      // General conversation — Sam's personality via Claude
+      response = await chatAsSam(
         conversation.messages.slice(-10).map((m) => ({
           role: m.role as "user" | "assistant",
           content: m.content,
@@ -321,7 +321,7 @@ async function routeToCurrentFlow(
         current_flow: "general",
         flow_state: {},
       });
-      return chatAsP([], text);
+      return chatAsSam([], text);
   }
 }
 
@@ -329,14 +329,14 @@ async function routeToCurrentFlow(
 // HEALTH CHECK
 // ============================================
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "paul-bot", city: "Kuala Lumpur" });
+  res.json({ status: "ok", service: "sam-bot", city: "Kuala Lumpur" });
 });
 
 // ============================================
 // START SERVER
 // ============================================
 app.listen(PORT, () => {
-  console.log(`Paul is running on port ${PORT}`);
+  console.log(`Sam is running on port ${PORT}`);
   console.log(`Webhook URL: https://your-domain.com/webhook`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 });

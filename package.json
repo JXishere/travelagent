@@ -1,7 +1,7 @@
 {
-  "name": "paul-bot",
+  "name": "sam-bot",
   "version": "0.1.0",
-  "description": "Paul — WhatsApp travel intelligence service for KL",
+  "description": "Sam — WhatsApp travel intelligence service for KL",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch --env-file .env.local src/index.ts",

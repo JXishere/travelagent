@@ -99,9 +99,9 @@ export async function handleContribution(
       return saveResponse;
     }
 
-    // "correct" — merge corrections and re-show summary
-    const newData = await extractWithContext(input, state.extracted ?? {});
-    const merged = smartMerge(state.extracted ?? {}, newData);
+    // "correct" — replace-merge corrections and re-show summary
+    const newData = await extractWithContext(input, state.extracted ?? {}, true);
+    const merged = smartMerge(state.extracted ?? {}, newData, true);
 
     await updateConversation(phoneNumber, {
       flow_state: {
@@ -144,11 +144,14 @@ async function resolveInput(
 /** Extract structured data from user input, with context of what we already know */
 async function extractWithContext(
   input: string,
-  existing: Partial<ExtractedSpot>
+  existing: Partial<ExtractedSpot>,
+  isCorrection = false
 ): Promise<Partial<ExtractedSpot>> {
   const hasExisting = Object.keys(existing).length > 0;
   const context = hasExisting
-    ? `We already know about this spot: ${JSON.stringify(existing)}. The user is providing more details. Extract ONLY the new information from their message.`
+    ? isCorrection
+      ? `We already know about this spot: ${JSON.stringify(existing)}. The user is CORRECTING or adding to this data. For any field they mention, return the COMPLETE corrected value (not just the new part). For example, if they say "actually it's nasi lemak not nasi campur", return what_to_order: ["nasi lemak"]. Only include fields the user mentioned.`
+      : `We already know about this spot: ${JSON.stringify(existing)}. The user is providing more details. Extract ONLY the new information from their message.`
     : undefined;
 
   try {
@@ -199,7 +202,8 @@ async function collectInfo(
 /** Merge new extracted data into existing, preserving non-empty values */
 function smartMerge(
   existing: Partial<ExtractedSpot>,
-  incoming: Partial<ExtractedSpot>
+  incoming: Partial<ExtractedSpot>,
+  replaceArrays = false
 ): Partial<ExtractedSpot> {
   const merged = { ...existing };
 
@@ -209,8 +213,9 @@ function smartMerge(
     if (Array.isArray(value) && value.length === 0) continue;
     if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) continue;
 
-    // For arrays, merge unique items rather than replace
-    if (Array.isArray(value) && Array.isArray((merged as any)[key])) {
+    // For corrections, replace arrays outright (LLM returns the complete corrected value)
+    // For collecting, merge unique items to accumulate across messages
+    if (Array.isArray(value) && Array.isArray((merged as any)[key]) && !replaceArrays) {
       const existingArr = (merged as any)[key] as string[];
       const newItems = value.filter((v: string) => !existingArr.includes(v));
       (merged as any)[key] = [...existingArr, ...newItems];
@@ -250,7 +255,7 @@ function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<Extract
   return `${prefix}Any tips? Like payment, hours, or insider tricks?`;
 }
 
-/** Acknowledge what Paul just learned */
+/** Acknowledge what Sam just learned */
 function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
   const learnedName = merged.name && !previous.name;
   const learnedNeighborhood = merged.neighborhood && !previous.neighborhood;
@@ -333,5 +338,5 @@ async function saveSpot(
     flow_state: {},
   });
 
-  return `Added *${data.name}* to the knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Paul gets for everyone.`;
+  return `Added *${data.name}* to the knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Sam gets for everyone.`;
 }

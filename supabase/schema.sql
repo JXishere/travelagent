@@ -1,4 +1,4 @@
--- Paul Travel Intelligence — Database Schema
+-- Sam Travel Intelligence — Database Schema
 -- Run this in your Supabase SQL editor to set up all tables.
 
 -- Enable UUID generation

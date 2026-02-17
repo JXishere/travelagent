@@ -52,14 +52,30 @@ export async function handleHungry(
     details.time_of_day ??
     (hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 20 ? "evening" : "late-night");
 
-  const mealCategories: Record<string, string[]> = {
+  // If the user explicitly asked for a meal type, use that instead of clock time
+  const mealTypeCategories: Record<string, string[]> = {
+    breakfast: ["breakfast", "cafe"],
+    brunch: ["breakfast", "cafe"],
+    lunch: ["lunch", "cafe"],
+    dinner: ["dinner"],
+    coffee: ["cafe"],
+    cafe: ["cafe"],
+    drinks: ["nightlife"],
+    bar: ["nightlife"],
+    supper: ["nightlife", "dinner"],
+  };
+
+  const timeCategories: Record<string, string[]> = {
     morning: ["breakfast", "cafe"],
     afternoon: ["lunch", "cafe"],
     evening: ["dinner"],
     "late-night": ["nightlife", "dinner"],
   };
 
-  const categories = mealCategories[timeOfDay] ?? ["lunch", "dinner"];
+  const categories =
+    (details.meal_type ? mealTypeCategories[details.meal_type.toLowerCase()] : undefined) ??
+    timeCategories[timeOfDay] ??
+    ["lunch", "dinner"];
 
   const spots = await querySpots({
     city: "Kuala Lumpur",

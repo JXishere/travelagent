@@ -1,12 +1,18 @@
-import { getCityStats } from "@/lib/supabase";
+import { getCityStats, getDistinctCities } from "@/lib/supabase";
 import { PromptInput } from "@/components/prompt-input";
+import { RotatingCity } from "@/components/rotating-city";
 
 export const revalidate = 60;
 
 const GOAL = 500;
 
+const DEFAULT_CITY = process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur";
+
 export default async function Home() {
-  const stats = await getCityStats("Kuala Lumpur");
+  const [stats, cities] = await Promise.all([
+    getCityStats(DEFAULT_CITY),
+    getDistinctCities(),
+  ]);
   const pct = Math.min(Math.round((stats.spot_count / GOAL) * 100), 100);
   const whatsappNumber = process.env.ADMIN_PHONE_NUMBER || "";
   const waLink = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("I know a spot")}`;
@@ -16,12 +22,12 @@ export default async function Home() {
       <div className="w-full max-w-md space-y-10 text-center">
         {/* Headline */}
         <h1 className="text-2xl font-medium tracking-tight">
-          know a spot. tell sam.
+          Know a spot? Tell Sam.
         </h1>
 
         {/* Subhead */}
         <p style={{ color: "var(--muted)" }}>
-          sam is learning kuala lumpur.
+          Sam is learning <RotatingCity cities={cities} />.
         </p>
 
         {/* Prompt input */}
@@ -54,7 +60,7 @@ export default async function Home() {
           className="inline-block rounded-lg px-8 py-3 text-sm font-semibold text-black transition-colors hover:opacity-90"
           style={{ backgroundColor: "var(--green)" }}
         >
-          tell sam what you know
+          Tell Sam what you know
         </a>
       </div>
     </main>

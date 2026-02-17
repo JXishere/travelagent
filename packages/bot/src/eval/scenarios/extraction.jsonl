@@ -1,0 +1,4 @@
+{"name": "Basic spot extraction", "input": "There's this amazing nasi lemak place called Village Park in Damansara Uptown. Cash only. Get the special nasi lemak with extra sambal.", "expect_json": true, "must_match": ["village\\s*park", "damansara"]}
+{"name": "Extracts category", "input": "Breakfast spot called Ali's Kitchen in Bangsar. Their roti canai is unreal.", "expect_json": true, "must_match": ["breakfast|cafe", "bangsar"]}
+{"name": "Handles minimal info", "input": "There's a cool bar in TTDI.", "expect_json": true, "must_match": ["ttdi"]}
+{"name": "Extracts multiple tips", "input": "Fatty Crab in Taman Megah. Get the chilli crab and the butter prawns. Go early before 7pm or you'll wait an hour. Cash only.", "expect_json": true, "must_match": ["chilli crab|butter prawn", "7pm|early"]}

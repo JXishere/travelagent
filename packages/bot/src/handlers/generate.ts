@@ -5,8 +5,10 @@ import {
   insertSpot,
   findDuplicateSpot,
   updateConversation,
+  getOrCreateTraveler,
   type Conversation,
 } from "../database.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 
 interface Candidate {
   name: string;
@@ -39,9 +41,13 @@ export async function startGenerate(
     .filter(Boolean)
     .join("\n");
 
-  const prompt = context || "Suggest a diverse mix of popular KL spots";
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  const city = traveler.current_city ?? getDefaultCity();
+  const prompt = context || `Suggest a diverse mix of popular ${city} spots`;
 
-  const result = await extractJSON<GenerateResult>("generate", prompt);
+  const result = await extractJSON<GenerateResult>("generate", prompt, undefined, {
+    templateVars: { CITY: city },
+  });
   const candidates = result.candidates ?? [];
 
   if (candidates.length === 0) {
@@ -126,7 +132,7 @@ export async function handleGenerate(
   return `${savedMsg}\n\n${nextMsg}`;
 }
 
-function formatCandidate(
+export function formatCandidate(
   c: Candidate,
   num: number,
   total: number

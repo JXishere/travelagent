@@ -22,3 +22,25 @@ export async function getCityStats(
 
   return data as { spot_count: number; contributor_count: number };
 }
+
+export async function getDistinctCities(): Promise<string[]> {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_KEY;
+
+  if (!url || !key) {
+    return ["every city"];
+  }
+
+  const supabase = createClient(url, key);
+  const { data, error } = await supabase
+    .from("spots")
+    .select("city")
+    .order("city");
+
+  if (error || !data || data.length === 0) {
+    return ["every city"];
+  }
+
+  const cities = [...new Set(data.map((row: { city: string }) => row.city))];
+  return cities.length > 0 ? cities : ["every city"];
+}

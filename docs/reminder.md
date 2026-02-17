@@ -1,1 +1,0 @@
-paul should give short replies whenever possible.

@@ -629,9 +629,17 @@ const spots = [
 ];
 
 async function seed() {
-  console.log(`Seeding ${spots.length} KL spots...`);
+  const city = process.argv[2] || "Kuala Lumpur";
+  const citySpots = spots.filter((s) => s.city === city);
 
-  for (const spot of spots) {
+  if (citySpots.length === 0) {
+    console.log(`No seed data for "${city}". Available cities: ${[...new Set(spots.map((s) => s.city))].join(", ")}`);
+    return;
+  }
+
+  console.log(`Seeding ${citySpots.length} ${city} spots...`);
+
+  for (const spot of citySpots) {
     // Try with source column first; fall back without if column doesn't exist yet
     let { error } = await supabase.from("spots").insert({ ...spot, source: "seed" });
     if (error?.message?.includes("source")) {

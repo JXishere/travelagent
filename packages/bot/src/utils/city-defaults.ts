@@ -32,3 +32,13 @@ export function getCityDefaults(city?: string): CityDefaults {
 export function getDefaultCity(): string {
   return DEFAULT_CITY;
 }
+
+/** Get all supported city names */
+export function getSupportedCities(): string[] {
+  return Object.keys(CITY_DEFAULTS);
+}
+
+/** Check if a city is supported */
+export function isSupportedCity(city: string): boolean {
+  return city in CITY_DEFAULTS;
+}

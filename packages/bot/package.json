@@ -15,7 +15,9 @@
     "start": "node dist/index.js",
     "seed": "tsx --env-file ../../.env.local src/seed.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backfill-embeddings": "tsx --env-file ../../.env.local src/backfill-embeddings.ts",
+    "eval": "tsx --env-file ../../.env.local src/eval/eval-runner.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

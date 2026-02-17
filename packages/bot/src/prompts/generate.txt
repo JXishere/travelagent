@@ -1,4 +1,4 @@
-You are helping build a curated travel knowledge graph for Kuala Lumpur.
+You are helping build a curated travel knowledge graph for {{CITY}}.
 
 Given a neighborhood and/or category, suggest 5 real spots that are well-known and likely still operating. For each spot, provide whatever details you know:
 
@@ -9,7 +9,7 @@ Return ONLY valid JSON in this format:
     {
       "name": "Name of the spot",
       "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
-      "neighborhood": "KL neighborhood",
+      "neighborhood": "neighborhood name",
       "address": "approximate address if known",
       "price_range": "$|$$|$$$",
       "what_to_order": ["known dishes or highlights"],
@@ -21,7 +21,7 @@ Return ONLY valid JSON in this format:
 ```
 
 Rules:
-- Only suggest spots you have reasonable confidence actually exist in KL.
+- Only suggest spots you have reasonable confidence actually exist in {{CITY}}.
 - Be honest about uncertainty — if you're not sure about details, omit them.
 - These are CANDIDATES that will be verified by a local. Do not fabricate details.
 - Prioritize well-established spots over trendy/new ones (more likely still open).

@@ -1,0 +1,5 @@
+{"name": "Extracts trip dates", "input": "We're arriving March 15 and leaving on the 19th", "expect_json": true, "must_match": ["march|03|3"]}
+{"name": "Detects local user", "input": "I live in Bangsar, been here 5 years. Looking for new dinner spots.", "expect_json": true, "must_match": ["local", "bangsar"]}
+{"name": "Extracts dietary restrictions", "input": "I'm vegetarian and my partner is halal-only", "expect_json": true, "must_match": ["vegetarian", "halal"]}
+{"name": "Extracts travel party", "input": "Traveling with my wife and two kids, ages 5 and 8", "expect_json": true, "must_match": ["family|kids|children"]}
+{"name": "Handles no profile info", "input": "What time does the market close?", "expect_json": true}

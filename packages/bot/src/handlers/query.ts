@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
 import { chat, loadPrompt, HAIKU } from "../llm.js";
-import { querySpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, type Spot } from "../database.js";
+import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories } from "../utils/categories.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
@@ -31,7 +31,7 @@ export async function handleQuery(
   const weather = await getCurrentWeather();
 
   // Build query filters
-  const spots = await querySpots({
+  let spots = await querySpots({
     city: traveler.current_city ?? getDefaultCity(),
     neighborhood: details.neighborhood,
     categories,
@@ -39,17 +39,28 @@ export async function handleQuery(
     limit: 5,
   });
 
+  // If structured query found nothing, try semantic search as fallback
   if (spots.length === 0) {
-    return await chat(
-      getSystemPrompt(),
-      [
-        {
-          role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
-        },
-      ],
-      { maxTokens: 512, model: HAIKU }
+    const semanticSpots = await trySemanticSearch(
+      message,
+      traveler.current_city ?? getDefaultCity(),
+      categories
     );
+
+    if (semanticSpots.length > 0) {
+      spots.push(...semanticSpots);
+    } else {
+      return await chat(
+        getSystemPrompt(),
+        [
+          {
+            role: "user",
+            content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
+          },
+        ],
+        { maxTokens: 512, model: HAIKU }
+      );
+    }
   }
 
   // Track usage and mark as visited
@@ -96,6 +107,22 @@ export function confidenceLabel(score: number | undefined): string {
   if (s >= 0.85) return "personal favorite";
   if (s >= 0.6) return "well-vouched";
   return "fresh intel";
+}
+
+/** Try semantic search when structured query returns no results */
+async function trySemanticSearch(
+  message: string,
+  city: string,
+  categories?: string[]
+): Promise<Spot[]> {
+  try {
+    const { generateEmbedding } = await import("../embeddings.js");
+    const embedding = await generateEmbedding(message);
+    return await semanticSearchSpots(embedding, { city, categories });
+  } catch {
+    // Semantic search unavailable (missing API key, no embeddings, etc.)
+    return [];
+  }
 }
 
 export function formatSpotsForLLM(spots: Spot[]): string {

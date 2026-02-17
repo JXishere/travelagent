@@ -134,7 +134,26 @@ export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
     .select()
     .single();
   if (error) throw error;
-  return data as Spot;
+
+  const inserted = data as Spot;
+
+  // Fire-and-forget: generate and store embedding for the new spot
+  autoEmbedSpot(inserted).catch((err) =>
+    console.error(`Auto-embed failed for spot ${inserted.id}:`, err)
+  );
+
+  return inserted;
+}
+
+/** Auto-embed a spot after insert (lazy-loaded to avoid circular deps) */
+async function autoEmbedSpot(spot: Spot): Promise<void> {
+  try {
+    const { buildSpotText, embedSpot } = await import("./embeddings.js");
+    const text = buildSpotText(spot);
+    await embedSpot(spot.id, text, updateSpot);
+  } catch {
+    // embeddings module may not be available (e.g. missing OPENAI_API_KEY in tests)
+  }
 }
 
 export async function findDuplicateSpot(
@@ -168,6 +187,28 @@ export async function updateSpot(spotId: string, updates: Partial<Spot>): Promis
     .from("spots")
     .update(updates)
     .eq("id", spotId);
+}
+
+/** Semantic similarity search using pgvector embeddings */
+export async function semanticSearchSpots(
+  queryEmbedding: number[],
+  filters?: { city?: string; categories?: string[] },
+  limit = 5
+): Promise<Spot[]> {
+  const embeddingStr = `[${queryEmbedding.join(",")}]`;
+  const { data, error } = await supabase.rpc("match_spots", {
+    query_embedding: embeddingStr,
+    filter_city: filters?.city ?? null,
+    filter_categories: filters?.categories ?? null,
+    match_limit: limit,
+  });
+
+  if (error) {
+    console.error("Semantic search failed:", error);
+    return [];
+  }
+
+  return (data ?? []) as Spot[];
 }
 
 export async function incrementSpotUseCount(spotId: string): Promise<void> {

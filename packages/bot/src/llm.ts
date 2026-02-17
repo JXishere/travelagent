@@ -93,9 +93,14 @@ export async function extractJSON<T>(
   promptName: string,
   input: string,
   context?: string,
-  options?: { model?: string }
+  options?: { model?: string; templateVars?: Record<string, string> }
 ): Promise<T> {
-  const systemPrompt = loadPrompt(promptName);
+  let systemPrompt = loadPrompt(promptName);
+  if (options?.templateVars) {
+    for (const [key, value] of Object.entries(options.templateVars)) {
+      systemPrompt = systemPrompt.replaceAll(`{{${key}}}`, value);
+    }
+  }
   const userContent = context
     ? `Context:\n${context}\n\nInput:\n${input}`
     : input;
@@ -143,7 +148,8 @@ Respond with ONLY one word: confirm, correct, or unrelated`;
 /** Classify user intent */
 export async function classifyIntent(
   message: string,
-  conversationContext?: string
+  conversationContext?: string,
+  city?: string
 ): Promise<{
   intent:
     | "hungry"
@@ -156,7 +162,8 @@ export async function classifyIntent(
     | "general";
   details: Record<string, string>;
 }> {
-  const systemPrompt = `You are an intent classifier for a travel assistant focused on Kuala Lumpur.
+  const cityName = city ?? "Kuala Lumpur";
+  const systemPrompt = `You are an intent classifier for a travel assistant focused on ${cityName}.
 
 Classify the user's message into exactly one intent:
 - "hungry": They want food/drink recommendations (mentions eating, hungry, food, restaurant, cafe, bar, breakfast, lunch, dinner)
@@ -164,7 +171,7 @@ Classify the user's message into exactly one intent:
 - "nearby": They want to know what's near a specific location ("I'm near", "what's around", "close to")
 - "weather": They're asking about weather or it's affecting their plans ("raining", "hot", "weather")
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
-- "profile": They're telling you about their trip or preferences, or identifying themselves ("planning a trip", "going to KL", "I like...", "I live here", "I'm local", "just moved to KL", "I'm from KL")
+- "profile": They're telling you about their trip or preferences, or identifying themselves ("planning a trip", "going to ${cityName}", "I like...", "I live here", "I'm local", "just moved to ${cityName}", "I'm from ${cityName}")
 - "feedback": They're giving feedback about a spot they visited ("it was great", "didn't like it", rating)
 - "general": General conversation, greetings, questions about Sam, off-topic
 

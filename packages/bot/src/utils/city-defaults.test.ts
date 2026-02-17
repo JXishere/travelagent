@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCityDefaults, getDefaultCity } from "./city-defaults.js";
+import { getCityDefaults, getDefaultCity, getSupportedCities, isSupportedCity } from "./city-defaults.js";
 
 describe("getCityDefaults", () => {
   it("returns KL config for 'Kuala Lumpur'", () => {
@@ -29,5 +29,23 @@ describe("getCityDefaults", () => {
 describe("getDefaultCity", () => {
   it("returns 'Kuala Lumpur'", () => {
     expect(getDefaultCity()).toBe("Kuala Lumpur");
+  });
+});
+
+describe("getSupportedCities", () => {
+  it("returns array including Kuala Lumpur", () => {
+    const cities = getSupportedCities();
+    expect(cities).toContain("Kuala Lumpur");
+    expect(cities.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("isSupportedCity", () => {
+  it("returns true for Kuala Lumpur", () => {
+    expect(isSupportedCity("Kuala Lumpur")).toBe(true);
+  });
+
+  it("returns false for unsupported city", () => {
+    expect(isSupportedCity("Tokyo")).toBe(false);
   });
 });

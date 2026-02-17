@@ -7,10 +7,11 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 });
 
+const city = (process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur").toLowerCase();
+
 export const metadata: Metadata = {
   title: "sam — a friend who lives in every city",
-  description:
-    "sam is learning kuala lumpur. help build the knowledge graph — tell sam what you know.",
+  description: `sam is learning ${city}. help build the knowledge graph — tell sam what you know.`,
 };
 
 export default function RootLayout({

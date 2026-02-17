@@ -2,7 +2,7 @@
 // Two stages: collecting → confirming
 
 import { transcribeVoiceNote } from "../transcription.js";
-import { extractJSON } from "../llm.js";
+import { extractJSON, classifyConfirmation } from "../llm.js";
 import {
   insertSpot,
   findDuplicateSpot,
@@ -40,7 +40,7 @@ interface ContributionState {
   messagesReceived: number;
 }
 
-const SAVE_PATTERNS = /^(save|yes|done|looks good|looks right|perfect|yep|👍|lgtm)$/i;
+
 
 export async function handleContribution(
   phoneNumber: string,
@@ -85,15 +85,21 @@ export async function handleContribution(
     return await collectInfo(phoneNumber, input, currentState);
   }
 
-  // Confirming stage
+  // Confirming stage — classify response with LLM instead of regex
   if (state.stage === "confirming") {
-    // Check for save confirmation (text only — voice is treated as more info)
-    if (!audioId && SAVE_PATTERNS.test(message.trim())) {
-      return await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text");
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const summary = formatSummary(state.extracted ?? {});
+    const intent = await classifyConfirmation(input, summary);
+
+    if (intent === "confirm" || intent === "unrelated") {
+      const saveResponse = await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text");
+      if (intent === "unrelated") {
+        return `${saveResponse}\n\nNow — what's up?`;
+      }
+      return saveResponse;
     }
 
-    // Treat as more info — merge and re-show summary
-    const input = await resolveInput(phoneNumber, message, audioId);
+    // "correct" — merge corrections and re-show summary
     const newData = await extractWithContext(input, state.extracted ?? {});
     const merged = smartMerge(state.extracted ?? {}, newData);
 
@@ -285,7 +291,7 @@ function formatSummary(data: Partial<ExtractedSpot>): string {
   }
 
   lines.push("");
-  lines.push(`Anything to add or fix? Say "save" when it looks right.`);
+  lines.push(`Looks solid — I'll add this unless you want to tweak anything.`);
 
   return lines.join("\n");
 }

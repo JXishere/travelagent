@@ -11,6 +11,8 @@ import {
 interface ProfileDelta {
   _no_changes?: boolean;
   name?: string;
+  user_type?: "local" | "traveler";
+  home_neighborhoods?: string[];
   trip_dates?: { start: string; end: string };
   travel_party?: string;
   dietary_restrictions?: string[];
@@ -29,7 +31,9 @@ const SKIP_FLOWS = new Set([
   "feedback",
   "generate",
   "profile_learning",
-  "profile",
+  // Note: "profile" intent is intentionally NOT skipped — continuous extraction
+  // acts as the safety net for returning users whose updates would otherwise be
+  // lost by startProfileLearning's early-return path.
 ]);
 
 /**
@@ -97,6 +101,7 @@ async function extractProfileDelta(
 /** Scalar fields that overwrite directly */
 const SCALAR_FIELDS = new Set([
   "name",
+  "user_type",
   "travel_party",
   "budget",
   "pace",
@@ -106,6 +111,7 @@ const SCALAR_FIELDS = new Set([
 /** Array fields that append + deduplicate, with ! removal support */
 const ARRAY_FIELDS = new Set([
   "dietary_restrictions",
+  "home_neighborhoods",
   "interests",
   "cuisine_preferences",
   "specific_requests",
@@ -114,6 +120,8 @@ const ARRAY_FIELDS = new Set([
 /** Fields stored on the traveler record directly (not inside preferences) */
 const TOP_LEVEL_FIELDS = new Set([
   "name",
+  "user_type",
+  "home_neighborhoods",
   "trip_dates",
   "travel_party",
   "dietary_restrictions",

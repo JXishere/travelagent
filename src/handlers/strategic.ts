@@ -1,6 +1,6 @@
 // Strategic decisions generation — profile + knowledge graph → pre-trip guide
 
-import { chat } from "../llm.js";
+import { chat, SONNET } from "../llm.js";
 import {
   getOrCreateTraveler,
   querySpots,
@@ -18,6 +18,10 @@ const strategicPrompt = readFileSync(
 
 export async function handleStrategic(phoneNumber: string): Promise<string> {
   const traveler = await getOrCreateTraveler(phoneNumber);
+  if (traveler.user_type === "local") {
+    await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+    return "You're all set! Just text me whenever you want to find something new in KL.";
+  }
   const prefs = traveler.preferences ?? {};
 
   // Query spots matching their profile
@@ -38,7 +42,7 @@ export async function handleStrategic(phoneNumber: string): Promise<string> {
   const spotsContext = formatSpotsForLLM(allSpots);
 
   const profileSummary = `
-Traveler profile:
+Profile:
 - Name: ${traveler.name ?? "Unknown"}
 - Dates: ${traveler.trip_dates ? `${(traveler.trip_dates as any).start} to ${(traveler.trip_dates as any).end}` : "Not specified"}
 - Party: ${traveler.travel_party ?? "Not specified"}
@@ -61,18 +65,18 @@ Generate the strategic decisions message. Pick the best 3-5 anchor spots based o
   const strategicMessage = await chat(
     strategicPrompt,
     [{ role: "user", content: prompt }],
-    { maxTokens: 2048 }
+    { maxTokens: 2048, model: SONNET }
   );
 
   // Send agreement plan after strategic decisions
   const agreementPlan = `
 ━━━ WHAT YOU CAN COUNT ON ━━━
 
-✅ I'm available 24/7 while you travel
-   Text anytime during your trip, response in minutes
+✅ I'm available 24/7 while you're here
+   Text anytime, response in minutes
 
 ✅ If you don't like a spot, I'll fix it immediately
-   No questions asked — your trip, your call
+   No questions asked — your time, your call
 
 ✅ No rigid schedules, zero pressure
    Use what works, ignore what doesn't

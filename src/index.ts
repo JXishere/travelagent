@@ -9,6 +9,7 @@ import {
   updateConversation,
   appendMessages,
   insertSpot,
+  findDuplicateSpot,
 } from "./database.js";
 import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
@@ -80,9 +81,23 @@ app.post("/webhook", async (req, res) => {
 async function processMessage(message: ReturnType<typeof parseWebhook>) {
   if (!message) return;
 
-  const { from, type, text, audioId } = message;
+  const { from, type, text, audioId, location } = message;
   const conversation = await getOrCreateConversation(from);
   const currentFlow = conversation.current_flow;
+
+  // Location pin → route to nearby handler
+  if (type === "location" && location) {
+    const response = await handleNearby(from, `I'm at ${location.latitude}, ${location.longitude}`, {
+      neighborhood: undefined,
+      specific_place: `${location.latitude},${location.longitude}`,
+    });
+    await appendMessages(from, [
+      { role: "user", content: `[shared location: ${location.latitude}, ${location.longitude}]` },
+      { role: "assistant", content: response },
+    ]);
+    await sendMessage(from, response);
+    return;
+  }
 
   // If we're mid-flow, continue that flow
   if (currentFlow !== "general") {
@@ -151,6 +166,19 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     }
 
     const { missing_fields, ...spotData } = extracted;
+
+    // Check for duplicate
+    const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
+    if (duplicate) {
+      const response = `*${duplicate.name}* (${duplicate.neighborhood}) already exists in the graph.`;
+      await appendMessages(from, [
+        { role: "user", content: text },
+        { role: "assistant", content: response },
+      ]);
+      await sendMessage(from, response);
+      return;
+    }
+
     await insertSpot({ ...spotData, source: "text" });
     const response = `Added *${extracted.name}* (${extracted.neighborhood}, ${extracted.category}) to the graph.`;
     await appendMessages(from, [
@@ -201,7 +229,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       break;
 
     case "profile":
-      response = await startProfileLearning(from);
+      response = await startProfileLearning(from, text);
       break;
 
     case "feedback":
@@ -209,17 +237,17 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       break;
 
     case "weather": {
-      // Weather-aware response using query handler
+      // Weather-aware response — prepend weather summary to query response
       const { getCurrentWeather } = await import("./weather.js");
       const weather = await getCurrentWeather();
-      if (weather?.is_raining) {
-        response = await handleQuery(from, text, {
-          ...details,
-          mood: "indoor",
-        });
-      } else {
-        response = await handleQuery(from, text, details);
-      }
+      const weatherSummary = weather
+        ? `Current weather in KL: ${weather.summary}${weather.is_raining ? " (raining)" : ""}`
+        : "";
+      const weatherContext = weatherSummary ? `Weather info: ${weatherSummary}` : undefined;
+      response = await handleQuery(from, text, {
+        ...details,
+        ...(weather?.is_raining ? { mood: "indoor" } : {}),
+      }, weatherContext);
       break;
     }
 

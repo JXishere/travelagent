@@ -1,10 +1,11 @@
-// On-trip guidance — real-time recommendations when the traveler is in KL
+// On-trip guidance — real-time recommendations when the user is in KL
 
-import { chat } from "../llm.js";
+import { chat, HAIKU } from "../llm.js";
 import {
   querySpots,
   getOrCreateTraveler,
   incrementSpotUseCount,
+  markSpotsVisited,
   type Spot,
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
@@ -56,26 +57,37 @@ export async function handleHungry(
     limit: 5,
   });
 
-  // Filter out spots they've already visited
-  const unvisited = spots.filter(
-    (s) => !traveler.spots_visited?.includes(s.id)
-  );
-  const toRecommend = unvisited.length >= 3 ? unvisited.slice(0, 3) : spots.slice(0, 3);
+  // Filter out visited spots only for travelers (locals may want to revisit favorites)
+  let toRecommend: Spot[];
+  if (traveler.user_type !== "local") {
+    const unvisited = spots.filter(
+      (s) => !traveler.spots_visited?.includes(s.id)
+    );
+    toRecommend = unvisited.length >= 3 ? unvisited.slice(0, 3) : spots.slice(0, 3);
+  } else {
+    // For locals, filter out disliked spots instead
+    const notDisliked = spots.filter(
+      (s) => !traveler.spots_disliked?.includes(s.id)
+    );
+    toRecommend = notDisliked.slice(0, 3);
+  }
 
   for (const spot of toRecommend) {
     incrementSpotUseCount(spot.id);
   }
+  await markSpotsVisited(phoneNumber, toRecommend.map(s => s.id));
 
   // No spots in DB — be honest
   if (toRecommend.length === 0) {
-    const prompt = `The traveler says: "${message}"
+    const prompt = `The user says: "${message}"
 
-You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have recommendations yet. Ask them about their trip so you can help when your knowledge grows, or suggest they contribute spots they discover.
+You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have recommendations yet. Ask what they're in the mood for so you can help when your knowledge grows, or suggest they contribute spots they discover.
 
 Keep it short — this is WhatsApp.`;
 
     return await chat(systemPrompt, [{ role: "user", content: prompt }], {
       maxTokens: 512,
+      model: HAIKU,
     });
   }
 
@@ -89,13 +101,13 @@ Keep it short — this is WhatsApp.`;
       ? "They're feeling tired — recommend nearby and chill options."
       : "";
 
-  const prompt = `The traveler says: "${message}"
+  const prompt = `The user says: "${message}"
 
 Time: ${timeOfDay} (KL time)
 ${details.neighborhood ? `They're near: ${details.neighborhood}` : "Location not specified — you can ask."}
 ${weatherNote}
 ${tiredNote}
-Traveler interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food"}
+Their interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food"}
 
 Here are spots from your knowledge graph:
 
@@ -126,11 +138,14 @@ export async function handleDayPlan(
   const allDaySpots = [...breakfastSpots, ...lunchSpots, ...activitySpots, ...dinnerSpots];
   const spotsContext = formatSpotsForLLM(allDaySpots);
 
-  const prompt = `The traveler asks: "${message}"
+  // Mark all recommended spots as visited
+  await markSpotsVisited(phoneNumber, allDaySpots.map(s => s.id));
+
+  const prompt = `The user asks: "${message}"
 
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
-Traveler interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food, culture"}
+Their interests: ${(traveler.preferences as any)?.interests?.join(", ") ?? "food, culture"}
 Spots they've already visited: ${traveler.spots_visited?.length ?? 0}
 
 Available spots for building a day plan:
@@ -164,7 +179,13 @@ export async function handleNearby(
 
   const spotsContext = formatSpotsForLLM(spots);
 
-  const prompt = `The traveler says: "${message}"
+  // Track usage and mark as visited
+  for (const spot of spots) {
+    incrementSpotUseCount(spot.id);
+  }
+  await markSpotsVisited(phoneNumber, spots.map(s => s.id));
+
+  const prompt = `The user says: "${message}"
 
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${neighborhood ? `They're near: ${neighborhood}` : "Location unclear — ask them."}

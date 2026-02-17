@@ -66,6 +66,10 @@ create table travelers (
   whatsapp_number text unique not null,
   name text,
 
+  -- User type: 'local', 'traveler', or 'unknown'
+  user_type text default 'unknown',
+  home_neighborhoods text[] default '{}',
+
   -- Learned preferences
   preferences jsonb default '{}',
   -- e.g. { "budget": "mid", "pace": "moderate", "interests": ["food", "culture"], "style": "adventurous" }

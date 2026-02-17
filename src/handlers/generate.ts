@@ -3,6 +3,7 @@
 import { extractJSON } from "../llm.js";
 import {
   insertSpot,
+  findDuplicateSpot,
   updateConversation,
   type Conversation,
 } from "../database.js";
@@ -106,6 +107,13 @@ export async function handleGenerate(
   const { notes: _n, missing_fields: _m, ...currentClean } = current as any;
   const { missing_fields: _m2, ...extractedClean } = extracted;
   const merged = { ...currentClean, ...extractedClean };
+
+  const duplicate = await findDuplicateSpot(merged.name, merged.neighborhood);
+  if (duplicate) {
+    const skipMsg = `*${merged.name}* already exists — skipping.`;
+    const nextMsg = await advanceToNext(phoneNumber, candidates, idx);
+    return `${skipMsg}\n\n${nextMsg}`;
+  }
 
   await insertSpot({
     ...merged,

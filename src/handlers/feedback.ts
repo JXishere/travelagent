@@ -1,10 +1,11 @@
 // Feedback flow — post-trip validation and tip collection
 
-import { chat } from "../llm.js";
+import { chat, HAIKU } from "../llm.js";
 import {
   getRecentlyRecommendedSpots,
   insertFeedback,
   getOrCreateTraveler,
+  updateTraveler,
   updateConversation,
   type Conversation,
   type Spot,
@@ -32,7 +33,7 @@ export async function handleFeedback(
 { "rating": 1-5 or null, "did_they_go": true/false, "comments": "summary", "tips": ["any tips for future visitors"] }
 If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4, good=3, meh=2, bad=1).`,
       [{ role: "user", content: message }],
-      { temperature: 0.2 }
+      { temperature: 0.2, model: HAIKU }
     );
 
     try {
@@ -49,6 +50,17 @@ If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4,
         comments: fb.comments,
         user_tips: fb.tips,
       });
+
+      // Write liked/disliked based on rating
+      if (fb.rating != null && fb.did_they_go !== false) {
+        if (fb.rating >= 4) {
+          const liked = [...(traveler.spots_liked ?? []), state.spot_id];
+          await updateTraveler(phoneNumber, { spots_liked: liked });
+        } else if (fb.rating <= 2) {
+          const disliked = [...(traveler.spots_disliked ?? []), state.spot_id];
+          await updateTraveler(phoneNumber, { spots_disliked: disliked });
+        }
+      }
 
       // Check if there are more spots to ask about
       const remainingSpots = (state.pending_spots ?? []) as string[];
@@ -76,7 +88,7 @@ If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4,
         flow_state: {},
       });
 
-      return "Thanks for all the feedback! This keeps the knowledge fresh for future travelers. 🙌\n\nAnytime you want to share more or add new spots you discovered, just say the word.";
+      return "Thanks for all the feedback! This keeps the knowledge fresh for everyone.\n\nAnytime you want to share more or add new spots you discovered, just say the word.";
     } catch {
       return "Got it, thanks! If you want to share more details, feel free. Otherwise, I'm here whenever you need me. 😊";
     }
@@ -114,5 +126,5 @@ export async function startFeedbackCollection(
     },
   });
 
-  return `Hey! Quick check — did you make it to *${firstSpot.name}*? How was it? (A rating 1-5 helps, plus any tips for future travelers!)`;
+  return `Hey! Quick check — did you make it to *${firstSpot.name}*? How was it? (A rating 1-5 helps, plus any tips!)`;
 }

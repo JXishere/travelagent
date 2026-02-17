@@ -1,6 +1,6 @@
-// Profile learning flow — conversational interview to learn traveler preferences
+// Profile learning flow — conversational interview to learn user preferences
 
-import { chat, extractJSON } from "../llm.js";
+import { chat, chatAsP, extractJSON, HAIKU } from "../llm.js";
 import {
   getOrCreateTraveler,
   updateTraveler,
@@ -17,6 +17,9 @@ const profilePrompt = readFileSync(
 
 interface ExtractedProfile {
   name?: string;
+  user_type?: "local" | "traveler";
+  home_neighborhoods?: string[];
+  cuisine_preferences?: string[];
   trip_dates?: { start: string; end: string };
   travel_party?: string;
   interests?: string[];
@@ -42,11 +45,11 @@ export async function handleProfile(
   const response = await chat(
     profilePrompt,
     [...history, { role: "user" as const, content: message }],
-    { maxTokens: 512 }
+    { maxTokens: 512, model: HAIKU }
   );
 
-  // Check if profile is complete
-  if (response.includes("[PROFILE_COMPLETE]")) {
+  // Check if profile is complete — case-insensitive, flexible format
+  if (/\[PROFILE[_\s]?COMPLETE\]/i.test(response)) {
     // Extract the profile from the full conversation
     const fullConvo = [
       ...history,
@@ -57,34 +60,52 @@ export async function handleProfile(
       .join("\n");
 
     const profile = await extractJSON<ExtractedProfile>(
-      "profile",
-      `Extract a traveler profile from this conversation:\n\n${fullConvo}`,
+      "continuous_profile",
+      `Extract a user profile from this conversation. Determine if they are a "local" or "traveler" based on context. For locals, extract home_neighborhoods and cuisine_preferences. For travelers, extract trip_dates, travel_party, first_time_visitor.\n\n${fullConvo}`,
     );
 
     // Save to database
-    await updateTraveler(phoneNumber, {
+    const travelerUpdates: Record<string, any> = {
       name: profile.name,
-      trip_dates: profile.trip_dates as any,
-      travel_party: profile.travel_party,
+      user_type: profile.user_type ?? "unknown",
       preferences: {
         interests: profile.interests,
         budget: profile.budget,
         pace: profile.pace,
+        cuisine_preferences: profile.cuisine_preferences,
         specific_requests: profile.specific_requests,
       },
       dietary_restrictions: profile.dietary_restrictions ?? [],
-      first_time_visitor: profile.first_time_visitor,
       current_city: "Kuala Lumpur",
-    });
+    };
 
-    // Transition to strategic decisions flow
-    await updateConversation(phoneNumber, {
-      current_flow: "strategic",
-      flow_state: { profile_just_completed: true },
-    });
+    if (profile.user_type === "local") {
+      travelerUpdates.home_neighborhoods = profile.home_neighborhoods ?? [];
+    } else {
+      travelerUpdates.trip_dates = profile.trip_dates;
+      travelerUpdates.travel_party = profile.travel_party;
+      travelerUpdates.first_time_visitor = profile.first_time_visitor;
+    }
+
+    await updateTraveler(phoneNumber, travelerUpdates);
+
+    // Branch flow based on user type
+    if (profile.user_type === "local") {
+      // Locals skip strategic guide — go straight to general
+      await updateConversation(phoneNumber, {
+        current_flow: "general",
+        flow_state: {},
+      });
+    } else {
+      // Travelers get the strategic decisions flow
+      await updateConversation(phoneNumber, {
+        current_flow: "strategic",
+        flow_state: { profile_just_completed: true },
+      });
+    }
 
     // Return Claude's response without the marker
-    return response.replace("[PROFILE_COMPLETE]", "").trim();
+    return response.replace(/\[PROFILE[_\s]?COMPLETE\]/i, "").trim();
   }
 
   return response;
@@ -92,30 +113,39 @@ export async function handleProfile(
 
 /** Kick off the profile learning flow */
 export async function startProfileLearning(
-  phoneNumber: string
+  phoneNumber: string,
+  initialMessage?: string
 ): Promise<string> {
+  // Check if we already have some profile data
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  if (traveler.preferences && Object.keys(traveler.preferences).length > 0) {
+    // Returning user — don't trap them in interview mode.
+    // Continuous profile extraction will capture any updates from their message.
+    if (initialMessage) {
+      return await chatAsP([], initialMessage);
+    }
+    if (traveler.user_type === "local") {
+      return "Hey, welcome back! Anything new you want to explore?";
+    }
+    return "Welcome back! What can I help you find?";
+  }
+
+  // New user — start the profile learning flow
   await updateConversation(phoneNumber, {
     current_flow: "profile_learning",
     flow_state: { stage: "interviewing" },
   });
 
-  // Check if we already have some profile data
-  const traveler = await getOrCreateTraveler(phoneNumber);
-  if (traveler.preferences && Object.keys(traveler.preferences).length > 0) {
-    return "Welcome back! Planning another trip to KL? Tell me what's changed — new dates, different vibe, or just picking up where we left off?";
+  // If the user's first message already has profile info, respond to it
+  if (initialMessage) {
+    return await chat(
+      profilePrompt,
+      [{ role: "user", content: initialMessage }],
+      { maxTokens: 512, model: HAIKU }
+    );
   }
 
-  return `Hey! I'm Paul — your KL insider. 🇲🇾
+  return `Hey! I'm Paul — your KL insider.
 
-Here's how this works:
-
-1️⃣ Tell me about your trip (where, when, who)
-2️⃣ I'll ask a few questions about your style
-3️⃣ I'll give you strategic decisions (where to stay, what to book ahead)
-4️⃣ When you land, text me — I'll guide you day-by-day
-5️⃣ After your trip, tell me how spots were
-
-You don't need to plan everything now. I've got you from start to finish.
-
-So — when are you heading to KL?`;
+Whether you're visiting or you live here, I'll point you to the best spots. Quick question: are you planning a trip to KL, or do you live here?`;
 }

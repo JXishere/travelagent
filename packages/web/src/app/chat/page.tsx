@@ -46,6 +46,24 @@ function Chat() {
           }),
         });
 
+        if (res.status === 429) {
+          const data = await res.json();
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last?.role === "assistant") {
+              updated[updated.length - 1] = {
+                ...last,
+                content:
+                  data.error ||
+                  "Hey, you've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+              };
+            }
+            return updated;
+          });
+          return;
+        }
+
         if (!res.ok || !res.body) {
           throw new Error("Failed to connect");
         }
@@ -126,7 +144,7 @@ function Chat() {
           sam
         </a>
         <span className="text-xs" style={{ color: "var(--muted)" }}>
-          kuala lumpur
+          {(process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur").toLowerCase()}
         </span>
       </header>
 

@@ -6,6 +6,7 @@ import { resolve } from "path";
 setPromptsDir(resolve(process.cwd(), "../bot/src/prompts"));
 
 import { NextRequest } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   getOrCreateConversation,
   appendMessages,
@@ -20,11 +21,35 @@ import { handleContribution } from "@sam/bot/handlers/contribution";
 import { handleQuery } from "@sam/bot/handlers/query";
 import { handleProfile, startProfileLearning } from "@sam/bot/handlers/profile";
 import { handleStrategic } from "@sam/bot/handlers/strategic";
-import { handleHungry, handleDayPlan, handleNearby } from "@sam/bot/handlers/ontrip";
+import {
+  handleHungry, handleDayPlan, handleNearby,
+  buildHungryPrompt, buildDayPlanPrompt, buildNearbyPrompt,
+} from "@sam/bot/handlers/ontrip";
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
 
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { allowed, remaining } = checkRateLimit(ip);
+
+  if (!allowed) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "You've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+        remaining: 0,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
   const { sessionId, message } = (await req.json()) as {
     sessionId: string;
     message: string;
@@ -63,7 +88,7 @@ export async function POST(req: NextRequest) {
         currentFlow
       ).catch(() => {});
 
-      return sseTextResponse(response);
+      return sseTextResponse(response, remaining);
     }
 
     // --- Fresh intent classification ---
@@ -85,7 +110,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     if (streamableIntents.has(intent)) {
-      return streamHandlerResponse(sessionId, message, intent, details, conversation);
+      return streamHandlerResponse(sessionId, message, intent, details, conversation, remaining);
     }
 
     // Multi-turn intents → call handler, return as single SSE chunk
@@ -123,7 +148,7 @@ export async function POST(req: NextRequest) {
       intent
     ).catch(() => {});
 
-    return sseTextResponse(response);
+    return sseTextResponse(response, remaining);
   } catch (error) {
     console.error("[web-chat] Error:", error);
     return sseTextResponse("Sorry, something went wrong on my end. Try again?");
@@ -180,39 +205,50 @@ async function streamHandlerResponse(
   message: string,
   intent: string,
   details: Record<string, string>,
-  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>
+  conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
+  rateLimitRemaining?: number
 ): Promise<Response> {
-  // For hungry/day_plan/nearby/weather — call the handler which does
-  // DB lookups + LLM call. But we want streaming. So we use a two-step
-  // approach: handlers that return strings are sent as single chunks,
-  // while "general" intent gets streamed token-by-token.
-  //
-  // For now, stream general chat and send handler responses as fast SSE.
-  // This is a pragmatic tradeoff — the handlers already format spot data
-  // into the prompt, so we'd need to refactor them to split "build prompt"
-  // from "call LLM" to get true streaming. Not worth it yet.
-
-  let response: string;
-
+  // Use prompt builders for structured handlers, then stream the LLM call
   switch (intent) {
-    case "hungry":
-      response = await handleHungry(sessionId, message, details);
-      break;
-    case "day_plan":
-      response = await handleDayPlan(sessionId, message, details);
-      break;
-    case "nearby":
-      response = await handleNearby(sessionId, message, details);
-      break;
+    case "hungry": {
+      const payload = await buildHungryPrompt(sessionId, message, details);
+      const stream = chatStream(
+        payload.systemPrompt,
+        [{ role: "user", content: payload.userPrompt }],
+        { maxTokens: payload.maxTokens }
+      );
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+    }
+    case "day_plan": {
+      const payload = await buildDayPlanPrompt(sessionId, message, details);
+      const stream = chatStream(
+        payload.systemPrompt,
+        [{ role: "user", content: payload.userPrompt }],
+        { maxTokens: payload.maxTokens }
+      );
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+    }
+    case "nearby": {
+      const payload = await buildNearbyPrompt(sessionId, message, details);
+      const stream = chatStream(
+        payload.systemPrompt,
+        [{ role: "user", content: payload.userPrompt }],
+        { maxTokens: payload.maxTokens }
+      );
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+    }
     case "weather": {
-      const { getCurrentWeather } = await import("@sam/bot/handlers/ontrip")
-        .then(() => import("@sam/bot/utils/city-defaults"))
-        .catch(() => ({ getCurrentWeather: null })) as any;
-      // Weather-aware: use handleQuery with weather context
-      response = await handleQuery(sessionId, message, {
-        ...details,
-      });
-      break;
+      // Weather-aware: use handleQuery (non-streamed, returns complete string)
+      const response = await handleQuery(sessionId, message, { ...details });
+      await appendMessages(sessionId, [
+        { role: "user", content: message },
+        { role: "assistant", content: response },
+      ]);
+      maybeExtractProfile(sessionId, [
+        { role: "user", content: message },
+        { role: "assistant", content: response },
+      ], intent).catch(() => {});
+      return sseTextResponse(response, rateLimitRemaining);
     }
     case "general":
     default: {
@@ -223,26 +259,9 @@ async function streamHandlerResponse(
       }));
 
       const stream = chatAsSamStream(history, message);
-      return streamSSE(stream, sessionId, message, intent);
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
   }
-
-  // Non-streamed handler responses
-  await appendMessages(sessionId, [
-    { role: "user", content: message },
-    { role: "assistant", content: response },
-  ]);
-
-  maybeExtractProfile(
-    sessionId,
-    [
-      { role: "user", content: message },
-      { role: "assistant", content: response },
-    ],
-    intent
-  ).catch(() => {});
-
-  return sseTextResponse(response);
 }
 
 // --- General chat fallback ---
@@ -269,7 +288,8 @@ function streamSSE(
   stream: ReturnType<typeof chatAsSamStream>,
   sessionId: string,
   message: string,
-  intent: string
+  intent: string,
+  rateLimitRemaining?: number
 ): Response {
   const encoder = new TextEncoder();
   let fullResponse = "";
@@ -318,27 +338,33 @@ function streamSSE(
     },
   });
 
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  };
+  if (rateLimitRemaining !== undefined) {
+    headers["X-RateLimit-Remaining"] = String(rateLimitRemaining);
+  }
+
+  return new Response(readable, { headers });
 }
 
 /** Send a complete text response as a single SSE chunk */
-function sseTextResponse(text: string): Response {
+function sseTextResponse(text: string, rateLimitRemaining?: number): Response {
   const encoder = new TextEncoder();
   const body = encoder.encode(
     `data: ${JSON.stringify({ text })}\n\ndata: [DONE]\n\n`
   );
 
-  return new Response(body, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  };
+  if (rateLimitRemaining !== undefined) {
+    headers["X-RateLimit-Remaining"] = String(rateLimitRemaining);
+  }
+
+  return new Response(body, { headers });
 }

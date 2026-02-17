@@ -1,0 +1,266 @@
+// Proactive message scheduler — makes Sam reach out like a friend
+// Runs on a 5-minute interval, checks for travelers who should hear from Sam
+
+import { sendMessage } from "./whatsapp.js";
+import { chat, HAIKU } from "./llm.js";
+import {
+  getActiveTravelers,
+  touchLastProactive,
+  markFeedbackAsked,
+  getSpotsNeedingFeedback,
+  type Traveler,
+} from "./database.js";
+import { getCurrentWeather } from "./weather.js";
+import { startFeedbackCollection } from "./handlers/feedback.js";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+const PROACTIVE_PROMPT = readFileSync(
+  join(__dirname, "prompts", "proactive.txt"),
+  "utf-8"
+);
+
+// KL is UTC+8
+const KL_OFFSET_HOURS = 8;
+
+const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const COOLDOWN_HOURS = 8;
+const WHATSAPP_WINDOW_HOURS = 23; // 1h buffer from 24h limit
+
+export type ProactiveType =
+  | "TRIP_WELCOME"
+  | "FEEDBACK_CHECK"
+  | "MORNING_NUDGE"
+  | "DINNER_NUDGE";
+
+export interface ProactiveResult {
+  type: ProactiveType;
+  context: string;
+}
+
+interface CandidateInfo {
+  name?: string;
+  trip_dates?: { start: string; end: string };
+  last_proactive_at?: string;
+  last_user_message_at?: string;
+  current_flow: string;
+  spots_visited: string[];
+  spots_feedback_asked: string[];
+  dietary_restrictions?: string[];
+  travel_party?: string;
+  current_city?: string;
+}
+
+let intervalId: ReturnType<typeof setInterval> | null = null;
+
+/** Start the proactive message scheduler */
+export function startScheduler(): void {
+  console.log("[scheduler] Starting proactive message scheduler (5-min interval)");
+  // First tick after 10s delay to let the server fully start
+  setTimeout(() => tick(), 10_000);
+  intervalId = setInterval(() => tick(), TICK_INTERVAL_MS);
+}
+
+/** Stop the scheduler (for tests / graceful shutdown) */
+export function stopScheduler(): void {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+    console.log("[scheduler] Stopped");
+  }
+}
+
+/** One scheduler tick — check all active travelers */
+async function tick(): Promise<void> {
+  try {
+    const travelers = await getActiveTravelers();
+    const now = new Date();
+    console.log(`[scheduler] Tick — ${travelers.length} active traveler(s)`);
+
+    for (const traveler of travelers) {
+      try {
+        const result = evaluateCandidate(traveler, now);
+        if (!result) continue;
+
+        console.log(`[scheduler] Sending ${result.type} to ${traveler.whatsapp_number}`);
+        await sendProactiveMessage(traveler, result);
+        await touchLastProactive(traveler.whatsapp_number);
+      } catch (err) {
+        console.error(`[scheduler] Error for ${traveler.whatsapp_number}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[scheduler] Tick error:", err);
+  }
+}
+
+/** Pure function: determine if/what proactive message to send */
+export function evaluateCandidate(
+  candidate: CandidateInfo,
+  now: Date
+): ProactiveResult | null {
+  // Gate 1: WhatsApp 24h window
+  if (!candidate.last_user_message_at) return null;
+  const lastMsg = new Date(candidate.last_user_message_at);
+  const hoursSinceMsg = (now.getTime() - lastMsg.getTime()) / (1000 * 60 * 60);
+  if (hoursSinceMsg > WHATSAPP_WINDOW_HOURS) return null;
+
+  // Gate 2: Cooldown (8 hours since last proactive)
+  if (candidate.last_proactive_at) {
+    const lastProactive = new Date(candidate.last_proactive_at);
+    const hoursSinceProactive =
+      (now.getTime() - lastProactive.getTime()) / (1000 * 60 * 60);
+    if (hoursSinceProactive < COOLDOWN_HOURS) return null;
+  }
+
+  // Gate 3: Flow safety — don't interrupt mid-flow
+  if (candidate.current_flow !== "general") return null;
+
+  // Gate 4: Active trip
+  if (!candidate.trip_dates?.start || !candidate.trip_dates?.end) return null;
+  const tripDay = calculateTripDay(candidate.trip_dates, now);
+  const totalDays = calculateTotalDays(candidate.trip_dates);
+  if (tripDay < 1 || tripDay > totalDays) return null;
+
+  // Gate 5: Daytime only (8am-10pm KL time)
+  const klHour = getKLHour(now);
+  if (klHour < 8 || klHour >= 22) return null;
+
+  const context = buildProactiveContext({
+    name: candidate.name,
+    tripDay,
+    totalDays,
+    travelParty: candidate.travel_party,
+    dietaryRestrictions: candidate.dietary_restrictions,
+    city: candidate.current_city ?? "Kuala Lumpur",
+    klHour,
+  });
+
+  // Priority 1: TRIP_WELCOME — day 1, never proactively messaged
+  if (tripDay === 1 && !candidate.last_proactive_at) {
+    return { type: "TRIP_WELCOME", context };
+  }
+
+  // Priority 2: FEEDBACK_CHECK — has unasked spots, during check windows
+  const hasUnaskedSpots =
+    (candidate.spots_visited?.length ?? 0) > 0 &&
+    candidate.spots_visited.some(
+      (id) => !(candidate.spots_feedback_asked ?? []).includes(id)
+    );
+  if (hasUnaskedSpots && ((klHour >= 10 && klHour < 12) || (klHour >= 19 && klHour < 21))) {
+    return { type: "FEEDBACK_CHECK", context };
+  }
+
+  // Priority 3: MORNING_NUDGE — day 2+, 8-10am
+  if (tripDay >= 2 && klHour >= 8 && klHour < 10) {
+    return { type: "MORNING_NUDGE", context };
+  }
+
+  // Priority 4: DINNER_NUDGE — day 2+, 5-7pm
+  if (tripDay >= 2 && klHour >= 17 && klHour < 19) {
+    return { type: "DINNER_NUDGE", context };
+  }
+
+  return null;
+}
+
+/** Build the context string passed to the LLM prompt */
+export function buildProactiveContext(params: {
+  name?: string;
+  tripDay: number;
+  totalDays: number;
+  travelParty?: string;
+  dietaryRestrictions?: string[];
+  city: string;
+  klHour: number;
+}): string {
+  const lines: string[] = [];
+  if (params.name) lines.push(`Name: ${params.name}`);
+  lines.push(`City: ${params.city}`);
+  lines.push(`Trip day: ${params.tripDay} of ${params.totalDays}`);
+  lines.push(`Local time: ~${params.klHour}:00`);
+  if (params.travelParty) lines.push(`Travel party: ${params.travelParty}`);
+  if (params.dietaryRestrictions?.length) {
+    lines.push(`Dietary restrictions: ${params.dietaryRestrictions.join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+/** Calculate which day of the trip it is (1-indexed) */
+export function calculateTripDay(
+  tripDates: { start: string; end: string },
+  now: Date
+): number {
+  const start = toKLMidnight(tripDates.start);
+  const today = toKLMidnight(formatKLDate(now));
+  const diffMs = today.getTime() - start.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/** Calculate total trip length in days */
+export function calculateTotalDays(tripDates: {
+  start: string;
+  end: string;
+}): number {
+  const start = toKLMidnight(tripDates.start);
+  const end = toKLMidnight(tripDates.end);
+  const diffMs = end.getTime() - start.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/** Send the proactive message */
+async function sendProactiveMessage(
+  traveler: Traveler & { current_flow: string; last_user_message_at?: string },
+  result: ProactiveResult
+): Promise<void> {
+  const phone = traveler.whatsapp_number;
+
+  if (result.type === "FEEDBACK_CHECK") {
+    // Delegate to existing feedback flow
+    const spots = await getSpotsNeedingFeedback(phone);
+    if (spots.length === 0) return;
+
+    const message = await startFeedbackCollection(phone);
+    await sendMessage(phone, message);
+    await markFeedbackAsked(phone, spots.map((s) => s.id));
+    return;
+  }
+
+  // LLM-generated message
+  const weather = await getCurrentWeather(traveler.current_city).catch(() => null);
+  const weatherLine = weather ? `\nWeather: ${weather.summary}` : "";
+
+  const prompt = PROACTIVE_PROMPT
+    .replace("{{MESSAGE_TYPE}}", result.type)
+    .replace("{{CONTEXT}}", result.context + weatherLine);
+
+  const message = await chat(prompt, [{ role: "user", content: "Generate the proactive message." }], {
+    temperature: 0.8,
+    model: HAIKU,
+    maxTokens: 256,
+  });
+
+  await sendMessage(phone, message);
+}
+
+// ============================================
+// HELPERS
+// ============================================
+
+function getKLHour(now: Date): number {
+  const utcHour = now.getUTCHours();
+  return (utcHour + KL_OFFSET_HOURS) % 24;
+}
+
+/** Convert a date string (YYYY-MM-DD) to a Date at midnight KL time */
+function toKLMidnight(dateStr: string): Date {
+  // Parse as UTC midnight, then adjust for KL offset
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+}
+
+/** Format a Date as a YYYY-MM-DD string in KL timezone */
+function formatKLDate(now: Date): string {
+  const klTime = new Date(now.getTime() + KL_OFFSET_HOURS * 60 * 60 * 1000);
+  return klTime.toISOString().split("T")[0];
+}

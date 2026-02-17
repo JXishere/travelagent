@@ -10,7 +10,9 @@ import {
   appendMessages,
   insertSpot,
   findDuplicateSpot,
+  touchLastUserMessage,
 } from "./database.js";
+import { getDefaultCity } from "./utils/city-defaults.js";
 import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
 import { handleProfile, startProfileLearning } from "./handlers/profile.js";
@@ -19,6 +21,7 @@ import { handleHungry, handleDayPlan, handleNearby } from "./handlers/ontrip.js"
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
 import { maybeExtractProfile } from "./handlers/continuous-profile.js";
+import { startScheduler } from "./scheduler.js";
 
 const app = express();
 app.use(express.json());
@@ -81,8 +84,10 @@ app.post("/webhook", async (req, res) => {
 async function processMessage(message: ReturnType<typeof parseWebhook>) {
   if (!message) return;
 
-  const { from, type, text, audioId, location } = message;
+  const { from, audioId, location } = message;
+  let { type, text } = message;
   const conversation = await getOrCreateConversation(from);
+  touchLastUserMessage(from).catch(() => {});
   const currentFlow = conversation.current_flow;
 
   // Location pin → route to nearby handler
@@ -127,6 +132,17 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     });
     await sendMessage(from, response);
     return;
+  }
+
+  // Image message — process caption as text if present, otherwise acknowledge
+  if (type === "image") {
+    if (message.imageCaption) {
+      text = message.imageCaption;
+      type = "text";
+    } else {
+      await sendMessage(from, "Nice pic! I can't process images yet though — send me a text or voice note and I'll help you out.");
+      return;
+    }
   }
 
   if (!text) return;
@@ -329,7 +345,7 @@ async function routeToCurrentFlow(
 // HEALTH CHECK
 // ============================================
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "sam-bot", city: "Kuala Lumpur" });
+  res.json({ status: "ok", service: "sam-bot", city: getDefaultCity() });
 });
 
 // ============================================
@@ -339,4 +355,5 @@ app.listen(PORT, () => {
   console.log(`Sam is running on port ${PORT}`);
   console.log(`Webhook URL: https://your-domain.com/webhook`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  startScheduler();
 });

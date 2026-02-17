@@ -2,7 +2,8 @@
 
 import { chat, HAIKU } from "../llm.js";
 import {
-  getRecentlyRecommendedSpots,
+  getSpotsNeedingFeedback,
+  markFeedbackAsked,
   insertFeedback,
   getOrCreateTraveler,
   updateTraveler,
@@ -18,6 +19,11 @@ const systemPrompt = readFileSync(
   "utf-8"
 );
 
+const feedbackExtractionPrompt = readFileSync(
+  join(__dirname, "..", "prompts", "feedback.txt"),
+  "utf-8"
+);
+
 export async function handleFeedback(
   phoneNumber: string,
   message: string,
@@ -29,9 +35,7 @@ export async function handleFeedback(
   if (state.stage === "asking" && state.spot_id) {
     // Parse their response — extract rating and comments
     const parsed = await chat(
-      `Extract feedback from this message about a restaurant/spot visit. Return ONLY JSON:
-{ "rating": 1-5 or null, "did_they_go": true/false, "comments": "summary", "tips": ["any tips for future visitors"] }
-If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4, good=3, meh=2, bad=1).`,
+      feedbackExtractionPrompt,
       [{ role: "user", content: message }],
       { temperature: 0.2, model: HAIKU }
     );
@@ -102,7 +106,7 @@ If they didn't provide a numeric rating, infer from sentiment (loved=5, great=4,
 export async function startFeedbackCollection(
   phoneNumber: string
 ): Promise<string> {
-  const spots = await getRecentlyRecommendedSpots(phoneNumber);
+  const spots = await getSpotsNeedingFeedback(phoneNumber);
 
   if (spots.length === 0) {
     await updateConversation(phoneNumber, {
@@ -125,6 +129,9 @@ export async function startFeedbackCollection(
       pending_names: remaining.map((s) => s.name),
     },
   });
+
+  // Mark these spots as asked so we don't re-ask
+  await markFeedbackAsked(phoneNumber, spots.map((s) => s.id));
 
   return `Hey! Quick check — did you make it to *${firstSpot.name}*? How was it? (A rating 1-5 helps, plus any tips!)`;
 }

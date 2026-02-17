@@ -1,11 +1,14 @@
 // Supabase client — all database operations
 
 import { createClient } from "@supabase/supabase-js";
+import { getDefaultCity } from "./utils/city-defaults.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_KEY!
 );
+
+const MAX_CONVERSATION_MESSAGES = 40;
 
 // ============================================
 // CONVERSATIONS
@@ -57,8 +60,7 @@ export async function appendMessages(
 ): Promise<void> {
   const convo = await getOrCreateConversation(phoneNumber);
   const allMessages = [...convo.messages, ...newMessages];
-  // Keep last 40 messages to stay within context limits
-  const trimmed = allMessages.slice(-40);
+  const trimmed = allMessages.slice(-MAX_CONVERSATION_MESSAGES);
   await updateConversation(phoneNumber, { messages: trimmed });
 }
 
@@ -128,7 +130,7 @@ export async function querySpots(filters: {
 export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
   const { data, error } = await supabase
     .from("spots")
-    .insert({ city: "Kuala Lumpur", ...spot })
+    .insert({ city: getDefaultCity(), ...spot })
     .select()
     .single();
   if (error) throw error;
@@ -150,6 +152,22 @@ export async function findDuplicateSpot(
 
   const { data } = await query.limit(1).maybeSingle();
   return (data as Spot) ?? null;
+}
+
+export async function getSpotById(spotId: string): Promise<Spot | null> {
+  const { data } = await supabase
+    .from("spots")
+    .select("*")
+    .eq("id", spotId)
+    .single();
+  return (data as Spot) ?? null;
+}
+
+export async function updateSpot(spotId: string, updates: Partial<Spot>): Promise<void> {
+  await supabase
+    .from("spots")
+    .update(updates)
+    .eq("id", spotId);
 }
 
 export async function incrementSpotUseCount(spotId: string): Promise<void> {
@@ -186,6 +204,8 @@ export interface Traveler {
   spots_visited: string[];
   spots_liked: string[];
   spots_disliked: string[];
+  last_proactive_at?: string;
+  spots_feedback_asked: string[];
 }
 
 export async function getOrCreateTraveler(
@@ -224,8 +244,9 @@ export async function markSpotVisited(
   spotId: string
 ): Promise<void> {
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const visited = [...(traveler.spots_visited ?? []), spotId];
-  await updateTraveler(phoneNumber, { spots_visited: visited });
+  const existing = new Set(traveler.spots_visited ?? []);
+  existing.add(spotId);
+  await updateTraveler(phoneNumber, { spots_visited: [...existing] });
 }
 
 export async function markSpotsVisited(
@@ -272,7 +293,7 @@ export async function getOrCreateContributor(
 
 export async function incrementContributorCount(
   phoneNumber: string,
-  city: string = "Kuala Lumpur"
+  city: string = getDefaultCity()
 ): Promise<void> {
   const contributor = await getOrCreateContributor(phoneNumber);
   const existing: string[] = (contributor as any).cities_contributed ?? [];
@@ -284,6 +305,88 @@ export async function incrementContributorCount(
       cities_contributed: cities,
     })
     .eq("whatsapp_number", phoneNumber);
+}
+
+// ============================================
+// PROACTIVE MESSAGING
+// ============================================
+
+/** Update last_user_message_at on the conversation (for WhatsApp 24h window tracking) */
+export async function touchLastUserMessage(phoneNumber: string): Promise<void> {
+  await supabase
+    .from("conversations")
+    .update({ last_user_message_at: new Date().toISOString() })
+    .eq("whatsapp_number", phoneNumber);
+}
+
+/** Get travelers currently on a trip with their conversation state */
+export async function getActiveTravelers(): Promise<
+  Array<Traveler & { current_flow: string; last_user_message_at?: string }>
+> {
+  const { data: travelers } = await supabase
+    .from("travelers")
+    .select("*")
+    .eq("user_type", "traveler")
+    .not("trip_dates", "is", null);
+
+  if (!travelers?.length) return [];
+
+  const phones = travelers.map((t: any) => t.whatsapp_number);
+  const { data: conversations } = await supabase
+    .from("conversations")
+    .select("whatsapp_number, current_flow, last_user_message_at")
+    .in("whatsapp_number", phones);
+
+  const convoMap = new Map(
+    (conversations ?? []).map((c: any) => [c.whatsapp_number, c])
+  );
+
+  return travelers.map((t: any) => {
+    const convo = convoMap.get(t.whatsapp_number);
+    return {
+      ...t,
+      current_flow: convo?.current_flow ?? "general",
+      last_user_message_at: convo?.last_user_message_at ?? undefined,
+    } as Traveler & { current_flow: string; last_user_message_at?: string };
+  });
+}
+
+/** Update last_proactive_at timestamp on the traveler */
+export async function touchLastProactive(phoneNumber: string): Promise<void> {
+  await supabase
+    .from("travelers")
+    .update({ last_proactive_at: new Date().toISOString() })
+    .eq("whatsapp_number", phoneNumber);
+}
+
+/** Append spot IDs to spots_feedback_asked (deduped) */
+export async function markFeedbackAsked(
+  phoneNumber: string,
+  spotIds: string[]
+): Promise<void> {
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  const existing = new Set(traveler.spots_feedback_asked ?? []);
+  for (const id of spotIds) existing.add(id);
+  await updateTraveler(phoneNumber, { spots_feedback_asked: [...existing] });
+}
+
+/** Get spots from spots_visited that haven't been asked about in feedback yet */
+export async function getSpotsNeedingFeedback(
+  phoneNumber: string
+): Promise<Spot[]> {
+  const traveler = await getOrCreateTraveler(phoneNumber);
+  if (!traveler.spots_visited?.length) return [];
+
+  const asked = new Set(traveler.spots_feedback_asked ?? []);
+  const needFeedback = traveler.spots_visited.filter((id) => !asked.has(id));
+  if (needFeedback.length === 0) return [];
+
+  const { data } = await supabase
+    .from("spots")
+    .select("*")
+    .in("id", needFeedback.slice(-5));
+
+  return (data ?? []) as Spot[];
 }
 
 // ============================================

@@ -88,6 +88,10 @@ create table travelers (
   spots_disliked uuid[] default '{}',
   trips_taken integer default 0,
 
+  -- Proactive messaging
+  last_proactive_at timestamp with time zone,
+  spots_feedback_asked uuid[] default '{}',
+
   created_at timestamp with time zone default now()
 );
 
@@ -105,6 +109,9 @@ create table conversations (
 
   messages jsonb default '[]',
   -- conversation history for Claude context
+
+  -- When the user last messaged us (for WhatsApp 24h window check)
+  last_user_message_at timestamp with time zone,
 
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()

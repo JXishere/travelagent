@@ -17,6 +17,7 @@ import { handleStrategic } from "./handlers/strategic.js";
 import { handleHungry, handleDayPlan, handleNearby } from "./handlers/ontrip.js";
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
+import { maybeExtractProfile } from "./handlers/continuous-profile.js";
 
 const app = express();
 app.use(express.json());
@@ -96,6 +97,10 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       { role: "assistant", content: response },
     ]);
     await sendMessage(from, response);
+    maybeExtractProfile(from, [
+      { role: "user", content: text ?? "[voice note]" },
+      { role: "assistant", content: response },
+    ], currentFlow).catch(() => {});
     return;
   }
 
@@ -238,6 +243,10 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   ]);
 
   await sendMessage(from, response);
+  maybeExtractProfile(from, [
+    { role: "user", content: text },
+    { role: "assistant", content: response },
+  ], intent).catch(() => {});
 }
 
 /** Route to the current active flow */

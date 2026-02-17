@@ -117,7 +117,6 @@ export async function handleGenerate(
 
   await insertSpot({
     ...merged,
-    city: "Kuala Lumpur",
     source: "llm_verified",
   } as any);
 

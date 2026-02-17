@@ -8,6 +8,7 @@ import {
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { formatSpotsForLLM } from "./query.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -26,7 +27,7 @@ export async function handleStrategic(phoneNumber: string): Promise<string> {
 
   // Query spots matching their profile
   const allSpots = await querySpots({
-    city: "Kuala Lumpur",
+    city: traveler.current_city ?? getDefaultCity(),
     limit: 20,
   });
 

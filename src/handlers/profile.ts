@@ -7,6 +7,7 @@ import {
   updateConversation,
   type Conversation,
 } from "../database.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -59,12 +60,15 @@ export async function handleProfile(
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
 
+    // Reuse continuous_profile prompt — same extraction schema, just applied to the full
+    // interview conversation instead of a single message exchange
     const profile = await extractJSON<ExtractedProfile>(
       "continuous_profile",
       `Extract a user profile from this conversation. Determine if they are a "local" or "traveler" based on context. For locals, extract home_neighborhoods and cuisine_preferences. For travelers, extract trip_dates, travel_party, first_time_visitor.\n\n${fullConvo}`,
     );
 
     // Save to database
+    const traveler = await getOrCreateTraveler(phoneNumber);
     const travelerUpdates: Record<string, any> = {
       name: profile.name,
       user_type: profile.user_type ?? "unknown",
@@ -76,7 +80,7 @@ export async function handleProfile(
         specific_requests: profile.specific_requests,
       },
       dietary_restrictions: profile.dietary_restrictions ?? [],
-      current_city: "Kuala Lumpur",
+      current_city: traveler.current_city ?? getDefaultCity(),
     };
 
     if (profile.user_type === "local") {

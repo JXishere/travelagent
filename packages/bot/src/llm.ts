@@ -37,7 +37,7 @@ export async function chat(
 ): Promise<string> {
   const response = await client.messages.create({
     model: options?.model ?? HAIKU,
-    max_tokens: options?.maxTokens ?? 1024,
+    max_tokens: options?.maxTokens ?? 512,
     system: systemPrompt,
     messages,
     temperature: options?.temperature ?? 0.7,
@@ -71,7 +71,7 @@ export function chatStream(
 ) {
   return client.messages.stream({
     model: options?.model ?? HAIKU,
-    max_tokens: options?.maxTokens ?? 1024,
+    max_tokens: options?.maxTokens ?? 512,
     system: systemPrompt,
     messages,
     temperature: options?.temperature ?? 0.7,

@@ -1,5 +1,20 @@
+// Sam personality & behavior tests
+// Targets: greetings/chitchat 200 chars, single rec 400, multi-spot 600
+
 {"name": "Sam identifies as Sam", "input": "Who are you?", "must_contain": ["sam"], "must_not_contain": ["paul", "AI language model", "ChatGPT"]}
-{"name": "Warm and casual tone", "input": "Hey, I just landed in KL!", "must_not_contain": ["certainly", "I'd be happy to", "as an AI"], "max_length": 500}
+{"name": "Warm and casual tone", "input": "Hey, I just landed in KL!", "must_not_contain": ["certainly", "I'd be happy to", "as an AI"], "max_length": 200}
 {"name": "Refuses to fabricate spots", "input": "What's the best restaurant in Putrajaya?", "context": "You have NO spots in your knowledge graph for Putrajaya.", "must_not_contain": ["I recommend", "you should try", "my top pick"]}
-{"name": "Keeps WhatsApp-length responses", "input": "Tell me about the food scene in KL", "max_length": 800}
-{"name": "Opinionated personality", "input": "Is nasi lemak overrated?", "max_length": 600}
+{"name": "Keeps WhatsApp-length responses", "input": "Tell me about the food scene in KL", "max_length": 600}
+{"name": "Opinionated personality", "input": "Is nasi lemak overrated?", "max_length": 400}
+
+// Length-focused scenarios
+{"name": "Greeting reply", "input": "Hey!", "max_length": 200}
+{"name": "Single spot recommendation", "input": "I'm hungry near Bangsar", "context": "Here are the matching spots from your knowledge graph:\n\n1. Village Park Restaurant\n   Neighborhood: Bangsar\n   Category: breakfast\n   Address: 5, Jalan SS 21/37, Damansara Utama\n   Price: $\n   Payment: cash, card\n   Hours: Tuesday: 7am-3pm, Wednesday: 7am-3pm, Thursday: 7am-3pm, Friday: 7am-3pm, Saturday: 7am-3pm, Sunday: 7am-3pm\n   Order: nasi lemak with ayam goreng berempah, teh tarik\n   Tips: Go before 10am to beat the queue | The ayam goreng sells out by noon on weekends\n   Vibe: casual\n   Tier: 1\n   Sam's take: personal favorite", "max_length": 400}
+{"name": "Multi-spot recommendation", "input": "Where should I eat dinner?", "context": "Here are the matching spots from your knowledge graph:\n\n1. Bijan Bar & Restaurant\n   Neighborhood: KLCC\n   Category: dinner\n   Price: $$$\n   Payment: cash, card\n   Order: rendang tok, ulam-ulam, kerabu\n   Tips: Book ahead for weekend dinners\n   Vibe: upscale\n   Tier: 1\n   Sam's take: personal favorite\n\n2. Wong Ah Wah\n   Neighborhood: Bukit Bintang\n   Category: dinner\n   Price: $$\n   Payment: cash\n   Order: chicken wings, grilled stingray, kangkung belacan\n   Tips: Go after 7pm when the grills are at full power\n   Vibe: chaotic\n   Tier: 1\n   Sam's take: well-vouched\n\n3. Sao Nam\n   Neighborhood: Bangsar\n   Category: dinner\n   Price: $$\n   Payment: cash, card\n   Order: pho, fresh spring rolls, bun cha\n   Tips: Small space, come early or queue\n   Vibe: chill\n   Tier: 2\n   Sam's take: well-vouched", "max_length": 600}
+{"name": "Follow-up question", "input": "What about breakfast?", "context": "Here are the matching spots from your knowledge graph:\n\n1. Yut Kee\n   Neighborhood: Dang Wangi\n   Category: breakfast\n   Price: $\n   Payment: cash\n   Order: roti babi, hainanese toast, kopi\n   Tips: Cash only, expect a wait on weekends\n   Vibe: local\n   Tier: 1\n   Sam's take: personal favorite\n\n2. Imbi Market\n   Neighborhood: Imbi\n   Category: breakfast\n   Price: $\n   Payment: cash\n   Order: curry mee, wan tan mee, nasi lemak\n   Tips: Gets crowded after 9am, go early\n   Vibe: chaotic\n   Tier: 2\n   Sam's take: well-vouched", "max_length": 500}
+{"name": "No spots found", "input": "Any good ramen in Putrajaya?", "context": "You have NO spots in your knowledge graph for this query.", "max_length": 200}
+{"name": "Unknown city", "input": "What should I eat in Osaka?", "context": "You have no data for Osaka.", "max_length": 200}
+{"name": "General chitchat", "input": "How does Sam work?", "max_length": 350}
+{"name": "Contribution welcome", "input": "I know this amazing nasi lemak spot", "max_length": 200, "must_not_contain": ["certainly", "I'd be happy to"]}
+{"name": "Return user greeting", "input": "Hey Sam, I'm back in KL!", "max_length": 200}
+{"name": "Opinion question", "input": "Is Jalan Alor worth it?", "context": "Here are the matching spots from your knowledge graph:\n\n1. Jalan Alor Food Street\n   Neighborhood: Bukit Bintang\n   Category: dinner\n   Price: $$\n   Payment: cash\n   Order: grilled chicken wings, satay, hokkien mee\n   Tips: Skip the restaurants with touts pulling you in — the stall food is better | Prices are tourist-inflated, still decent though\n   Vibe: touristy\n   Tier: 2\n   Sam's take: well-vouched", "max_length": 450}

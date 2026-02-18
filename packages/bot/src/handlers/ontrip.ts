@@ -143,7 +143,7 @@ ${spotsContext}
 
 Recommend naturally. Include full operational details. Respect their dietary restrictions — do NOT recommend dishes or spots that conflict. End by asking which one appeals or if they want something different. Keep it concise — this is WhatsApp, not email.`,
     spotIds: toRecommend.map(s => s.id),
-    maxTokens: 1024,
+    maxTokens: 512,
   };
 }
 
@@ -199,7 +199,7 @@ ${spotsContext}
 
 Build a loose, conversational day structure. NOT a rigid itinerary — more like "here's a nice flow for today." Ask about their energy level if they didn't mention it. Include operational details for each spot. Respect their dietary restrictions — skip dishes that conflict. End with "text me when you're hungry or want to adjust!"`,
     spotIds: allDaySpots.map(s => s.id),
-    maxTokens: 1500,
+    maxTokens: 1024,
   };
 }
 
@@ -284,7 +284,7 @@ ${spotsContext}
 
 Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from neighborhood."} Keep it casual.`,
     spotIds: spots.map(s => s.id),
-    maxTokens: 1024,
+    maxTokens: 512,
   };
 }
 

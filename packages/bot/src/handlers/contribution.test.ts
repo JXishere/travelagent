@@ -88,7 +88,7 @@ describe("isReady", () => {
     expect(isReady({ name: "Test", category: "dinner", neighborhood: "Bangsar" })).toBe(false);
   });
 
-  it("returns true when has critical + operational data", () => {
+  it("returns true when has critical + what_to_order", () => {
     expect(
       isReady({
         name: "Test",
@@ -97,7 +97,9 @@ describe("isReady", () => {
         what_to_order: ["nasi lemak"],
       })
     ).toBe(true);
+  });
 
+  it("returns false when has critical + pro_tips but no what_to_order", () => {
     expect(
       isReady({
         name: "Test",
@@ -105,8 +107,10 @@ describe("isReady", () => {
         neighborhood: "Bangsar",
         pro_tips: ["go early"],
       })
-    ).toBe(true);
+    ).toBe(false);
+  });
 
+  it("returns false when has critical + payment_methods but no what_to_order", () => {
     expect(
       isReady({
         name: "Test",
@@ -114,7 +118,7 @@ describe("isReady", () => {
         neighborhood: "Bangsar",
         payment_methods: ["cash"],
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

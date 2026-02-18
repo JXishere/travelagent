@@ -326,12 +326,10 @@ export function smartMerge(
 /** Check if we have enough data to show a confirmation summary */
 export function isReady(data: Partial<ExtractedSpot>): boolean {
   const hasCritical = Boolean(data.name && data.category && data.neighborhood);
-  const hasOperational = Boolean(
-    (data.what_to_order && data.what_to_order.length > 0) ||
-    (data.pro_tips && data.pro_tips.length > 0) ||
-    (data.payment_methods && data.payment_methods.length > 0)
+  const hasContributorOpinion = Boolean(
+    data.what_to_order && data.what_to_order.length > 0
   );
-  return hasCritical && hasOperational;
+  return hasCritical && hasContributorOpinion;
 }
 
 /** Build a natural follow-up question with a warm prefix */

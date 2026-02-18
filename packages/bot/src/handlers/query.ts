@@ -99,7 +99,7 @@ Here are the matching spots from your knowledge graph. Recommend them naturally 
 ${spotContext}`;
 
   return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {
-    maxTokens: 1024,
+    maxTokens: 512,
   });
 }
 

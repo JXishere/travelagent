@@ -201,7 +201,10 @@ Return ONLY the JSON object, no markdown fences or extra text.`;
     const fenceMatch = textBlock.text.match(/```(?:json)?\s*([\s\S]*?)```/);
     const bareMatch = textBlock.text.match(/\{[\s\S]*\}/);
     const jsonStr = fenceMatch ? fenceMatch[1].trim() : bareMatch ? bareMatch[0] : textBlock.text.trim();
-    return JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonStr);
+    // Belt-and-suspenders: never return opening_hours from web search
+    delete parsed.opening_hours;
+    return parsed;
   } catch (error) {
     console.error("webSearchSpot failed:", error);
     return {};

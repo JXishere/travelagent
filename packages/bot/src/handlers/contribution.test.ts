@@ -72,7 +72,7 @@ describe("smartMerge", () => {
   it("ignores null, undefined, empty strings, empty arrays, and empty objects", () => {
     const result = smartMerge(
       { name: "Fatty Crab", vibe: "casual" },
-      { name: null as any, vibe: "", what_to_order: [], opening_hours: {} }
+      { name: null as any, vibe: "", what_to_order: [] }
     );
     expect(result.name).toBe("Fatty Crab");
     expect(result.vibe).toBe("casual");
@@ -379,7 +379,7 @@ describe("enrichFromWeb", () => {
       vibe: "chill",
       tier: 2,
       best_time_of_day: "morning",
-      opening_hours: { monday: "9am-5pm" },
+      indoor_outdoor: "indoor",
     });
 
     const data = { name: "Ka'ia" };
@@ -686,31 +686,98 @@ describe("handleContribution — confirming stage", () => {
     expect(result).toContain("Bangsar");
   });
 
-  it("calls samSays with web-enriched context and user's question for question intent", async () => {
+  it("calls samSays with field-level web context for question intent", async () => {
     mockedClassify.mockResolvedValue("question");
 
-    await handleContribution("+60123", "where did you get the hours?", undefined, confirmingConv({ webEnriched: true }));
+    await handleContribution("+60123", "where did you get the price?", undefined, confirmingConv({ webSourcedFields: ["price_range", "address"] }));
 
     expect(mockedSamSays).toHaveBeenCalledWith(
-      expect.stringContaining("filled in some operational gaps")
+      expect.stringContaining("price range, address")
     );
     // User's actual question is included
     expect(mockedSamSays).toHaveBeenCalledWith(
-      expect.stringContaining("where did you get the hours?")
+      expect.stringContaining("where did you get the price?")
     );
   });
 
-  it("calls samSays with non-enriched context and user's question for question intent", async () => {
+  it("calls samSays with non-enriched context when no web fields", async () => {
     mockedClassify.mockResolvedValue("question");
 
-    await handleContribution("+60123", "double check the opening time", undefined, confirmingConv({ webEnriched: false }));
+    await handleContribution("+60123", "double check the opening time", undefined, confirmingConv({ webSourcedFields: [] }));
 
     expect(mockedSamSays).toHaveBeenCalledWith(
       expect.stringContaining("All the data came from what they told you")
     );
-    // User's actual question is included
     expect(mockedSamSays).toHaveBeenCalledWith(
       expect.stringContaining("double check the opening time")
+    );
+  });
+
+  it("backwards compat: old webEnriched boolean still works for question intent", async () => {
+    mockedClassify.mockResolvedValue("question");
+
+    const conv = makeConversation({
+      flow_state: {
+        stage: "confirming",
+        extracted: readySpot,
+        source: "text",
+        messagesReceived: 2,
+        webEnriched: true, // old format
+      },
+    });
+
+    await handleContribution("+60123", "is the address right?", undefined, conv);
+
+    // Should still detect web enrichment via backwards compat
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("from the web")
+    );
+  });
+
+  it("correction removes corrected field from webSourcedFields", async () => {
+    mockedClassify.mockResolvedValue("correct");
+    mockedExtract.mockResolvedValue({ price_range: "$$$" }); // correcting price_range
+
+    const conv = confirmingConv({
+      extracted: { ...readySpot, price_range: "$$", address: "10 Jalan Maarof" },
+      webSourcedFields: ["price_range", "address"],
+    });
+
+    await handleContribution("+60123", "actually it's $$$", undefined, conv);
+
+    // price_range corrected by contributor → removed from webSourcedFields
+    // address still web-sourced
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({
+        webSourcedFields: ["address"],
+        extracted: expect.objectContaining({ price_range: "$$$" }),
+      }),
+    }));
+  });
+
+  it("saves spot without web-sourced fields in insertSpot call", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+
+    const conv = confirmingConv({
+      extracted: { ...readySpot, price_range: "$$", address: "10 Jalan Maarof" },
+      webSourcedFields: ["price_range", "address"],
+    });
+
+    await handleContribution("+60123", "looks good", undefined, conv);
+
+    // insertSpot should NOT include web-sourced fields
+    expect(mockedInsertSpot).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        price_range: "$$",
+        address: "10 Jalan Maarof",
+      })
+    );
+    // But should still include contributor fields
+    expect(mockedInsertSpot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Fatty Crab",
+        category: "dinner",
+      })
     );
   });
 });

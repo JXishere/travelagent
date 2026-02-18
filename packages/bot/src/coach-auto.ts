@@ -96,14 +96,15 @@ ${currentPrompt}
 ## Coaching Report
 ${synthesis}
 
-## Rules for editing
-- Apply ONLY the top 1-2 highest-impact suggestions from the report
+## Rules for editing — READ CAREFULLY
+- Apply ONLY the single highest-impact suggestion from the report
+- The output must be SHORTER than or EQUAL in length to the current prompt. If you add a line, remove or shorten another.
+- Tighten existing wording rather than adding new paragraphs
 - Keep Sam's personality intact — don't make him generic
-- Don't add more than 5-6 new lines total
 - Don't remove existing rules that aren't mentioned in the report
-- Keep the {{CITY}} template variable — don't replace it
+- Keep the {{CITY}} template variable exactly as-is — don't replace it
 - Preserve the overall structure and tone of the prompt
-- Output ONLY the new system.txt content, nothing else — no explanation, no markdown fences`;
+- Output ONLY the new system.txt content, nothing else — no explanation, no markdown fences, no preamble`;
 
   const revised = await chat(
     "You are a careful prompt editor. Output only the revised prompt text.",

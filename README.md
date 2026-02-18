@@ -75,7 +75,7 @@ packages/
 │   │   ├── transcription.ts      — Whisper voice note transcription
 │   │   ├── weather.ts            — OpenWeather integration
 │   │   ├── scheduler.ts          — Proactive message engine (5-min interval)
-│   │   ├── seed.ts               — Knowledge graph seeding (50+ KL spots)
+│   │   ├── seed.ts               — Knowledge graph seeding (42 KL spots with lat/lng)
 │   │   ├── handlers/
 │   │   │   ├── query.ts              — Spot recommendations
 │   │   │   ├── ontrip.ts             — Hungry, day plan, nearby handlers
@@ -123,7 +123,7 @@ packages/
 │   └── tsconfig.json
 
 supabase/
-├── schema.sql                         — Full database schema (5 tables + RPC)
+├── schema.sql                         — Full database schema (6 tables + RPC)
 └── migrations/                        — Incremental migration files
 ```
 
@@ -175,7 +175,7 @@ ADMIN_PHONE_NUMBER=        # Optional: enables admin features
 npm run seed
 ```
 
-Populates 50+ curated KL spots with full operational intel.
+Populates 42 curated KL spots with coordinates and full operational intel.
 
 ### 5. Run
 
@@ -224,6 +224,7 @@ Gated behind the `ADMIN_PHONE_NUMBER` env var:
 | `conversations` | State machine — current flow, flow state, message history |
 | `contributors` | Who added knowledge — cities contributed, spot count |
 | `feedback` | Post-visit validation — ratings, comments, user tips |
+| `events` | Analytics — session_id, channel (web/whatsapp), event_type, event_data (jsonb) |
 
 ## Architecture
 
@@ -266,4 +267,4 @@ Both flows share the same handlers via the `@sam/bot` workspace dependency. The 
 npm test
 ```
 
-125 unit tests covering spot formatting, contribution extraction, profile merging, scheduler eligibility, message splitting, and category mapping.
+199 unit tests covering spot formatting, contribution extraction, profile merging, scheduler eligibility, message splitting, and category mapping.

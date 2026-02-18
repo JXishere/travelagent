@@ -63,6 +63,15 @@ export async function chatAsSam(
   return chat(systemPrompt, messages);
 }
 
+/** Quick Sam-voiced response for conversational glue (Haiku, max 100 tokens) */
+export async function samSays(instruction: string, city?: string): Promise<string> {
+  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city ?? getDefaultCity());
+  return chat(systemPrompt, [{ role: "user", content: instruction }], {
+    maxTokens: 100,
+    model: HAIKU,
+  });
+}
+
 /** Streaming chat — returns an Anthropic MessageStream for token-by-token output */
 export function chatStream(
   systemPrompt: string,
@@ -125,17 +134,18 @@ export async function extractJSON<T>(
 export async function classifyConfirmation(
   message: string,
   spotSummary: string
-): Promise<"confirm" | "correct" | "unrelated"> {
+): Promise<"confirm" | "correct" | "question" | "unrelated"> {
   const systemPrompt = `You classify a user's response after being shown a spot summary they contributed to a travel knowledge graph.
 
 Classify into exactly one category:
 - "confirm": Happy with the summary (e.g. "yes", "looks good", "perfect", "👍", "save it", "nice", "done")
 - "correct": Wants to fix or add info about THIS spot (e.g. "actually it's in Bangsar", "they also have great roti canai", "change the vibe")
+- "question": Asking about the summary, the data, or the process (e.g. "where did you get this info?", "is this from the web?", "why dinner and not lunch?", "how do you know the hours?")
 - "unrelated": Talking about something else entirely (e.g. "I'm hungry", "what should I do today", "hey", "where should I eat")
 
 If the message has BOTH confirmation AND new spot info ("yeah also they close on Mondays"), classify as "correct".
 
-Respond with ONLY one word: confirm, correct, or unrelated`;
+Respond with ONLY one word: confirm, correct, question, or unrelated`;
 
   const result = await chat(
     systemPrompt,
@@ -144,7 +154,7 @@ Respond with ONLY one word: confirm, correct, or unrelated`;
   );
 
   const cleaned = result.trim().toLowerCase();
-  if (cleaned === "confirm" || cleaned === "correct" || cleaned === "unrelated") {
+  if (cleaned === "confirm" || cleaned === "correct" || cleaned === "question" || cleaned === "unrelated") {
     return cleaned;
   }
   return "confirm";
@@ -169,7 +179,6 @@ export async function webSearchSpot(
   "what_to_order": ["popular dishes/items"],
   "pro_tips": ["useful tips for visitors"],
   "vibe": "casual|upscale|chaotic|chill|local|touristy",
-  "opening_hours": {"monday": "9am-5pm", ...}
 }
 
 Return ONLY the JSON object, no markdown fences or extra text.`;

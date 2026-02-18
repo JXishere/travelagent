@@ -19,16 +19,10 @@ Return ONLY valid JSON in this exact format:
   "best_time_of_day": "morning|afternoon|evening|late-night",
   "indoor_outdoor": "indoor|outdoor|both",
   "weather_dependent": false,
-  "opening_hours": {"daily": "8am-10pm"},
   "tier": 2,
   "missing_fields": ["list of important fields not mentioned in the voice note"]
 }
 ```
-
-opening_hours format examples:
-- {"daily": "8am-10pm"}
-- {"mon-fri": "9am-6pm", "sat-sun": "10am-4pm"}
-- {"daily": "7am-11pm", "closed": "Monday"}
 
 Rules:
 - Extract everything explicitly mentioned. Do NOT guess or fabricate data.
@@ -37,3 +31,4 @@ Rules:
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
 - Always extract the city if mentioned. If not mentioned, default to "{{CITY}}".
 - For neighborhood, capture the location as the contributor describes it — a neighborhood, mall, building, or complex name. Do NOT discard a location just because it's not a traditional neighborhood name. "X in Y" means Y is the neighborhood.
+- If the contributor mentions opening hours or operating times, capture them as a pro_tip (e.g. "Open 8am-10pm daily") rather than a separate field. Hours change frequently and are better as tips than structured data.

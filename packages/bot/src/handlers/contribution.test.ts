@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock modules that have side effects at import time
-vi.mock("../database.js", () => ({}));
+vi.mock("../database.js", () => ({
+  updateConversation: vi.fn().mockResolvedValue(undefined),
+  insertSpot: vi.fn().mockResolvedValue(undefined),
+  updateSpot: vi.fn().mockResolvedValue(undefined),
+  findDuplicateSpot: vi.fn().mockResolvedValue(null),
+  getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", spots_contributed: 1 }),
+  incrementContributorCount: vi.fn().mockResolvedValue(undefined),
+  getSpotById: vi.fn().mockResolvedValue(null),
+  trackEvent: vi.fn(),
+}));
 vi.mock("../transcription.js", () => ({}));
 vi.mock("../whatsapp.js", () => ({}));
 vi.mock("../llm.js", () => ({
   webSearchSpot: vi.fn().mockResolvedValue({}),
+  classifyConfirmation: vi.fn().mockResolvedValue("confirm"),
+  extractJSON: vi.fn().mockResolvedValue({}),
+  samSays: vi.fn().mockImplementation((instruction: string) => Promise.resolve(`[sam: ${instruction.slice(0, 60)}]`)),
 }));
 
 import {
@@ -14,12 +26,11 @@ import {
   smartMergeForUpdate,
   formatSummary,
   describeNewInfo,
-  buildFollowUp,
-  buildWarmPrefix,
   enrichFromWeb,
+  handleContribution,
 } from "./contribution.js";
-import { webSearchSpot } from "../llm.js";
-import type { Spot } from "../database.js";
+import { webSearchSpot, classifyConfirmation, samSays } from "../llm.js";
+import type { Spot, Conversation } from "../database.js";
 
 describe("smartMerge", () => {
   it("merges new fields into empty object", () => {
@@ -156,7 +167,6 @@ describe("formatSummary", () => {
       payment_methods: ["cash"],
       what_to_order: ["chilli crab"],
       pro_tips: ["go early"],
-      opening_hours: { monday: "6pm-11pm" },
       vibe: "chaotic",
     });
     expect(result).toContain("*Fatty Crab* — Taman Megah, Kuala Lumpur");
@@ -165,7 +175,7 @@ describe("formatSummary", () => {
     expect(result).toContain("cash");
     expect(result).toContain("🍽 Order: chilli crab");
     expect(result).toContain("💡 go early");
-    expect(result).toContain("🕐 Monday: 6pm-11pm");
+    expect(result).not.toContain("🕐");
     expect(result).toContain("✨ Vibe: chaotic");
   });
 
@@ -205,20 +215,11 @@ describe("formatSummary", () => {
     expect(result).toContain("💡 go early. sit outside");
   });
 
-  it("formats opening_hours entries", () => {
+  it("does not render opening_hours even if present in data", () => {
     const result = formatSummary({
       name: "Test",
       neighborhood: "X",
       opening_hours: { monday: "9am-5pm", tuesday: "10am-6pm" },
-    });
-    expect(result).toContain("🕐 Monday: 9am-5pm, Tuesday: 10am-6pm");
-  });
-
-  it("skips opening_hours when empty object", () => {
-    const result = formatSummary({
-      name: "Test",
-      neighborhood: "X",
-      opening_hours: {},
     });
     expect(result).not.toContain("🕐");
   });
@@ -281,80 +282,6 @@ describe("describeNewInfo", () => {
   });
 });
 
-describe("buildFollowUp", () => {
-  it("returns opening prompt when extraction yielded nothing", () => {
-    const result = buildFollowUp({}, {});
-    expect(result).toContain("What's the spot?");
-  });
-
-  it("asks for name when missing", () => {
-    const result = buildFollowUp({ category: "dinner" }, {});
-    expect(result).toContain("What's it called?");
-  });
-
-  it("asks for neighborhood when missing", () => {
-    const result = buildFollowUp({ name: "Fatty Crab" }, {});
-    expect(result).toContain("What area");
-  });
-
-  it("asks for category when missing", () => {
-    const result = buildFollowUp(
-      { name: "Fatty Crab", neighborhood: "Taman Megah" },
-      {}
-    );
-    expect(result).toContain("What kind of spot?");
-  });
-
-  it("asks for what_to_order when missing", () => {
-    const result = buildFollowUp(
-      { name: "Fatty Crab", neighborhood: "Taman Megah", category: "dinner" },
-      {}
-    );
-    expect(result).toContain("What should people order");
-  });
-
-  it("asks for tips when all critical fields present", () => {
-    const result = buildFollowUp(
-      {
-        name: "Fatty Crab",
-        neighborhood: "Taman Megah",
-        category: "dinner",
-        what_to_order: ["chilli crab"],
-      },
-      {}
-    );
-    expect(result).toContain("Any tips?");
-  });
-});
-
-describe("buildWarmPrefix", () => {
-  it("acknowledges name + neighborhood", () => {
-    const result = buildWarmPrefix(
-      { name: "Fatty Crab", neighborhood: "Taman Megah" },
-      {}
-    );
-    expect(result).toBe("*Fatty Crab* in Taman Megah, nice! ");
-  });
-
-  it("acknowledges name only", () => {
-    const result = buildWarmPrefix({ name: "Fatty Crab" }, {});
-    expect(result).toBe("Got it — *Fatty Crab*. ");
-  });
-
-  it("acknowledges neighborhood only", () => {
-    const result = buildWarmPrefix({ neighborhood: "Bangsar" }, {});
-    expect(result).toBe("Bangsar, nice! ");
-  });
-
-  it("returns generic when nothing new", () => {
-    const prev = { name: "Fatty Crab", neighborhood: "Taman Megah" };
-    const result = buildWarmPrefix(
-      { name: "Fatty Crab", neighborhood: "Taman Megah" },
-      prev
-    );
-    expect(result).toBe("Got it. ");
-  });
-});
 
 describe("enrichFromWeb", () => {
   const mockedWebSearch = vi.mocked(webSearchSpot);
@@ -452,5 +379,438 @@ describe("enrichFromWeb", () => {
     const result = await enrichFromWeb(data);
     expect(result.enriched).toEqual(data);
     expect(result.didEnrich).toBe(false);
+  });
+});
+
+// --- handleContribution integration tests ---
+
+import {
+  updateConversation,
+  insertSpot,
+  findDuplicateSpot,
+  getOrCreateContributor,
+  incrementContributorCount,
+  getSpotById,
+  updateSpot,
+  trackEvent,
+} from "../database.js";
+import { extractJSON } from "../llm.js";
+
+const mockedSamSays = vi.mocked(samSays);
+const mockedClassify = vi.mocked(classifyConfirmation);
+const mockedExtract = vi.mocked(extractJSON);
+const mockedWebSearch = vi.mocked(webSearchSpot);
+const mockedUpdateConv = vi.mocked(updateConversation);
+const mockedInsertSpot = vi.mocked(insertSpot);
+const mockedFindDuplicate = vi.mocked(findDuplicateSpot);
+const mockedGetContributor = vi.mocked(getOrCreateContributor);
+const mockedIncrementCount = vi.mocked(incrementContributorCount);
+const mockedGetSpotById = vi.mocked(getSpotById);
+const mockedUpdateSpot = vi.mocked(updateSpot);
+const mockedTrackEvent = vi.mocked(trackEvent);
+
+function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
+  return {
+    id: "conv-1",
+    whatsapp_number: "+60123",
+    current_flow: "contribution",
+    flow_state: {},
+    messages: [],
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  } as Conversation;
+}
+
+const readySpot = {
+  name: "Fatty Crab",
+  category: "dinner",
+  neighborhood: "Taman Megah",
+  what_to_order: ["chilli crab"],
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockedSamSays.mockImplementation((instruction: string) =>
+    Promise.resolve(`[sam: ${instruction.slice(0, 60)}]`)
+  );
+  mockedExtract.mockResolvedValue({});
+  mockedWebSearch.mockResolvedValue({});
+  mockedClassify.mockResolvedValue("confirm");
+  mockedFindDuplicate.mockResolvedValue(null);
+  mockedGetContributor.mockResolvedValue({ id: "c1", spots_contributed: 1 } as any);
+  mockedGetSpotById.mockResolvedValue(null);
+});
+
+describe("handleContribution — first message (no stage)", () => {
+  it("initializes collecting stage and calls samSays when extraction yields nothing", async () => {
+    const conv = makeConversation({ flow_state: {} });
+    const result = await handleContribution("+60123", "I want to add a spot", undefined, conv);
+
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      current_flow: "contribution",
+      flow_state: expect.objectContaining({ stage: "collecting" }),
+    }));
+    expect(mockedSamSays).toHaveBeenCalled();
+    expect(typeof result).toBe("string");
+  });
+
+  it("extracts data from trigger message and shows summary if ready", async () => {
+    mockedExtract.mockResolvedValue(readySpot);
+
+    const conv = makeConversation({ flow_state: {} });
+    const result = await handleContribution("+60123", "Fatty Crab in Taman Megah, dinner, order chilli crab", undefined, conv);
+
+    // Should transition to confirming
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({ stage: "confirming" }),
+    }));
+    expect(result).toContain("*Fatty Crab*");
+    expect(result).toContain("Taman Megah");
+  });
+
+  it("asks follow-up via samSays when extraction is partial", async () => {
+    mockedExtract.mockResolvedValue({ name: "Fatty Crab" });
+
+    const conv = makeConversation({ flow_state: {} });
+    await handleContribution("+60123", "Fatty Crab is amazing", undefined, conv);
+
+    // Should stay in collecting
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({ stage: "collecting" }),
+    }));
+    // samSays called for follow-up (generateFollowUp) — should mention the spot name
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("Fatty Crab")
+    );
+  });
+});
+
+describe("handleContribution — collecting stage", () => {
+  it("accumulates data across messages and transitions to confirming when ready", async () => {
+    mockedExtract.mockResolvedValue({ category: "dinner", what_to_order: ["chilli crab"] });
+
+    const conv = makeConversation({
+      flow_state: {
+        stage: "collecting",
+        extracted: { name: "Fatty Crab", neighborhood: "Taman Megah" },
+        source: "text",
+        messagesReceived: 1,
+      },
+    });
+
+    const result = await handleContribution("+60123", "it's a dinner spot, must order the chilli crab", undefined, conv);
+
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({ stage: "confirming" }),
+    }));
+    expect(result).toContain("*Fatty Crab*");
+  });
+
+  it("generates Sam-voiced follow-up mentioning missing fields", async () => {
+    mockedExtract.mockResolvedValue({ neighborhood: "Bangsar" });
+
+    const conv = makeConversation({
+      flow_state: {
+        stage: "collecting",
+        extracted: { name: "Secret Spot" },
+        source: "text",
+        messagesReceived: 1,
+      },
+    });
+
+    await handleContribution("+60123", "it's in Bangsar", undefined, conv);
+
+    // Should ask for category (name + neighborhood known, category missing)
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("what kind of spot")
+    );
+  });
+
+  it("triggers web enrichment when name is first provided", async () => {
+    mockedExtract.mockResolvedValue({ name: "Ka'ia" });
+    mockedWebSearch.mockResolvedValue({ neighborhood: "Bangsar South", price_range: "$$" });
+
+    const conv = makeConversation({
+      flow_state: {
+        stage: "collecting",
+        extracted: {},
+        source: "text",
+        messagesReceived: 0,
+      },
+    });
+
+    await handleContribution("+60123", "Ka'ia is great", undefined, conv);
+
+    expect(mockedWebSearch).toHaveBeenCalledWith("Ka'ia", "Kuala Lumpur", undefined);
+    // Enriched data should be saved in flow state
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({
+        extracted: expect.objectContaining({ name: "Ka'ia", neighborhood: "Bangsar South" }),
+        webEnriched: true,
+      }),
+    }));
+  });
+
+  it("shows web-enriched intro via samSays when summary is ready after enrichment", async () => {
+    // Extraction returns partial data (missing category) — not yet ready
+    mockedExtract.mockResolvedValue({ name: "Ka'ia", neighborhood: "Bangsar", what_to_order: ["flat white"] });
+    // Web search fills in the missing category — making it ready
+    mockedWebSearch.mockResolvedValue({ category: "cafe", price_range: "$$" });
+
+    const conv = makeConversation({
+      flow_state: { stage: "collecting", extracted: {}, source: "text", messagesReceived: 0 },
+    });
+
+    const result = await handleContribution("+60123", "Ka'ia in Bangsar, order the flat white", undefined, conv);
+
+    // samSays generates the web-enriched intro
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("filled in some")
+    );
+    // Summary data is still present
+    expect(result).toContain("*Ka'ia*");
+  });
+});
+
+describe("handleContribution — confirming stage", () => {
+  const confirmingConv = (overrides = {}) => makeConversation({
+    flow_state: {
+      stage: "confirming",
+      extracted: readySpot,
+      source: "text",
+      messagesReceived: 2,
+      webEnriched: false,
+      ...overrides,
+    },
+  });
+
+  it("saves spot on confirm and calls samSays for thank-you", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+
+    const result = await handleContribution("+60123", "looks good", undefined, confirmingConv());
+
+    expect(mockedInsertSpot).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Fatty Crab",
+      contributor_id: "c1",
+      source: "text",
+    }));
+    expect(mockedIncrementCount).toHaveBeenCalled();
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining('saved "Fatty Crab"')
+    );
+    expect(typeof result).toBe("string");
+  });
+
+  it("saves spot on unrelated and appends transition", async () => {
+    mockedClassify.mockResolvedValue("unrelated");
+
+    const result = await handleContribution("+60123", "I'm hungry", undefined, confirmingConv());
+
+    expect(mockedInsertSpot).toHaveBeenCalled();
+    expect(result).toContain("Now — what's up?");
+  });
+
+  it("re-shows summary on correction with updated data", async () => {
+    mockedClassify.mockResolvedValue("correct");
+    mockedExtract.mockResolvedValue({ neighborhood: "Bangsar" });
+
+    const result = await handleContribution("+60123", "actually it's in Bangsar", undefined, confirmingConv());
+
+    // Should re-save with confirming stage and updated data
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({
+        stage: "confirming",
+        extracted: expect.objectContaining({ neighborhood: "Bangsar" }),
+      }),
+    }));
+    expect(result).toContain("*Fatty Crab*");
+    expect(result).toContain("Bangsar");
+  });
+
+  it("calls samSays with web-enriched context and user's question for question intent", async () => {
+    mockedClassify.mockResolvedValue("question");
+
+    await handleContribution("+60123", "where did you get the hours?", undefined, confirmingConv({ webEnriched: true }));
+
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("filled in some operational gaps")
+    );
+    // User's actual question is included
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("where did you get the hours?")
+    );
+  });
+
+  it("calls samSays with non-enriched context and user's question for question intent", async () => {
+    mockedClassify.mockResolvedValue("question");
+
+    await handleContribution("+60123", "double check the opening time", undefined, confirmingConv({ webEnriched: false }));
+
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("All the data came from what they told you")
+    );
+    // User's actual question is included
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("double check the opening time")
+    );
+  });
+});
+
+describe("handleContribution — duplicate detection", () => {
+  const confirmingConv = () => makeConversation({
+    flow_state: {
+      stage: "confirming",
+      extracted: { ...readySpot, vibe: "chaotic" },
+      source: "text",
+      messagesReceived: 2,
+    },
+  });
+
+  it("handles duplicate with same info — resets flow and notifies via samSays", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+    mockedFindDuplicate.mockResolvedValue({
+      id: "dup-1",
+      name: "Fatty Crab",
+      neighborhood: "Taman Megah",
+      city: "Kuala Lumpur",
+      what_to_order: ["chilli crab"],
+      vibe: "chaotic",
+    } as Spot);
+
+    const result = await handleContribution("+60123", "save it", undefined, confirmingConv());
+
+    expect(mockedInsertSpot).not.toHaveBeenCalled();
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      current_flow: "general",
+      flow_state: {},
+    }));
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("already in your knowledge graph")
+    );
+    expect(typeof result).toBe("string");
+  });
+
+  it("handles duplicate with new info — transitions to update_existing via samSays", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+    mockedFindDuplicate.mockResolvedValue({
+      id: "dup-1",
+      name: "Fatty Crab",
+      neighborhood: "Taman Megah",
+      city: "Kuala Lumpur",
+      what_to_order: ["chilli crab"],
+      vibe: "casual", // different from incoming "chaotic"
+    } as Spot);
+
+    const result = await handleContribution("+60123", "save it", undefined, confirmingConv());
+
+    expect(mockedInsertSpot).not.toHaveBeenCalled();
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      flow_state: expect.objectContaining({
+        stage: "update_existing",
+        duplicateSpotId: "dup-1",
+      }),
+    }));
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("already exists")
+    );
+    expect(typeof result).toBe("string");
+  });
+});
+
+describe("handleContribution — update_existing stage", () => {
+  const updateConv = () => makeConversation({
+    flow_state: {
+      stage: "update_existing",
+      extracted: { ...readySpot, vibe: "chaotic" },
+      source: "text",
+      messagesReceived: 0,
+      duplicateSpotId: "spot-99",
+    },
+  });
+
+  it("updates spot on confirm and thanks via samSays", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+    mockedGetSpotById.mockResolvedValue({
+      id: "spot-99",
+      name: "Fatty Crab",
+      what_to_order: ["chilli crab"],
+    } as Spot);
+
+    const result = await handleContribution("+60123", "yes update it", undefined, updateConv());
+
+    expect(mockedUpdateSpot).toHaveBeenCalledWith("spot-99", expect.objectContaining({
+      vibe: "chaotic",
+    }));
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      current_flow: "general",
+    }));
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("updated")
+    );
+    expect(typeof result).toBe("string");
+  });
+
+  it("appends transition suffix on unrelated during update", async () => {
+    mockedClassify.mockResolvedValue("unrelated");
+    mockedGetSpotById.mockResolvedValue({ id: "spot-99", name: "Fatty Crab" } as Spot);
+
+    const result = await handleContribution("+60123", "I'm hungry", undefined, updateConv());
+
+    expect(mockedUpdateSpot).toHaveBeenCalled();
+    expect(result).toContain("Now — what's up?");
+  });
+
+  it("declines update gracefully via samSays", async () => {
+    mockedClassify.mockResolvedValue("correct"); // not confirm/unrelated
+
+    const result = await handleContribution("+60123", "nah keep it", undefined, updateConv());
+
+    expect(mockedUpdateSpot).not.toHaveBeenCalled();
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      current_flow: "general",
+    }));
+    expect(mockedSamSays).toHaveBeenCalledWith(
+      expect.stringContaining("decided not to update")
+    );
+  });
+});
+
+describe("handleContribution — channel parameter", () => {
+  it("passes channel to trackEvent on save (default whatsapp)", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+    const conv = makeConversation({
+      flow_state: { stage: "confirming", extracted: readySpot, source: "text", messagesReceived: 2 },
+    });
+
+    await handleContribution("+60123", "save it", undefined, conv);
+
+    expect(mockedTrackEvent).toHaveBeenCalledWith("+60123", "whatsapp", "flow_complete", expect.any(Object));
+  });
+
+  it("passes web channel to trackEvent when specified", async () => {
+    mockedClassify.mockResolvedValue("confirm");
+    const conv = makeConversation({
+      flow_state: { stage: "confirming", extracted: readySpot, source: "text", messagesReceived: 2 },
+    });
+
+    await handleContribution("+60123", "save it", undefined, conv, { channel: "web" });
+
+    expect(mockedTrackEvent).toHaveBeenCalledWith("+60123", "web", "flow_complete", expect.any(Object));
+  });
+});
+
+describe("handleContribution — error fallback", () => {
+  it("returns hardcoded error for unknown stage", async () => {
+    const conv = makeConversation({
+      flow_state: { stage: "some_garbage_state" },
+    });
+
+    const result = await handleContribution("+60123", "hello", undefined, conv);
+
+    expect(result).toContain("Something went wrong");
+    expect(result).toContain("add a spot");
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
+      current_flow: "general",
+    }));
   });
 });

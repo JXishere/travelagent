@@ -1,7 +1,7 @@
 // Contribution flow — conversational accumulation of spot knowledge
 // Two stages: collecting → confirming
 
-import { extractJSON, classifyConfirmation, webSearchSpot } from "../llm.js";
+import { extractJSON, classifyConfirmation, webSearchSpot, samSays } from "../llm.js";
 import {
   insertSpot,
   updateSpot,
@@ -15,6 +15,12 @@ import {
   type Spot,
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
+
+/** Only these fields may be filled from web search — everything else must come from the contributor */
+const WEB_ALLOWED_FIELDS = new Set([
+  "name", "category", "neighborhood", "city",
+  "address", "price_range", "payment_methods",
+]);
 
 interface ExtractedSpot {
   name?: string;
@@ -31,7 +37,6 @@ interface ExtractedSpot {
   best_time_of_day?: string;
   indoor_outdoor?: string;
   weather_dependent?: boolean;
-  opening_hours?: Record<string, string>;
   tier?: number;
   missing_fields?: string[];
 }
@@ -42,7 +47,7 @@ interface ContributionState {
   source: "voice" | "text";
   messagesReceived: number;
   duplicateSpotId?: string;
-  webEnriched?: boolean;
+  webSourcedFields?: string[];
 }
 
 
@@ -51,8 +56,10 @@ export async function handleContribution(
   phoneNumber: string,
   message: string,
   audioId: string | undefined,
-  conversation: Conversation
+  conversation: Conversation,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
+  const channel = options?.channel ?? "whatsapp";
   const state = conversation.flow_state as Partial<ContributionState>;
 
   // First message — initialize collecting stage
@@ -75,7 +82,7 @@ export async function handleContribution(
       return await collectInfo(phoneNumber, input, initialState);
     }
 
-    return "Nice! What's the spot? Just tell me about it — I'll piece it together.";
+    return samSays("A contributor wants to add a spot to your knowledge graph. Ask them about it warmly. One sentence.");
   }
 
   // Collecting stage
@@ -96,8 +103,19 @@ export async function handleContribution(
     const summary = formatSummary(state.extracted ?? {});
     const intent = await classifyConfirmation(input, summary);
 
+    if (intent === "question") {
+      // Backwards compat: old conversation states used webEnriched boolean
+      const webFields = state.webSourcedFields ?? ((state as any).webEnriched ? ["address", "price_range"] : []);
+      const dataSource = webFields.length > 0
+        ? `You filled in some operational gaps (${webFields.join(", ").replace(/_/g, " ")}) from the web — their opinions on what to order and tips are theirs.`
+        : "All the data came from what they told you — you just organized it.";
+      const instruction = `A contributor is reviewing their spot summary and said: "${input}". ${dataSource} The spot data is: ${JSON.stringify(state.extracted)}. Answer their specific question helpfully. If they're asking you to verify something, be honest about your confidence. End by asking if they want to save or tweak. Two sentences max.`;
+      return samSays(instruction);
+    }
+
     if (intent === "confirm" || intent === "unrelated") {
-      const saveResponse = await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text");
+      const webFields = state.webSourcedFields ?? [];
+      const saveResponse = await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
       if (intent === "unrelated") {
         return `${saveResponse}\n\nNow — what's up?`;
       }
@@ -106,7 +124,14 @@ export async function handleContribution(
 
     // "correct" — replace-merge corrections and re-show summary
     const newData = await extractWithContext(input, state.extracted ?? {}, true);
+    // Belt-and-suspenders: strip opening_hours from correction extraction
+    delete (newData as any).opening_hours;
     const merged = smartMerge(state.extracted ?? {}, newData, true);
+
+    // Corrected fields are now contributor-verified — remove from webSourcedFields
+    const correctedKeys = Object.keys(newData);
+    const prevWebFields = state.webSourcedFields ?? ((state as any).webEnriched ? [] : []);
+    const updatedWebFields = prevWebFields.filter((f: string) => !correctedKeys.includes(f));
 
     await updateConversation(phoneNumber, {
       flow_state: {
@@ -114,10 +139,11 @@ export async function handleContribution(
         extracted: merged,
         source: audioId ? "voice" : (state.source ?? "text"),
         messagesReceived: (state.messagesReceived ?? 0) + 1,
+        webSourcedFields: updatedWebFields,
       },
     });
 
-    return formatSummary(merged);
+    return formatSummary(merged, updatedWebFields);
   }
 
   // Update existing stage — user confirmed or declined updating a duplicate spot
@@ -128,12 +154,19 @@ export async function handleContribution(
     if (intent === "confirm" || intent === "unrelated") {
       const spotId = state.duplicateSpotId!;
       const existing = await getSpotById(spotId);
-      const updates = smartMergeForUpdate(state.extracted ?? {});
+      // Strip web-sourced fields before updating
+      const webFields = state.webSourcedFields ?? [];
+      const cleanedData = { ...(state.extracted ?? {}) };
+      for (const field of webFields) {
+        delete (cleanedData as any)[field];
+      }
+      delete (cleanedData as any).opening_hours;
+      const updates = smartMergeForUpdate(cleanedData);
       // Merge array fields: append new items to existing arrays
       if (existing) {
         const arrayFields = ["what_to_order", "what_to_skip", "pro_tips", "payment_methods"] as const;
         for (const field of arrayFields) {
-          const incomingArr: string[] = (state.extracted as any)?.[field] ?? [];
+          const incomingArr: string[] = (cleanedData as any)?.[field] ?? [];
           if (incomingArr.length > 0) {
             const existingArr: string[] = (existing as any)[field] ?? [];
             const existingLower = new Set(existingArr.map(s => s.toLowerCase()));
@@ -147,7 +180,7 @@ export async function handleContribution(
         current_flow: "general",
         flow_state: {},
       });
-      const response = `Updated *${state.extracted?.name}* with your new intel! 🙏`;
+      const response = await samSays(`You just updated "${state.extracted?.name}" with new contributor intel. Thank them warmly, one sentence.`);
       if (intent === "unrelated") {
         return `${response}\n\nNow — what's up?`;
       }
@@ -159,7 +192,7 @@ export async function handleContribution(
       current_flow: "general",
       flow_state: {},
     });
-    return "No worries, keeping it as is! What else can I help with?";
+    return samSays("A contributor decided not to update an existing spot. Let them know it's all good and ask what else you can help with. One sentence.");
   }
 
   // Fallback
@@ -218,29 +251,39 @@ async function extractWithContext(
 /** Enrich extracted spot data with web search results */
 export async function enrichFromWeb(
   data: Partial<ExtractedSpot>
-): Promise<{ enriched: Partial<ExtractedSpot>; didEnrich: boolean }> {
+): Promise<{ enriched: Partial<ExtractedSpot>; webSourcedFields: string[] }> {
   if (!data.name || isReady(data)) {
-    return { enriched: data, didEnrich: false };
+    return { enriched: data, webSourcedFields: [] };
   }
 
   const city = data.city || getDefaultCity();
   const webData = await webSearchSpot(data.name, city, data.category);
 
-  // Strip opinion fields — web search should only fill operational/factual data.
-  // Contributor voice is Sam's core value; opinions stay contributor-only.
-  const opinionFields = ["what_to_order", "what_to_skip", "pro_tips", "vibe", "tier", "best_time_of_day"];
-  for (const field of opinionFields) {
-    delete webData[field];
+  // Belt-and-suspenders: never let opening_hours through from web
+  delete (webData as any).opening_hours;
+
+  // Allowlist: only keep fields we trust from web search
+  for (const key of Object.keys(webData)) {
+    if (!WEB_ALLOWED_FIELDS.has(key)) {
+      delete webData[key];
+    }
   }
 
   if (Object.keys(webData).length === 0) {
-    return { enriched: data, didEnrich: false };
+    return { enriched: data, webSourcedFields: [] };
+  }
+
+  // Track which fields are genuinely new from web (not already in contributor data)
+  const webSourcedFields: string[] = [];
+  for (const key of Object.keys(webData)) {
+    if ((data as any)[key] == null || (data as any)[key] === "") {
+      webSourcedFields.push(key);
+    }
   }
 
   // Contributor data wins — pass it as "incoming" so it overwrites web data
   const merged = smartMerge(webData, data);
-  const didEnrich = Object.keys(merged).length > Object.keys(data).length;
-  return { enriched: merged, didEnrich };
+  return { enriched: merged, webSourcedFields };
 }
 
 /** Process a message during the collecting stage */
@@ -251,16 +294,23 @@ async function collectInfo(
 ): Promise<string> {
   const previous = state.extracted;
   const newData = await extractWithContext(input, previous);
+  // Belt-and-suspenders: strip opening_hours from extraction
+  delete (newData as any).opening_hours;
   let merged = smartMerge(previous, newData);
   const messagesReceived = state.messagesReceived + 1;
 
-  // When we just learned the spot name, try to enrich from web search
-  const justLearnedName = merged.name && !previous.name;
-  let webEnriched = state.webEnriched ?? false;
-  if (justLearnedName && !webEnriched) {
+  // When the spot name changed (or was first provided), enrich from web
+  const nameChanged = merged.name && merged.name !== previous.name;
+  let webSourcedFields = state.webSourcedFields ?? [];
+  if (nameChanged) {
+    if (previous.name) {
+      // Name changed mid-flow — reset to just current extraction to avoid stale data
+      merged = { ...newData };
+    }
+    webSourcedFields = [];
     const result = await enrichFromWeb(merged);
     merged = result.enriched;
-    webEnriched = result.didEnrich;
+    webSourcedFields = result.webSourcedFields;
   }
 
   // Check if we have enough to show a summary
@@ -271,12 +321,14 @@ async function collectInfo(
         extracted: merged,
         source: state.source,
         messagesReceived,
-        webEnriched,
+        webSourcedFields,
       },
     });
-    const summary = formatSummary(merged);
-    if (webEnriched) {
-      return `I looked this up and filled in some gaps. Double-check the details:\n\n${summary}`;
+    const summary = formatSummary(merged, webSourcedFields);
+    if (webSourcedFields.length > 0) {
+      const fieldNames = webSourcedFields.join(", ").replace(/_/g, " ");
+      const intro = await samSays(`You looked up a spot online and filled in some operational details (${fieldNames}) for a contributor. Write a one-sentence intro before showing them the data. Mention the specific fields you filled from the web and they should double-check.`);
+      return `${intro}\n\n${summary}`;
     }
     return summary;
   }
@@ -288,11 +340,11 @@ async function collectInfo(
       extracted: merged,
       source: state.source,
       messagesReceived,
-      webEnriched,
+      webSourcedFields,
     },
   });
 
-  return buildFollowUp(merged, previous);
+  return generateFollowUp(merged, previous);
 }
 
 /** Merge new extracted data into existing, preserving non-empty values */
@@ -332,44 +384,51 @@ export function isReady(data: Partial<ExtractedSpot>): boolean {
   return hasCritical && hasContributorOpinion;
 }
 
-/** Build a natural follow-up question with a warm prefix */
-export function buildFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
-  // If extraction yielded nothing, give a warm opening prompt
+/** Generate a Sam-voiced follow-up question based on what's known and what's missing */
+async function generateFollowUp(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): Promise<string> {
   const meaningfulKeys = Object.keys(merged).filter((k) => k !== "missing_fields");
   if (meaningfulKeys.length === 0) {
-    return "Nice! What's the spot? Just tell me about it — I'll piece it together.";
+    return samSays("A contributor wants to add a spot to your knowledge graph. Ask them about it warmly. One sentence.");
   }
 
-  const prefix = buildWarmPrefix(merged, previous);
+  const missing = !merged.name
+    ? "the name of the spot"
+    : !merged.neighborhood
+    ? "what area/neighborhood it's in"
+    : !merged.category
+    ? "what kind of spot it is (breakfast, lunch, dinner, cafe, activity, nightlife, market)"
+    : !merged.what_to_order?.length
+    ? "what people should order there"
+    : "any tips like payment, hours, or insider tricks";
 
-  if (!merged.name) return `${prefix}What's it called?`;
-  if (!merged.neighborhood) return `${prefix}What area is it in? And what city if it's not KL?`;
-  if (!merged.category) return `${prefix}What kind of spot? (breakfast, lunch, dinner, cafe, activity, nightlife, market)`;
-  if (!merged.what_to_order?.length) return `${prefix}What should people order there?`;
-  return `${prefix}Any tips? Like payment, hours, or insider tricks?`;
-}
+  const newName = merged.name && merged.name !== previous.name;
+  const newNeighborhood = merged.neighborhood && merged.neighborhood !== previous.neighborhood;
+  let ack = "";
+  if (newName) ack += `You just learned the spot is called "${merged.name}". `;
+  if (newNeighborhood) ack += `You just learned it's in ${merged.neighborhood}. `;
 
-/** Acknowledge what Sam just learned */
-export function buildWarmPrefix(merged: Partial<ExtractedSpot>, previous: Partial<ExtractedSpot>): string {
-  const learnedName = merged.name && !previous.name;
-  const learnedNeighborhood = merged.neighborhood && !previous.neighborhood;
-
-  if (learnedName && learnedNeighborhood) return `*${merged.name}* in ${merged.neighborhood}, nice! `;
-  if (learnedName) return `Got it — *${merged.name}*. `;
-  if (learnedNeighborhood) return `${merged.neighborhood}, nice! `;
-  return "Got it. ";
+  const instruction = `${ack}A contributor is adding a spot to your knowledge graph. You know so far: ${JSON.stringify(merged)}. Acknowledge what's new briefly and ask for ${missing}. One sentence, keep it natural.`;
+  return samSays(instruction);
 }
 
 /** Format a summary of the accumulated spot data */
-export function formatSummary(data: Partial<ExtractedSpot>): string {
+export function formatSummary(data: Partial<ExtractedSpot>, webSourcedFields: string[] = []): string {
+  const webSet = new Set(webSourcedFields);
+  const tag = (field: string, value: string) =>
+    webSet.has(field) ? `${value} _(from web)_` : value;
+
   const lines: string[] = ["Here's what I've got:", ""];
 
   lines.push(`*${data.name}* — ${data.neighborhood}, ${data.city || getDefaultCity()}`);
 
+  if (data.address) {
+    lines.push(`📍 ${tag("address", data.address)}`);
+  }
+
   const meta: string[] = [];
   if (data.category) meta.push(capitalize(data.category));
-  if (data.price_range) meta.push(data.price_range);
-  if (data.payment_methods?.length) meta.push(data.payment_methods.join(", "));
+  if (data.price_range) meta.push(tag("price_range", data.price_range));
+  if (data.payment_methods?.length) meta.push(tag("payment_methods", data.payment_methods.join(", ")));
   if (meta.length) lines.push(meta.join(" | "));
 
   if (data.what_to_order?.length) {
@@ -380,16 +439,14 @@ export function formatSummary(data: Partial<ExtractedSpot>): string {
     lines.push(`💡 ${data.pro_tips.join(". ")}`);
   }
 
-  if (data.opening_hours && Object.keys(data.opening_hours).length > 0) {
-    const parts = Object.entries(data.opening_hours).map(([day, hrs]) => `${capitalize(day)}: ${hrs}`);
-    lines.push(`🕐 ${parts.join(", ")}`);
-  }
-
   if (data.vibe) {
     lines.push(`✨ Vibe: ${data.vibe}`);
   }
 
   lines.push("");
+  if (webSet.size > 0) {
+    lines.push("Fields marked _(from web)_ are unverified — double-check before saving.");
+  }
   lines.push(`Looks solid — I'll add this unless you want to tweak anything.`);
 
   return lines.join("\n");
@@ -432,7 +489,7 @@ export function smartMergeForUpdate(incoming: Partial<ExtractedSpot>): Partial<S
   const { missing_fields, ...data } = incoming as any;
 
   // Scalar fields — overwrite if present
-  const scalarFields = ["vibe", "price_range", "address", "best_time_of_day", "indoor_outdoor", "weather_dependent", "tier", "opening_hours"] as const;
+  const scalarFields = ["vibe", "price_range", "address", "best_time_of_day", "indoor_outdoor", "weather_dependent", "tier"] as const;
   for (const field of scalarFields) {
     if (data[field] != null) {
       (updates as any)[field] = data[field];
@@ -445,11 +502,20 @@ export function smartMergeForUpdate(incoming: Partial<ExtractedSpot>): Partial<S
 async function saveSpot(
   phoneNumber: string,
   data: Partial<ExtractedSpot>,
-  source: "voice" | "text"
+  source: "voice" | "text",
+  channel: "whatsapp" | "web" = "whatsapp",
+  webSourcedFields: string[] = []
 ): Promise<string> {
   const contributor = await getOrCreateContributor(phoneNumber);
 
   const { missing_fields, ...spotData } = data as any;
+
+  // Strip web-sourced fields — only contributor-verified data goes to DB
+  for (const field of webSourcedFields) {
+    delete spotData[field];
+  }
+  // Belt-and-suspenders: never persist opening_hours
+  delete spotData.opening_hours;
 
   // Check for duplicate — offer to update instead of silently discarding
   const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
@@ -460,7 +526,7 @@ async function saveSpot(
         current_flow: "general",
         flow_state: {},
       });
-      return `*${duplicate.name}* (${duplicate.neighborhood}) is already in the knowledge graph and your info matches what we have!`;
+      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.neighborhood}, but it's already in your knowledge graph with the same info. Let them know warmly. One sentence.`);
     }
 
     await updateConversation(phoneNumber, {
@@ -471,9 +537,10 @@ async function saveSpot(
         source,
         messagesReceived: 0,
         duplicateSpotId: duplicate.id,
+        webSourcedFields,
       },
     });
-    return `*${duplicate.name}* is already in the graph, but you've got new intel:\n\n${newInfo.join("\n")}\n\nWant me to update it?`;
+    return samSays(`A contributor added "${duplicate.name}" which already exists, but they have new intel:\n${newInfo.join("\n")}\nAsk if they want to update the existing entry. Keep it brief.`);
   }
 
   await insertSpot({
@@ -490,11 +557,11 @@ async function saveSpot(
     flow_state: {},
   });
 
-  trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+  trackEvent(phoneNumber, channel, "flow_complete", {
     flow: "contribution",
     spot_name: data.name,
     source,
   });
 
-  return `Added *${data.name}* to the knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Sam gets for everyone.`;
+  return samSays(`You just saved "${data.name}" to your knowledge graph from a contributor. They've contributed ${updated.spots_contributed} spot(s) total. Thank them warmly, mention the spot name. One sentence.`);
 }

@@ -119,10 +119,11 @@ ${synthesis}
 function runEval(): boolean {
   try {
     console.log("Running eval...");
-    execSync("npx tsx --env-file ../../.env.local src/eval/eval-runner.ts system", {
+    execSync("npx tsx src/eval/eval-runner.ts system", {
       cwd: join(__dirname, ".."),
       stdio: "pipe",
       timeout: 120_000,
+      env: { ...process.env }, // inherit env vars (works in CI + locally)
     });
     console.log("Eval passed.");
     return true;
@@ -154,7 +155,7 @@ async function main() {
   const revised = await applyChanges(result.synthesis);
 
   // Sanity check: don't write empty or drastically different prompts
-  if (revised.length < 200 || revised.length > original.length * 2) {
+  if (revised.length < 200 || revised.length > original.length * 1.3) {
     console.log(`Revised prompt looks wrong (${revised.length} chars vs ${original.length} original). Skipping.`);
     process.exit(0);
   }
@@ -166,9 +167,10 @@ async function main() {
   const evalPassed = runEval();
 
   if (!evalPassed) {
-    console.log("\nEval failed — reverting system.txt");
+    console.log("\nEval failed — reverting system.txt (change was too aggressive)");
     writeFileSync(SYSTEM_PROMPT_PATH, original);
-    process.exit(1);
+    console.log("No PR will be created. System prompt unchanged.");
+    process.exit(0); // not an error — eval rejection is expected sometimes
   }
 
   // Write report for PR body

@@ -31,7 +31,7 @@ You are an end-to-end tester for Sam's WhatsApp travel bot. You trace through th
 
 **2. Hungry Query**
 - Message: "I'm starving, near Bangsar, want something local"
-- Expected: Intent → hungry, query spots (neighborhood=Bangsar, vibe=local), return 2-3 recommendations with operational details
+- Expected: Intent → hungry, query spots (area=Bangsar, vibe=local), return 2-3 recommendations with operational details
 - Check: Spots include what_to_order, hours, pro_tips
 
 **3. Day Planning**
@@ -68,7 +68,7 @@ You are an end-to-end tester for Sam's WhatsApp travel bot. You trace through th
 
 **9. No Matching Spots**
 - Message: "I want fine dining in Setapak" (unlikely to have data)
-- Expected: Honest "I don't have spots there yet", suggest nearby neighborhoods
+- Expected: Honest "I don't have spots there yet", suggest nearby areas
 - Check: Never fabricates spots
 
 **10. Voice Note Error**

@@ -28,3 +28,5 @@ npm run migrate
 | `20260218_000000_add_embeddings.sql` | pgvector extension, embedding column on spots, match_spots RPC for semantic search | pending |
 | `20260218_010000_rls_policies.sql` | Replace blanket RLS with proper role-based policies (public read for spots/contributors, service-role only for travelers/conversations/feedback) | pending |
 | `20260218_020000_add_daily_stats_rpc.sql` | RPC function for analytics dashboard (daily sessions, messages by channel, top intent, recommendations, flow completions) | pending |
+| `20260218_030000_rename_neighborhood_to_area.sql` | Rename spots.neighborhood → area, travelers.home_neighborhoods → home_areas, recreate index + match_spots RPC | pending |
+| `20260218_040000_global_stats_rpc.sql` | Global stats RPC for landing page — counts all spots across cities, not just one | pending |

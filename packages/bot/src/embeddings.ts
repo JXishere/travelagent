@@ -23,7 +23,7 @@ export function buildSpotText(spot: Partial<Spot>): string {
   const parts: string[] = [];
 
   if (spot.name) parts.push(spot.name);
-  if (spot.neighborhood) parts.push(spot.neighborhood);
+  if (spot.area) parts.push(spot.area);
   if (spot.category) parts.push(spot.category);
   if (spot.vibe) parts.push(`vibe: ${spot.vibe}`);
   if (spot.what_to_order?.length) parts.push(`known for: ${spot.what_to_order.join(", ")}`);

@@ -13,7 +13,7 @@ import { getDefaultCity } from "../utils/city-defaults.js";
 interface Candidate {
   name: string;
   category?: string;
-  neighborhood?: string;
+  area?: string;
   address?: string;
   price_range?: string;
   what_to_order?: string[];
@@ -31,11 +31,11 @@ export async function startGenerate(
   args: string
 ): Promise<string> {
   const parts = args.trim().split(/\s+/);
-  const neighborhood = parts[0] || undefined;
+  const area = parts[0] || undefined;
   const category = parts[1] || undefined;
 
   const context = [
-    neighborhood && `Neighborhood: ${neighborhood}`,
+    area && `Neighborhood: ${area}`,
     category && `Category: ${category}`,
   ]
     .filter(Boolean)
@@ -81,7 +81,7 @@ export async function handleGenerate(
       current_flow: "general",
       flow_state: {},
     });
-    return "Generate session ended. Start a new one with `/generate <neighborhood> <category>`.";
+    return "Generate session ended. Start a new one with `/generate <area> <category>`.";
   }
 
   const candidates = state.candidates as Candidate[];
@@ -115,7 +115,7 @@ export async function handleGenerate(
   const { missing_fields: _m2, ...extractedClean } = extracted;
   const merged = { ...currentClean, ...extractedClean };
 
-  const duplicate = await findDuplicateSpot(merged.name, merged.neighborhood);
+  const duplicate = await findDuplicateSpot(merged.name, merged.area);
   if (duplicate) {
     const skipMsg = `*${merged.name}* already exists — skipping.`;
     const nextMsg = await advanceToNext(phoneNumber, candidates, idx);
@@ -139,7 +139,7 @@ export function formatCandidate(
   total: number
 ): string {
   const lines = [`*Candidate ${num}/${total}: ${c.name}*`];
-  if (c.neighborhood) lines.push(`Neighborhood: ${c.neighborhood}`);
+  if (c.area) lines.push(`Neighborhood: ${c.area}`);
   if (c.category) lines.push(`Category: ${c.category}`);
   if (c.address) lines.push(`Address: ${c.address}`);
   if (c.price_range) lines.push(`Price: ${c.price_range}`);

@@ -32,9 +32,9 @@ Spots are added by local contributors via voice notes or text, verified by admin
 
 | Capability | How it works |
 |---|---|
-| **Food recommendations** | "I'm hungry" → filters by neighborhood, meal type, weather, dietary restrictions. Returns 3 unvisited spots with full operational details. |
+| **Food recommendations** | "I'm hungry" → filters by area, meal type, weather, dietary restrictions. Returns 3 unvisited spots with full operational details. |
 | **Day planning** | "What should I do today?" → builds a loose day structure across breakfast, lunch, activities, dinner from the knowledge graph. |
-| **Nearby spots** | "What's near KLCC?" → filters by neighborhood. Supports text and location pins. |
+| **Nearby spots** | "What's near KLCC?" → filters by area. Supports text and location pins. |
 | **Weather awareness** | Live OpenWeather data. When it's raining, Sam prefers indoor spots automatically. |
 | **Profile learning** | New users get a conversational interview. Background extraction silently captures preferences from every message going forward. |
 | **Pre-trip strategic plan** | After learning your profile, Sam generates a personalized trip guide with anchor spots, what to expect, and what to book ahead. |
@@ -213,13 +213,13 @@ npm run test:watch   # Run tests in watch mode
 Gated behind the `ADMIN_PHONE_NUMBER` env var:
 
 - **`add: <spot details>`** — Rapid-add a spot via text. Example: `add: Fatty Crab, Taman Megah, dinner, tier 1. Cash only. Order the chilli crab.`
-- **`/generate <neighborhood> <category>`** — LLM suggests candidate spots for admin review and verification.
+- **`/generate <area> <category>`** — LLM suggests candidate spots for admin review and verification.
 
 ## Database schema
 
 | Table | Purpose |
 |---|---|
-| `spots` | Knowledge graph — name, neighborhood, category, tier, hours, what to order, pro tips, vibe, confidence score |
+| `spots` | Knowledge graph — name, area, category, tier, hours, what to order, pro tips, vibe, confidence score |
 | `travelers` | User profiles — preferences, dietary restrictions, trip dates, visited/liked/disliked spots |
 | `conversations` | State machine — current flow, flow state, message history |
 | `contributors` | Who added knowledge — cities contributed, spot count |

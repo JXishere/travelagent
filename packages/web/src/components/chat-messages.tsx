@@ -51,8 +51,8 @@ export function ChatMessages({
     <div ref={containerRef} className="relative flex-1 overflow-y-auto px-4 py-6">
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center">
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            ask sam anything about kuala lumpur
+          <p className="text-sm" style={{ color: "var(--muted)", opacity: 0.5 }}>
+            ask Sam anything
           </p>
         </div>
       )}

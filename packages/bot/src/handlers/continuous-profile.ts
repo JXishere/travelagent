@@ -13,7 +13,7 @@ interface ProfileDelta {
   _no_changes?: boolean;
   name?: string;
   user_type?: "local" | "traveler";
-  home_neighborhoods?: string[];
+  home_areas?: string[];
   trip_dates?: { start: string; end: string };
   travel_party?: string;
   dietary_restrictions?: string[];
@@ -114,7 +114,7 @@ const SCALAR_FIELDS = new Set([
 /** Array fields that append + deduplicate, with ! removal support */
 const ARRAY_FIELDS = new Set([
   "dietary_restrictions",
-  "home_neighborhoods",
+  "home_areas",
   "interests",
   "cuisine_preferences",
   "specific_requests",
@@ -124,7 +124,7 @@ const ARRAY_FIELDS = new Set([
 const TOP_LEVEL_FIELDS = new Set([
   "name",
   "user_type",
-  "home_neighborhoods",
+  "home_areas",
   "trip_dates",
   "travel_party",
   "dietary_restrictions",

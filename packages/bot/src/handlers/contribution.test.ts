@@ -96,7 +96,7 @@ describe("isReady", () => {
   });
 
   it("returns false when has critical but no operational data", () => {
-    expect(isReady({ name: "Test", category: "dinner", neighborhood: "Bangsar" })).toBe(false);
+    expect(isReady({ name: "Test", category: "dinner", area: "Bangsar" })).toBe(false);
   });
 
   it("returns true when has critical + what_to_order", () => {
@@ -104,29 +104,40 @@ describe("isReady", () => {
       isReady({
         name: "Test",
         category: "dinner",
-        neighborhood: "Bangsar",
+        area: "Bangsar",
         what_to_order: ["nasi lemak"],
       })
     ).toBe(true);
   });
 
-  it("returns false when has critical + pro_tips but no what_to_order", () => {
+  it("returns true when has critical + pro_tips (no what_to_order)", () => {
     expect(
       isReady({
         name: "Test",
         category: "dinner",
-        neighborhood: "Bangsar",
+        area: "Bangsar",
         pro_tips: ["go early"],
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("returns false when has critical + payment_methods but no what_to_order", () => {
+  it("returns true when has critical + vibe (no what_to_order)", () => {
     expect(
       isReady({
         name: "Test",
         category: "dinner",
-        neighborhood: "Bangsar",
+        area: "Bangsar",
+        vibe: "casual",
+      })
+    ).toBe(true);
+  });
+
+  it("returns false when has critical + payment_methods but no opinion", () => {
+    expect(
+      isReady({
+        name: "Test",
+        category: "dinner",
+        area: "Bangsar",
         payment_methods: ["cash"],
       })
     ).toBe(false);
@@ -161,7 +172,7 @@ describe("formatSummary", () => {
   it("formats full data", () => {
     const result = formatSummary({
       name: "Fatty Crab",
-      neighborhood: "Taman Megah",
+      area: "Taman Megah",
       category: "dinner",
       price_range: "$$",
       payment_methods: ["cash"],
@@ -180,7 +191,7 @@ describe("formatSummary", () => {
   });
 
   it("formats minimal data", () => {
-    const result = formatSummary({ name: "Test Spot", neighborhood: "KLCC" });
+    const result = formatSummary({ name: "Test Spot", area: "KLCC" });
     expect(result).toContain("*Test Spot* — KLCC, Kuala Lumpur");
     expect(result).not.toContain("🍽");
     expect(result).not.toContain("💡");
@@ -191,7 +202,7 @@ describe("formatSummary", () => {
   it("uses custom city when provided", () => {
     const result = formatSummary({
       name: "Test",
-      neighborhood: "Shibuya",
+      area: "Shibuya",
       city: "Tokyo",
     });
     expect(result).toContain("*Test* — Shibuya, Tokyo");
@@ -200,7 +211,7 @@ describe("formatSummary", () => {
   it("joins multiple what_to_order items", () => {
     const result = formatSummary({
       name: "Test",
-      neighborhood: "X",
+      area: "X",
       what_to_order: ["nasi lemak", "roti canai"],
     });
     expect(result).toContain("🍽 Order: nasi lemak, roti canai");
@@ -209,7 +220,7 @@ describe("formatSummary", () => {
   it("joins multiple pro_tips with periods", () => {
     const result = formatSummary({
       name: "Test",
-      neighborhood: "X",
+      area: "X",
       pro_tips: ["go early", "sit outside"],
     });
     expect(result).toContain("💡 go early. sit outside");
@@ -218,7 +229,7 @@ describe("formatSummary", () => {
   it("displays address when present", () => {
     const result = formatSummary({
       name: "Test",
-      neighborhood: "X",
+      area: "X",
       address: "123 Jalan Sultan",
     });
     expect(result).toContain("📍 123 Jalan Sultan");
@@ -228,7 +239,7 @@ describe("formatSummary", () => {
     const result = formatSummary(
       {
         name: "Ka'ia",
-        neighborhood: "Bangsar",
+        area: "Bangsar",
         address: "10 Jalan Maarof",
         price_range: "$$",
         payment_methods: ["cash", "card"],
@@ -250,7 +261,7 @@ describe("formatSummary", () => {
     const result = formatSummary(
       {
         name: "Test",
-        neighborhood: "X",
+        area: "X",
         price_range: "$$",
       },
       []
@@ -337,7 +348,7 @@ describe("enrichFromWeb", () => {
     const data = {
       name: "Fatty Crab",
       category: "dinner",
-      neighborhood: "Taman Megah",
+      area: "Taman Megah",
       what_to_order: ["chilli crab"],
     };
     const result = await enrichFromWeb(data);
@@ -368,7 +379,7 @@ describe("enrichFromWeb", () => {
 
   it("strips non-allowed fields from web data via allowlist", async () => {
     mockedWebSearch.mockResolvedValue({
-      neighborhood: "Bangsar South",
+      area: "Bangsar South",
       address: "10 Jalan Maarof",
       price_range: "$$",
       what_to_order: ["flat white"],
@@ -387,7 +398,7 @@ describe("enrichFromWeb", () => {
     expect(result.enriched.price_range).toBe("$$");
 
     // Location fields stripped — must come from contributor
-    expect(result.enriched.neighborhood).toBeUndefined();
+    expect(result.enriched.area).toBeUndefined();
     expect(result.enriched.address).toBeUndefined();
 
     // Non-allowed fields stripped — not present from web
@@ -400,9 +411,9 @@ describe("enrichFromWeb", () => {
     expect(result.webSourcedFields).toEqual(["price_range"]);
   });
 
-  it("blocks unexpected fields like latitude, neighborhood, and random keys", async () => {
+  it("blocks unexpected fields like latitude, area, and random keys", async () => {
     mockedWebSearch.mockResolvedValue({
-      neighborhood: "KLCC",
+      area: "KLCC",
       address: "Suria KLCC",
       latitude: 3.157,
       longitude: 101.712,
@@ -413,8 +424,8 @@ describe("enrichFromWeb", () => {
     const data = { name: "Petronas Cafe" };
     const result = await enrichFromWeb(data);
 
-    // neighborhood and address are NOT in allowlist — blocked
-    expect(result.enriched.neighborhood).toBeUndefined();
+    // area and address are NOT in allowlist — blocked
+    expect(result.enriched.area).toBeUndefined();
     expect(result.enriched.address).toBeUndefined();
     expect((result.enriched as any).latitude).toBeUndefined();
     expect((result.enriched as any).longitude).toBeUndefined();
@@ -488,7 +499,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
 const readySpot = {
   name: "Fatty Crab",
   category: "dinner",
-  neighborhood: "Taman Megah",
+  area: "Taman Megah",
   what_to_order: ["chilli crab"],
 };
 
@@ -556,7 +567,7 @@ describe("handleContribution — collecting stage", () => {
     const conv = makeConversation({
       flow_state: {
         stage: "collecting",
-        extracted: { name: "Fatty Crab", neighborhood: "Taman Megah" },
+        extracted: { name: "Fatty Crab", area: "Taman Megah" },
         source: "text",
         messagesReceived: 1,
       },
@@ -571,7 +582,7 @@ describe("handleContribution — collecting stage", () => {
   });
 
   it("generates Sam-voiced follow-up mentioning missing fields", async () => {
-    mockedExtract.mockResolvedValue({ neighborhood: "Bangsar" });
+    mockedExtract.mockResolvedValue({ area: "Bangsar" });
 
     const conv = makeConversation({
       flow_state: {
@@ -584,7 +595,7 @@ describe("handleContribution — collecting stage", () => {
 
     await handleContribution("+60123", "it's in Bangsar", undefined, conv);
 
-    // Should ask for category (name + neighborhood known, category missing)
+    // Should ask for category (name + area known, category missing)
     expect(mockedSamSays).toHaveBeenCalledWith(
       expect.stringContaining("what kind of spot")
     );
@@ -592,7 +603,7 @@ describe("handleContribution — collecting stage", () => {
 
   it("triggers web enrichment when name is first provided", async () => {
     mockedExtract.mockResolvedValue({ name: "Ka'ia" });
-    mockedWebSearch.mockResolvedValue({ neighborhood: "Bangsar South", price_range: "$$", category: "cafe" });
+    mockedWebSearch.mockResolvedValue({ area: "Bangsar South", price_range: "$$", category: "cafe" });
 
     const conv = makeConversation({
       flow_state: {
@@ -607,25 +618,25 @@ describe("handleContribution — collecting stage", () => {
 
     expect(mockedWebSearch).toHaveBeenCalledWith("Ka'ia", "Kuala Lumpur", undefined);
     // Enriched data should be saved in flow state with field-level provenance
-    // neighborhood and address are stripped by allowlist — only category and price_range filled
+    // area and address are stripped by allowlist — only category and price_range filled
     expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
       flow_state: expect.objectContaining({
         extracted: expect.objectContaining({ name: "Ka'ia", category: "cafe" }),
         webSourcedFields: expect.arrayContaining(["price_range", "category"]),
       }),
     }));
-    // neighborhood should NOT be in enriched data
+    // area should NOT be in enriched data
     const flowState = mockedUpdateConv.mock.calls.find(
       (c) => (c[1] as any).flow_state?.extracted
     )?.[1] as any;
-    expect(flowState.flow_state.extracted.neighborhood).toBeUndefined();
+    expect(flowState.flow_state.extracted.area).toBeUndefined();
   });
 
   it("shows web-enriched intro via samSays when summary is ready after enrichment", async () => {
-    // Extraction returns data with neighborhood (from contributor) but missing category
-    mockedExtract.mockResolvedValue({ name: "Ka'ia", neighborhood: "Bangsar", what_to_order: ["flat white"] });
+    // Extraction returns data with area (from contributor) but missing category
+    mockedExtract.mockResolvedValue({ name: "Ka'ia", area: "Bangsar", what_to_order: ["flat white"] });
     // Web search fills in the missing category — making it ready
-    // (neighborhood from web would be stripped by allowlist, but contributor already provided it)
+    // (area from web would be stripped by allowlist, but contributor already provided it)
     mockedWebSearch.mockResolvedValue({ category: "cafe", price_range: "$$" });
 
     const conv = makeConversation({
@@ -683,7 +694,7 @@ describe("handleContribution — confirming stage", () => {
 
   it("re-shows summary on correction with updated data", async () => {
     mockedClassify.mockResolvedValue("correct");
-    mockedExtract.mockResolvedValue({ neighborhood: "Bangsar" });
+    mockedExtract.mockResolvedValue({ area: "Bangsar" });
 
     const result = await handleContribution("+60123", "actually it's in Bangsar", undefined, confirmingConv());
 
@@ -691,7 +702,7 @@ describe("handleContribution — confirming stage", () => {
     expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
       flow_state: expect.objectContaining({
         stage: "confirming",
-        extracted: expect.objectContaining({ neighborhood: "Bangsar" }),
+        extracted: expect.objectContaining({ area: "Bangsar" }),
       }),
     }));
     expect(result).toContain("*Fatty Crab*");
@@ -809,7 +820,7 @@ describe("handleContribution — duplicate detection", () => {
     mockedFindDuplicate.mockResolvedValue({
       id: "dup-1",
       name: "Fatty Crab",
-      neighborhood: "Taman Megah",
+      area: "Taman Megah",
       city: "Kuala Lumpur",
       what_to_order: ["chilli crab"],
       vibe: "chaotic",
@@ -833,7 +844,7 @@ describe("handleContribution — duplicate detection", () => {
     mockedFindDuplicate.mockResolvedValue({
       id: "dup-1",
       name: "Fatty Crab",
-      neighborhood: "Taman Megah",
+      area: "Taman Megah",
       city: "Kuala Lumpur",
       what_to_order: ["chilli crab"],
       vibe: "casual", // different from incoming "chaotic"

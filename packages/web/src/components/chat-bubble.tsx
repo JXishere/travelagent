@@ -117,10 +117,10 @@ export function ChatBubble({
   };
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
-      <div className="flex flex-col" style={{ maxWidth: "85%" }}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-2`}>
+      <div className="flex flex-col" style={{ maxWidth: "80%" }}>
         <div
-          className={`group relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          className={`group relative rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
             isUser
               ? "rounded-br-sm"
               : "rounded-bl-sm"

@@ -67,7 +67,7 @@ describe("formatSpotsForLLM", () => {
   it("formats a full spot with all fields", () => {
     const spot: Spot = {
       ...baseSpot,
-      neighborhood: "Taman Megah",
+      area: "Taman Megah",
       category: "dinner",
       address: "123 Main St",
       price_range: "$$",

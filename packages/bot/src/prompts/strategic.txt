@@ -20,7 +20,7 @@ Based on your profile:
 
 ━━━ WHERE TO STAY ━━━
 
-[Neighborhood recommendation with specific reasoning]
+[Area recommendation with specific reasoning]
 [Why this area and not others]
 
 ━━━ WHAT TO BOOK AHEAD ━━━

@@ -22,7 +22,7 @@ function getSystemPrompt(): string {
 }
 
 interface IntentDetails {
-  neighborhood?: string;
+  area?: string;
   meal_type?: string;
   time_of_day?: string;
   mood?: string;
@@ -78,7 +78,7 @@ export async function buildHungryPrompt(
       // Fallback: broad food categories
       spots = await querySpots({
         city: cityDefaults.name,
-        neighborhood: details.neighborhood,
+        area: details.area,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         limit: 5,
@@ -88,7 +88,7 @@ export async function buildHungryPrompt(
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
     spots = await querySpots({
       city: cityDefaults.name,
-      neighborhood: details.neighborhood,
+      area: details.area,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
@@ -149,7 +149,7 @@ Keep it short — this is WhatsApp.`,
     userPrompt: `The user says: "${message}"
 
 Time: ${timeOfDay} (KL time)
-${details.neighborhood ? `They're near: ${details.neighborhood}` : "Location not specified — you can ask."}
+${details.area ? `They're near: ${details.area}` : "Location not specified — you can ask."}
 ${weatherNote}
 ${tiredNote}
 ${prefContext}
@@ -242,7 +242,7 @@ export async function buildNearbyPrompt(
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
 
-  const neighborhood = details.neighborhood ?? details.specific_place;
+  const area = details.area ?? details.specific_place;
 
   // Check if the user provided coordinates (e.g. "3.139,101.687")
   const coords = parseCoordinates(details.specific_place ?? message);
@@ -267,10 +267,10 @@ export async function buildNearbyPrompt(
         .join("\n");
     }
   } else {
-    // Text-based neighborhood search
+    // Text-based area search
     spots = await querySpots({
       city,
-      neighborhood,
+      area,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
     });
@@ -291,7 +291,7 @@ export async function buildNearbyPrompt(
     userPrompt: `The user says: "${message}"
 
 ${weather ? `Weather: ${weather.summary}` : ""}
-${neighborhood ? `They're near: ${neighborhood}` : coords ? `They shared coordinates: ${coords.lat}, ${coords.lng}` : "Location unclear — ask them."}
+${area ? `They're near: ${area}` : coords ? `They shared coordinates: ${coords.lat}, ${coords.lng}` : "Location unclear — ask them."}
 ${distanceContext ? `\nDistances:\n${distanceContext}` : ""}
 ${prefContext}
 
@@ -299,7 +299,7 @@ Nearby spots from knowledge graph:
 
 ${spotsContext}
 
-Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from neighborhood."} Keep it casual.`,
+Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from area."} Keep it casual.`,
     spotIds: spots.map(s => s.id),
     maxTokens: 512,
   };

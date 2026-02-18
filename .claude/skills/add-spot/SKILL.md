@@ -18,7 +18,7 @@ The user wants to add this spot: `$ARGUMENTS`
 
 Search the web for the spot's details. Look for:
 - **Full name** and any common aliases
-- **Address** and neighborhood within KL/greater KL
+- **Address** and area within KL/greater KL
 - **Opening hours** (day-by-day if possible)
 - **Payment methods** (cash only? Cards? E-wallets like Touch 'n Go?)
 - **Price range** ($, $$, or $$$)
@@ -37,13 +37,13 @@ Use multiple sources: Google reviews, food blogs, TripAdvisor, local KL food sit
 ### 2. Check for Duplicates
 
 Query existing spots to check if this place is already in the database:
-- Use the Supabase MCP to run: `SELECT name, neighborhood, category FROM spots WHERE name ILIKE '%<name>%'`
+- Use the Supabase MCP to run: `SELECT name, area, category FROM spots WHERE name ILIKE '%<name>%'`
 - If MCP is unavailable, query via the Supabase JS client:
 ```bash
 npx tsx --env-file .env.local -e "
 import { createClient } from '@supabase/supabase-js';
 const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
-const { data } = await sb.from('spots').select('name, neighborhood, category').ilike('name', '%SPOT_NAME%');
+const { data } = await sb.from('spots').select('name, area, category').ilike('name', '%SPOT_NAME%');
 console.log(JSON.stringify(data, null, 2));
 "
 ```
@@ -57,7 +57,7 @@ Format the researched data to match the spots schema:
 {
   name: "Full Spot Name",
   city: "Kuala Lumpur",
-  neighborhood: "Bangsar",           // KL neighborhood
+  area: "Bangsar",           // KL area
   category: "lunch",                 // breakfast|lunch|dinner|cafe|activity|nightlife|market
   tier: 2,                          // 1=must-do, 2=should-do, 3=hidden-gem
   address: "Full address",
@@ -87,7 +87,7 @@ npx tsx --env-file .env.local -e "
 import { createClient } from '@supabase/supabase-js';
 const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
 const { data, error } = await sb.from('spots').insert({
-  name: '...', city: 'Kuala Lumpur', neighborhood: '...', /* ... all fields */
+  name: '...', city: 'Kuala Lumpur', area: '...', /* ... all fields */
 }).select().single();
 if (error) { console.error(error); process.exit(1); }
 console.log('Inserted:', JSON.stringify(data, null, 2));

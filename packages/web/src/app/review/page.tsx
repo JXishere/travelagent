@@ -10,7 +10,7 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     category: "",
-    neighborhood: "",
+    area: "",
     tier: "",
     source: "",
     search: "",
@@ -27,8 +27,8 @@ export default function ReviewPage() {
     () => [...new Set(spots.map((s) => s.category))].sort(),
     [spots]
   );
-  const neighborhoods = useMemo(
-    () => [...new Set(spots.map((s) => s.neighborhood))].sort(),
+  const areas = useMemo(
+    () => [...new Set(spots.map((s) => s.area))].sort(),
     [spots]
   );
   const sources = useMemo(
@@ -39,7 +39,7 @@ export default function ReviewPage() {
   const filtered = useMemo(() => {
     return spots.filter((s) => {
       if (filters.category && s.category !== filters.category) return false;
-      if (filters.neighborhood && s.neighborhood !== filters.neighborhood)
+      if (filters.area && s.area !== filters.area)
         return false;
       if (filters.tier && s.tier !== Number(filters.tier)) return false;
       if (filters.source && s.source !== filters.source) return false;
@@ -47,7 +47,7 @@ export default function ReviewPage() {
         const q = filters.search.toLowerCase();
         if (
           !s.name.toLowerCase().includes(q) &&
-          !s.neighborhood.toLowerCase().includes(q)
+          !s.area.toLowerCase().includes(q)
         )
           return false;
       }
@@ -114,7 +114,7 @@ export default function ReviewPage() {
 
       <SpotFilters
         categories={categories}
-        neighborhoods={neighborhoods}
+        areas={areas}
         sources={sources}
         filters={filters}
         onChange={setFilters}

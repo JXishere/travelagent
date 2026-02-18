@@ -28,7 +28,7 @@ packages/
 │   │   ├── transcription.ts    — Whisper voice note transcription
 │   │   ├── weather.ts          — OpenWeather integration
 │   │   ├── scheduler.ts        — Proactive message engine (5-min interval)
-│   │   ├── seed.ts             — Knowledge graph seeding (42 KL spots with lat/lng)
+│   │   ├── seed.ts             — Seed runner (imports per-city data, inserts to DB)
 │   │   ├── coach.ts            — Self-coaching: reviews conversations, suggests prompt improvements
 │   │   ├── coach-auto.ts       — Automated coaching: analyze → apply → validate → commit
 │   │   ├── embeddings.ts       — OpenAI embeddings for pgvector semantic search
@@ -55,6 +55,10 @@ packages/
 │   │   │   ├── feedback.txt           — Feedback response parsing
 │   │   │   ├── generate.txt           — Spot content generation prompt
 │   │   │   └── coach.txt              — Coaching evaluation prompt
+│   │   ├── seeds/
+│   │   │   ├── kl.ts                  — 49 Kuala Lumpur spots
+│   │   │   ├── penang.ts             — 87 Penang spots (island + mainland)
+│   │   │   └── pj.ts                  — 4 Petaling Jaya spots
 │   │   └── utils/
 │   │       ├── categories.ts          — Category mappings + synonyms
 │   │       ├── city-defaults.ts       — Per-city coordinates, timezone, locale
@@ -82,7 +86,7 @@ packages/
 │   │   │   ├── prompt-input.tsx       — Landing page prompt input
 │   │   │   ├── rotating-city.tsx      — Animated city name rotator for landing page
 │   │   │   ├── spot-card.tsx          — Expandable spot card with edit/approve/delete
-│   │   │   └── spot-filters.tsx       — Filter by category/neighborhood/tier/source
+│   │   │   └── spot-filters.tsx       — Filter by category/area/tier/source
 │   │   └── lib/
 │   │       ├── rate-limit.ts          — Rate limiting utility
 │   │       └── supabase.ts            — Supabase client, getAllSpots(), updateSpot(), deleteSpot(), getCityStats()
@@ -124,9 +128,9 @@ npm run coach:auto # Automated coaching: analyze → apply → validate → comm
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `spots` | Knowledge graph | name, neighborhood, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
+| `spots` | Knowledge graph | name, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
 | `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], spots_contributed |
-| `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_neighborhoods[], trips_taken |
+| `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_areas[], trips_taken |
 | `conversations` | State management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |
 | `feedback` | Post-trip validation | spot_id, traveler_id, rating(1-5), did_they_go, user_tips[] |
 | `events` | Analytics / usage tracking | session_id, channel(web/whatsapp), event_type, event_data(jsonb), created_at |

@@ -10,7 +10,7 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 
 - name (string) — their first name
 - user_type (string: "local" or "traveler") — infer from "I live here", "I'm visiting", "just moved to {{CITY}}"
-- home_neighborhoods (string[]) — areas they live in or frequent (for locals)
+- home_areas (string[]) — areas they live in or frequent (for locals)
 - trip_dates (object: { start, end }) — dates in YYYY-MM-DD format
 - travel_party (string) — "solo", "couple", "friends", "family", or a description like "3 friends"
 - dietary_restrictions (string[]) — "vegetarian", "halal", "no pork", "no shellfish", "gluten-free", etc.

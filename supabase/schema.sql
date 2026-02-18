@@ -24,7 +24,7 @@ create table spots (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   city text not null default 'Kuala Lumpur',
-  neighborhood text,
+  area text,
   category text, -- breakfast, lunch, dinner, cafe, activity, nightlife, market
 
   tier integer default 2, -- 1 (must-do), 2 (should-do), 3 (nice-to-have/hidden gem)
@@ -68,7 +68,7 @@ create table travelers (
 
   -- User type: 'local', 'traveler', or 'unknown'
   user_type text default 'unknown',
-  home_neighborhoods text[] default '{}',
+  home_areas text[] default '{}',
 
   -- Learned preferences
   preferences jsonb default '{}',
@@ -135,7 +135,7 @@ create table feedback (
 -- INDEXES
 -- ============================================
 create index idx_spots_city on spots(city);
-create index idx_spots_neighborhood on spots(neighborhood);
+create index idx_spots_area on spots(area);
 create index idx_spots_category on spots(category);
 create index idx_spots_tier on spots(tier);
 create index idx_conversations_phone on conversations(whatsapp_number);

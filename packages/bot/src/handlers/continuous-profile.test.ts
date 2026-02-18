@@ -14,7 +14,7 @@ const baseTraveler: Traveler = {
   id: "test-id",
   whatsapp_number: "+60123456789",
   user_type: "unknown",
-  home_neighborhoods: [],
+  home_areas: [],
   preferences: {},
   dietary_restrictions: [],
   spots_visited: [],

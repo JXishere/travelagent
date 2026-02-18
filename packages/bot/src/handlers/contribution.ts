@@ -25,7 +25,7 @@ const WEB_ALLOWED_FIELDS = new Set([
 interface ExtractedSpot {
   name?: string;
   category?: string;
-  neighborhood?: string;
+  area?: string;
   city?: string;
   address?: string;
   price_range?: string;
@@ -377,9 +377,11 @@ export function smartMerge(
 
 /** Check if we have enough data to show a confirmation summary */
 export function isReady(data: Partial<ExtractedSpot>): boolean {
-  const hasCritical = Boolean(data.name && data.category && data.neighborhood);
+  const hasCritical = Boolean(data.name && data.category && data.area);
   const hasContributorOpinion = Boolean(
-    data.what_to_order && data.what_to_order.length > 0
+    (data.what_to_order && data.what_to_order.length > 0) ||
+    (data.pro_tips && data.pro_tips.length > 0) ||
+    data.vibe
   );
   return hasCritical && hasContributorOpinion;
 }
@@ -393,8 +395,8 @@ async function generateFollowUp(merged: Partial<ExtractedSpot>, previous: Partia
 
   const missing = !merged.name
     ? "the name of the spot"
-    : !merged.neighborhood
-    ? "what area/neighborhood it's in"
+    : !merged.area
+    ? "what area/area it's in"
     : !merged.category
     ? "what kind of spot it is (breakfast, lunch, dinner, cafe, activity, nightlife, market)"
     : !merged.what_to_order?.length
@@ -402,10 +404,10 @@ async function generateFollowUp(merged: Partial<ExtractedSpot>, previous: Partia
     : "any tips like payment, hours, or insider tricks";
 
   const newName = merged.name && merged.name !== previous.name;
-  const newNeighborhood = merged.neighborhood && merged.neighborhood !== previous.neighborhood;
+  const newNeighborhood = merged.area && merged.area !== previous.area;
   let ack = "";
   if (newName) ack += `You just learned the spot is called "${merged.name}". `;
-  if (newNeighborhood) ack += `You just learned it's in ${merged.neighborhood}. `;
+  if (newNeighborhood) ack += `You just learned it's in ${merged.area}. `;
 
   const instruction = `${ack}A contributor is adding a spot to your knowledge graph. You know so far: ${JSON.stringify(merged)}. Acknowledge what's new briefly and ask for ${missing}. One sentence, keep it natural.`;
   return samSays(instruction);
@@ -419,7 +421,7 @@ export function formatSummary(data: Partial<ExtractedSpot>, webSourcedFields: st
 
   const lines: string[] = ["Here's what I've got:", ""];
 
-  lines.push(`*${data.name}* — ${data.neighborhood}, ${data.city || getDefaultCity()}`);
+  lines.push(`*${data.name}* — ${data.area}, ${data.city || getDefaultCity()}`);
 
   if (data.address) {
     lines.push(`📍 ${tag("address", data.address)}`);
@@ -518,7 +520,7 @@ async function saveSpot(
   delete spotData.opening_hours;
 
   // Check for duplicate — offer to update instead of silently discarding
-  const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
+  const duplicate = await findDuplicateSpot(spotData.name, spotData.area);
   if (duplicate) {
     const newInfo = describeNewInfo(duplicate, data);
     if (newInfo.length === 0) {
@@ -526,7 +528,7 @@ async function saveSpot(
         current_flow: "general",
         flow_state: {},
       });
-      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.neighborhood}, but it's already in your knowledge graph with the same info. Let them know warmly. One sentence.`);
+      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.area}, but it's already in your knowledge graph with the same info. Let them know warmly. One sentence.`);
     }
 
     await updateConversation(phoneNumber, {

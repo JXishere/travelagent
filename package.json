@@ -12,6 +12,7 @@
     "seed": "npm run seed -w @sam/bot",
     "test": "npm run test -w @sam/bot",
     "coach": "npm run coach -w @sam/bot",
-    "coach:auto": "npm run coach:auto -w @sam/bot"
+    "coach:auto": "npm run coach:auto -w @sam/bot",
+    "research": "npx tsx --env-file .env.local scripts/batch-research.ts"
   }
 }

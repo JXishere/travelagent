@@ -72,7 +72,7 @@ export interface Spot {
   id: string;
   name: string;
   city: string;
-  neighborhood?: string;
+  area?: string;
   category?: string;
   tier?: number;
   address?: string;
@@ -97,7 +97,7 @@ export interface Spot {
 
 export async function querySpots(filters: {
   city?: string;
-  neighborhood?: string;
+  area?: string;
   category?: string;
   categories?: string[];
   indoor_outdoor?: string;
@@ -111,8 +111,8 @@ export async function querySpots(filters: {
     .order("confidence_score", { ascending: false });
 
   if (filters.city) query = query.eq("city", filters.city);
-  if (filters.neighborhood)
-    query = query.ilike("neighborhood", `%${filters.neighborhood}%`);
+  if (filters.area)
+    query = query.ilike("area", `%${filters.area}%`);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.categories)
     query = query.in("category", filters.categories);
@@ -158,15 +158,15 @@ async function autoEmbedSpot(spot: Spot): Promise<void> {
 
 export async function findDuplicateSpot(
   name: string,
-  neighborhood?: string
+  area?: string
 ): Promise<Spot | null> {
   let query = supabase
     .from("spots")
     .select("*")
     .ilike("name", name);
 
-  if (neighborhood) {
-    query = query.ilike("neighborhood", `%${neighborhood}%`);
+  if (area) {
+    query = query.ilike("area", `%${area}%`);
   }
 
   const { data } = await query.limit(1).maybeSingle();
@@ -235,7 +235,7 @@ export interface Traveler {
   whatsapp_number: string;
   name?: string;
   user_type: "local" | "traveler" | "unknown";
-  home_neighborhoods: string[];
+  home_areas: string[];
   preferences: Record<string, any>;
   dietary_restrictions: string[];
   current_city?: string;

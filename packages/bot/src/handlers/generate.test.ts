@@ -42,9 +42,9 @@ beforeEach(() => {
 });
 
 describe("startGenerate", () => {
-  it("parses 'bangsar dinner' into neighborhood + category", async () => {
+  it("parses 'bangsar dinner' into area + category", async () => {
     mockExtractJSON.mockResolvedValue({
-      candidates: [{ name: "Test Spot", neighborhood: "Bangsar", category: "dinner" }],
+      candidates: [{ name: "Test Spot", area: "Bangsar", category: "dinner" }],
     });
 
     await startGenerate("+1234", "bangsar dinner");
@@ -57,7 +57,7 @@ describe("startGenerate", () => {
     );
   });
 
-  it("handles single arg (neighborhood only)", async () => {
+  it("handles single arg (area only)", async () => {
     mockExtractJSON.mockResolvedValue({
       candidates: [{ name: "Test Spot" }],
     });
@@ -99,8 +99,8 @@ describe("startGenerate", () => {
   it("stores candidates in flow state and presents first", async () => {
     mockExtractJSON.mockResolvedValue({
       candidates: [
-        { name: "Spot A", neighborhood: "Bangsar" },
-        { name: "Spot B", neighborhood: "TTDI" },
+        { name: "Spot A", area: "Bangsar" },
+        { name: "Spot B", area: "TTDI" },
       ],
     });
 
@@ -121,9 +121,9 @@ describe("startGenerate", () => {
 
 describe("handleGenerate", () => {
   const candidates = [
-    { name: "Spot A", neighborhood: "Bangsar", category: "dinner" },
-    { name: "Spot B", neighborhood: "TTDI", category: "cafe" },
-    { name: "Spot C", neighborhood: "KLCC", category: "lunch" },
+    { name: "Spot A", area: "Bangsar", category: "dinner" },
+    { name: "Spot B", area: "TTDI", category: "cafe" },
+    { name: "Spot C", area: "KLCC", category: "lunch" },
   ];
 
   const makeConvo = (idx: number): Conversation => ({
@@ -179,7 +179,7 @@ describe("handleGenerate", () => {
     expect(mockInsertSpot).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Spot A",
-        neighborhood: "Bangsar",
+        area: "Bangsar",
         category: "dinner",
         price_range: "$$",
         vibe: "casual",
@@ -222,7 +222,7 @@ describe("formatCandidate", () => {
     const result = formatCandidate(
       {
         name: "Fatty Crab",
-        neighborhood: "Taman Megah",
+        area: "Taman Megah",
         category: "dinner",
         address: "123 Main St",
         price_range: "$$",

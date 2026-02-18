@@ -1,89 +1,146 @@
 ---
-description: Simulate a WhatsApp conversation flow locally without a live server
-argument: Scenario description (e.g. "hungry near Bangsar", "new user first message")
+description: Send real messages to Sam via the web chat API, analyze responses, and fix issues
+argument: Test scenario or message (e.g. "hungry near Bangsar", "birthday dinner japanese food", "multi-turn profile then food request")
 context: fork
 agent: general-purpose
-allowed-tools: Read, Grep, Bash
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
-# /test-convo — Simulate a WhatsApp Conversation
+# /test-convo — Live Conversation Testing with Sam
 
-You are testing Sam's conversation flow by tracing through the code logic without running a live server.
+You test Sam by sending real messages to the web chat API, analyzing his responses, and fixing any issues you find.
 
 ## Input
 
 Test scenario: `$ARGUMENTS`
 
+## Prerequisites
+
+The Next.js dev server must be running on port 3001. Check first:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 2>/dev/null
+```
+
+If it's not running (non-200), tell the user to run `npm run dev:web` in another terminal and stop.
+
+## How to Talk to Sam
+
+Send messages using curl. Each conversation needs a unique `sessionId`.
+
+```bash
+# Generate a session ID
+SESSION_ID="test-$(date +%s)"
+
+# Send a message and parse the SSE response
+curl -s -X POST http://localhost:3001/api/chat \
+  -H "Content-Type: application/json" \
+  -d "{\"sessionId\": \"$SESSION_ID\", \"message\": \"your message here\"}" | \
+  sed -n 's/^data: //p' | \
+  grep -v '^\[DONE\]' | \
+  python3 -c "import sys,json; [print(json.loads(l).get('text',''),end='') for l in sys.stdin if l.strip()]"
+```
+
+For multi-turn conversations, reuse the same `SESSION_ID` across messages.
+
 ## Process
 
-### 1. Read the Codebase
+### 1. Design Test Messages
 
-Read these files to understand the full flow:
-- `src/index.ts` — message routing and flow logic
-- `src/llm.ts` — intent classification and chat functions
-- `src/database.ts` — DB query patterns
-- `src/handlers/` — all handler files (query.ts, ontrip.ts, profile.ts, continuous-profile.ts, strategic.ts, contribution.ts, feedback.ts, generate.ts)
-- `src/utils/geo.ts` — haversine distance, nearby filtering
-- `src/utils/categories.ts` — category mappings + synonyms
-- `src/prompts/` — all prompt files (system.txt, extraction.txt, profile.txt, continuous_profile.txt, strategic.txt, generate.txt)
+Based on the scenario `$ARGUMENTS`, design 2-5 test messages that probe Sam's behavior. Include:
+- The primary scenario the user described
+- An edge case variant (e.g. ambiguous intent, follow-up question)
+- A regression check (e.g. pure profile message should still work)
 
-### 2. Simulate the Flow
+If no specific scenario is given, run these default tests:
+1. "i need a place to go for my birthday. thinking some place chill. i wanna grab some japanese food with my close friend"
+2. (follow-up in same session) "maybe around PJ or KL"
+3. (new session) "I'm planning a trip to KL next week" — should start profile, not food recs
+4. (new session) "where's good for ramen near bangsar?"
+5. (new session) "I know a great spot in TTDI" — should start contribution flow
 
-Trace exactly what would happen for the test scenario:
+### 2. Send Messages and Collect Responses
 
-**Step 1: Intent Classification**
-- What would `classifyIntent()` return for this message?
-- Show the intent and extracted details
+For each test message:
+1. Send it to Sam via the API
+2. Capture Sam's full response
+3. Note the response time
 
-**Step 2: Flow Routing**
-- Which handler gets called based on the intent?
-- Is there an existing `current_flow` that would override?
+### 3. Analyze Each Response
 
-**Step 3: Database Query**
-- What query would `database.ts` run?
-- Based on the seed data in `src/seed.ts`, what spots would match?
-- List the matching spots with their key details
+For each response, evaluate:
 
-**Step 4: LLM Response**
-- Which prompt file is loaded?
-- What context is sent to Claude (system prompt + user message + spot data)?
-- What would the response structure look like?
+**Intent correctness**: Did Sam understand what the user wanted?
+- Food request → got food recommendations (not profile questions)?
+- Profile info → started profile learning (not food recs)?
+- Contribution → started collecting spot info?
 
-**Step 5: WhatsApp Message**
-- What would actually be sent back to the user?
-- Is it concise enough for WhatsApp?
+**Data quality**: Did Sam use real database data?
+- Are spot names real (from the DB)?
+- Are operational details included (what to order, tips, area)?
+- Did Sam fabricate any spots?
 
-### 3. Report
+**Conversation quality**:
+- Is the response concise and natural?
+- Does Sam sound like a friend, not a search engine?
+- For WhatsApp: would this fit on a phone screen?
 
-Output a structured report:
+**Flow continuity**: For multi-turn conversations:
+- Does Sam remember context from previous messages?
+- Do follow-up answers (like area preferences) get handled correctly?
+
+### 4. Report Findings
+
+Output a clear report for each message:
 
 ```
-## Simulation: [scenario]
+## Test: [message]
+Session: [session_id]
 
-### Intent Classification
-- Intent: [intent]
-- Details: [extracted details]
+### Sam's Response
+[full response text]
 
-### Flow
-- Handler: [file:function]
-- Current flow state: [flow]
+### Analysis
+- Intent: [correct/incorrect — what was expected vs what happened]
+- Data: [real spots / fabricated / no data]
+- Quality: [good / issues noted]
+- Flow: [correct routing / wrong handler]
 
-### Database Query
-- Query: [what gets queried]
-- Matching spots: [list with key details]
-
-### Response
-- Prompt used: [prompt file]
-- Expected response: [simulated response text]
-
-### Issues Found
-- [any problems: missing data, wrong flow, poor formatting, etc.]
+### Verdict: PASS / FAIL / WARN
+[one-line summary of why]
 ```
 
-## Edge Cases to Consider
+### 5. Fix Issues
 
-- What if no spots match the query?
-- What if the user is in the middle of another flow?
-- What if the message is ambiguous (could be multiple intents)?
-- Is the response appropriately concise for WhatsApp?
-- Does the response include operational details (hours, tips, what to order)?
+If any tests FAIL:
+1. Read the relevant code files to understand the root cause
+2. Identify the specific file and function that needs fixing
+3. Make the fix (edit the code)
+4. Re-run the failing test to verify the fix
+5. Run `npm test` to check for regressions
+
+Common issues and where to fix them:
+- **Wrong intent**: `packages/bot/src/llm.ts` → `classifyIntent()` prompt
+- **Missing spots**: `packages/bot/src/handlers/ontrip.ts` → query logic, or `packages/bot/src/database.ts` → `querySpots()`
+- **Bad response tone**: `packages/bot/src/prompts/system.txt`
+- **Profile trap**: `packages/bot/src/handlers/profile.ts` → `startProfileLearning()` guard
+- **Wrong city mapping**: `packages/bot/src/prompts/extraction.txt` → area-to-city mapping
+
+After fixing, re-run the full test suite to confirm no regressions:
+```bash
+npm test
+```
+
+### 6. Summary
+
+End with an overall summary:
+```
+## Summary
+- Tests run: X
+- Passed: X
+- Failed: X
+- Fixed: X
+
+### Changes Made
+- [file]: [what was changed and why]
+```

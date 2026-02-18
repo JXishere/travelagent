@@ -94,7 +94,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   // Location pin → route to nearby handler
   if (type === "location" && location) {
     const response = await handleNearby(from, `I'm at ${location.latitude}, ${location.longitude}`, {
-      neighborhood: undefined,
+      area: undefined,
       specific_place: `${location.latitude},${location.longitude}`,
     });
     await appendMessages(from, [
@@ -158,7 +158,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     });
 
     const criticalMissing = (extracted.missing_fields ?? []).filter((f: string) =>
-      ["name", "category", "neighborhood"].includes(f)
+      ["name", "category", "area"].includes(f)
     );
 
     if (criticalMissing.length > 0) {
@@ -171,7 +171,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
         .map((f: string) => {
           if (f === "name") return "Name?";
           if (f === "category") return "Category? (breakfast/lunch/dinner/cafe/activity/nightlife/market)";
-          if (f === "neighborhood") return "Neighborhood?";
+          if (f === "area") return "Area?";
           return f + "?";
         })
         .join(" ");
@@ -187,9 +187,9 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     const { missing_fields, ...spotData } = extracted;
 
     // Check for duplicate
-    const duplicate = await findDuplicateSpot(spotData.name, spotData.neighborhood);
+    const duplicate = await findDuplicateSpot(spotData.name, spotData.area);
     if (duplicate) {
-      const response = `*${duplicate.name}* (${duplicate.neighborhood}) already exists in the graph.`;
+      const response = `*${duplicate.name}* (${duplicate.area}) already exists in the graph.`;
       await appendMessages(from, [
         { role: "user", content: text },
         { role: "assistant", content: response },
@@ -199,7 +199,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     }
 
     await insertSpot({ ...spotData, source: "text" });
-    const response = `Added *${extracted.name}* (${extracted.neighborhood}, ${extracted.category}) to the graph.`;
+    const response = `Added *${extracted.name}* (${extracted.area}, ${extracted.category}) to the graph.`;
     await appendMessages(from, [
       { role: "user", content: text },
       { role: "assistant", content: response },

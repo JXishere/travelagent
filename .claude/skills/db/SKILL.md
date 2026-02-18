@@ -14,11 +14,11 @@ The user provides a natural language query as the argument: `$ARGUMENTS`
 
 ## Shortcuts
 
-- **"spots"** or **"all"** → `SELECT name, neighborhood, category, tier, price_range FROM spots ORDER BY neighborhood, category`
+- **"spots"** or **"all"** → `SELECT name, area, category, tier, price_range FROM spots ORDER BY area, category`
 - **"stats"** → Run all of these and format as a summary:
   - `SELECT COUNT(*) FROM spots`
   - `SELECT category, COUNT(*) FROM spots GROUP BY category ORDER BY count DESC`
-  - `SELECT neighborhood, COUNT(*) FROM spots GROUP BY neighborhood ORDER BY count DESC`
+  - `SELECT area, COUNT(*) FROM spots GROUP BY area ORDER BY count DESC`
   - `SELECT tier, COUNT(*) FROM spots GROUP BY tier ORDER BY tier`
   - `SELECT COUNT(*) FROM travelers`
   - `SELECT COUNT(*) FROM contributors`
@@ -32,7 +32,7 @@ The user provides a natural language query as the argument: `$ARGUMENTS`
 npx tsx --env-file .env.local -e "
 import { createClient } from '@supabase/supabase-js';
 const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
-const { data, error } = await sb.from('spots').select('name, neighborhood, category, tier, price_range');
+const { data, error } = await sb.from('spots').select('name, area, category, tier, price_range');
 if (error) { console.error(error); process.exit(1); }
 console.log(JSON.stringify(data, null, 2));
 "
@@ -42,9 +42,9 @@ console.log(JSON.stringify(data, null, 2));
 
 ## Schema Reference
 
-**spots**: id, name, city, neighborhood, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source (seed|voice|text|llm_verified|manual), last_verified
+**spots**: id, name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source (seed|voice|text|llm_verified|manual), last_verified
 
-**travelers**: id, whatsapp_number, name, user_type (local|traveler|unknown), home_neighborhoods[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
+**travelers**: id, whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
 
 **contributors**: id, whatsapp_number, name, cities_contributed[], spots_contributed
 

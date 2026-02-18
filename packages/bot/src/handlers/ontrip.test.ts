@@ -33,7 +33,7 @@ const mamakSpot: Spot = {
   id: "spot-mamak",
   name: "Nasi Kandar Pelita",
   city: "Kuala Lumpur",
-  neighborhood: "KLCC",
+  area: "KLCC",
   category: "dinner",
   what_to_order: ["roti canai", "nasi kandar"],
 };
@@ -42,7 +42,7 @@ const dinnerSpot: Spot = {
   id: "spot-dinner",
   name: "Fatty Crab",
   city: "Kuala Lumpur",
-  neighborhood: "Taman Megah",
+  area: "Taman Megah",
   category: "dinner",
   what_to_order: ["chilli crab"],
 };
@@ -173,7 +173,7 @@ describe("buildHungryPrompt — dish query routing", () => {
 
     const result = await buildHungryPrompt("+60123", "I want dinner near KLCC", {
       meal_type: "dinner",
-      neighborhood: "KLCC",
+      area: "KLCC",
     });
 
     // Structured query tried first

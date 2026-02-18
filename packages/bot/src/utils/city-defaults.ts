@@ -20,6 +20,15 @@ const CITY_DEFAULTS: Record<string, CityDefaults> = {
     language: "en",
     currency: "MYR",
   },
+  Penang: {
+    name: "Penang",
+    timezone: "Asia/Kuala_Lumpur",
+    utcOffset: 8,
+    latitude: 5.4141,
+    longitude: 100.3288,
+    language: "en",
+    currency: "MYR",
+  },
 };
 
 const DEFAULT_CITY = "Kuala Lumpur";

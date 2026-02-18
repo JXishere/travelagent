@@ -2,11 +2,11 @@
 
 interface SpotFiltersProps {
   categories: string[];
-  neighborhoods: string[];
+  areas: string[];
   sources: string[];
   filters: {
     category: string;
-    neighborhood: string;
+    area: string;
     tier: string;
     source: string;
     search: string;
@@ -18,7 +18,7 @@ interface SpotFiltersProps {
 
 export function SpotFilters({
   categories,
-  neighborhoods,
+  areas,
   sources,
   filters,
   onChange,
@@ -43,7 +43,7 @@ export function SpotFilters({
     >
       <input
         type="text"
-        placeholder="Search name or neighborhood..."
+        placeholder="Search name or area..."
         value={filters.search}
         onChange={(e) => set("search", e.target.value)}
         style={{
@@ -72,12 +72,12 @@ export function SpotFilters({
       </select>
 
       <select
-        value={filters.neighborhood}
-        onChange={(e) => set("neighborhood", e.target.value)}
+        value={filters.area}
+        onChange={(e) => set("area", e.target.value)}
         style={selectStyle}
       >
-        <option value="">All neighborhoods</option>
-        {neighborhoods.map((n) => (
+        <option value="">All areas</option>
+        {areas.map((n) => (
           <option key={n} value={n}>
             {n}
           </option>

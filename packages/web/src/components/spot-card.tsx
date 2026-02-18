@@ -25,6 +25,8 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [parsing, setParsing] = useState(false);
   const [draft, setDraft] = useState({
     tier: spot.tier,
     category: spot.category,
@@ -43,6 +45,55 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
       : spot.tier === 2
         ? "#60a5fa"
         : "var(--muted)";
+
+  const handleParseAndSave = async () => {
+    if (!notes.trim()) return;
+    setParsing(true);
+    try {
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: notes, spotName: spot.name, city: spot.city }),
+      });
+      if (!res.ok) throw new Error("Extract failed");
+      const parsed = await res.json();
+
+      // Merge: append arrays, fill gaps for scalars
+      const updates: Partial<Spot> = {};
+      if (parsed.what_to_order?.length) {
+        updates.what_to_order = [
+          ...new Set([...(spot.what_to_order ?? []), ...parsed.what_to_order]),
+        ];
+      }
+      if (parsed.pro_tips?.length) {
+        updates.pro_tips = [
+          ...new Set([...(spot.pro_tips ?? []), ...parsed.pro_tips]),
+        ];
+      }
+      if (parsed.what_to_skip?.length) {
+        updates.what_to_skip = [
+          ...new Set([...(spot.what_to_skip ?? []), ...parsed.what_to_skip]),
+        ];
+      }
+      // Scalars: only fill if currently empty
+      if (parsed.vibe && !spot.vibe) updates.vibe = parsed.vibe;
+      if (parsed.price_range && !spot.price_range) updates.price_range = parsed.price_range;
+      if (parsed.address && !spot.address) updates.address = parsed.address;
+      if (parsed.best_time_of_day && !spot.best_time_of_day) updates.best_time_of_day = parsed.best_time_of_day;
+      if (parsed.indoor_outdoor && !spot.indoor_outdoor) updates.indoor_outdoor = parsed.indoor_outdoor;
+      if (parsed.category && parsed.category !== spot.category) updates.category = parsed.category;
+      if (parsed.tier && parsed.tier !== spot.tier) updates.tier = parsed.tier;
+
+      if (Object.keys(updates).length > 0) {
+        onSave(spot.id, updates);
+      }
+      setNotes("");
+    } catch (err) {
+      console.error("Parse failed:", err);
+    } finally {
+      setParsing(false);
+    }
+  };
 
   const handleSave = () => {
     onSave(spot.id, {
@@ -86,7 +137,7 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
       >
         <span style={{ fontWeight: "bold", flex: "1 1 auto" }}>{spot.name}</span>
         <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
-          {spot.neighborhood}
+          {spot.area}
         </span>
         <span
           style={{
@@ -224,10 +275,6 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
               <DetailRow label="Best time" value={spot.best_time_of_day} />
               <DetailRow label="Indoor/outdoor" value={spot.indoor_outdoor} />
               <DetailRow
-                label="Payment"
-                value={spot.payment_methods?.join(", ")}
-              />
-              <DetailRow
                 label="Hours"
                 value={
                   spot.opening_hours
@@ -268,12 +315,37 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
                 </div>
               )}
 
+              {/* Freeform notes */}
+              <div style={{ marginTop: "0.75rem" }}>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="What do you remember? e.g. &quot;the dry chilli pan mee is insane, always packed on weekends, go before 11am&quot;"
+                  rows={3}
+                  style={{
+                    ...inputStyle,
+                    width: "100%",
+                    resize: "vertical",
+                    boxSizing: "border-box",
+                  }}
+                />
+                {notes.trim() && (
+                  <button
+                    onClick={handleParseAndSave}
+                    disabled={parsing}
+                    style={{ ...btnGreen, marginTop: "0.5rem" }}
+                  >
+                    {parsing ? "Parsing..." : "Parse & Save"}
+                  </button>
+                )}
+              </div>
+
               {/* Actions */}
               <div
                 style={{
                   display: "flex",
                   gap: "0.5rem",
-                  marginTop: "1rem",
+                  marginTop: "0.75rem",
                   borderTop: "1px solid var(--bg)",
                   paddingTop: "0.75rem",
                 }}

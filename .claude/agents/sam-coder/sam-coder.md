@@ -59,7 +59,7 @@ const systemPrompt = readFileSync(
 );
 
 interface HandlerDetails {
-  neighborhood?: string;
+  area?: string;
   // ... intent-specific fields
 }
 
@@ -119,9 +119,9 @@ export async function queryX(filters: { ... }): Promise<X[]> {
 
 ## Schema Quick Reference
 
-**spots**: name, city, neighborhood, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, lat/lon, payment_methods[], opening_hours (jsonb), price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count
+**spots**: name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, lat/lon, payment_methods[], opening_hours (jsonb), price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count
 
-**travelers**: whatsapp_number, name, user_type (local|traveler|unknown), home_neighborhoods[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
+**travelers**: whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
 
 **conversations**: whatsapp_number, current_flow, flow_state (jsonb), messages (jsonb[])
 

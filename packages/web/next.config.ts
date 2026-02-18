@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
   env: {
     SUPABASE_URL: combinedEnv.SUPABASE_URL ?? "",
     SUPABASE_KEY: combinedEnv.SUPABASE_KEY ?? "",
+    NEXT_PUBLIC_SUPABASE_URL: combinedEnv.SUPABASE_URL ?? "",
+    NEXT_PUBLIC_SUPABASE_KEY: combinedEnv.SUPABASE_KEY ?? "",
     ANTHROPIC_API_KEY: combinedEnv.ANTHROPIC_API_KEY ?? "",
     OPENWEATHER_API_KEY: combinedEnv.OPENWEATHER_API_KEY ?? "",
     ADMIN_PHONE_NUMBER: combinedEnv.ADMIN_PHONE_NUMBER ?? "",

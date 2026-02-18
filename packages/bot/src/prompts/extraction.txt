@@ -7,7 +7,7 @@ Return ONLY valid JSON in this exact format:
 {
   "name": "Name of the spot",
   "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
-  "neighborhood": "Area, neighborhood, mall, or building (e.g. Bangsar, TTDI, Pavilion KL, Ativo Suites)",
+  "area": "Area, neighborhood, mall, or building (e.g. Bangsar, TTDI, Pavilion KL, Mid Valley)",
   "city": "City name (e.g. Kuala Lumpur, Penang, Malacca)",
   "address": "Street address if mentioned",
   "price_range": "$|$$|$$$",
@@ -27,8 +27,10 @@ Return ONLY valid JSON in this exact format:
 Rules:
 - Extract everything explicitly mentioned. Do NOT guess or fabricate data.
 - Set "tier" based on how enthusiastically the contributor describes it (1 = "you MUST go here", 2 = recommended, 3 = nice to have).
-- "missing_fields" should list critical fields that were NOT mentioned: name, category, neighborhood are critical.
+- "missing_fields" should list critical fields that were NOT mentioned: name, category, area are critical.
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
-- Always extract the city if mentioned. If not mentioned, default to "{{CITY}}".
-- For neighborhood, capture the location as the contributor describes it — a neighborhood, mall, building, or complex name. Do NOT discard a location just because it's not a traditional neighborhood name. "X in Y" means Y is the neighborhood.
+- Always extract the city if mentioned. If not mentioned, infer from the area using the mapping below. Only default to "{{CITY}}" if the area doesn't match any known city.
+- Area-to-city mapping (these areas are in Petaling Jaya, NOT Kuala Lumpur):
+  Damansara Jaya, Damansara Utama, Damansara Kim, Mutiara Damansara, Ara Damansara, Kota Damansara, Taman Tun Dr Ismail (TTDI — the PJ side), SS2, SS13, SS14, SS15, Section 13, Section 14, Section 17, Section 19, PJ Old Town, Taman Megah, Aman Suria, Sunway Mas, Subang Jaya, Bandar Sunway, USJ, Kelana Jaya, Taman SEA, Tropicana, Bandar Utama, Klang, Shah Alam, Setia Alam
+- For area, capture the location as the contributor describes it — an area, neighborhood, mall, building, or complex name. Do NOT discard a location just because it's not a traditional neighborhood name. "X in Y" means Y is the area.
 - If the contributor mentions opening hours or operating times, capture them as a pro_tip (e.g. "Open 8am-10pm daily") rather than a separate field. Hours change frequently and are better as tips than structured data.

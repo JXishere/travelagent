@@ -13,7 +13,7 @@ function getSystemPrompt(): string {
 }
 
 interface QueryDetails {
-  neighborhood?: string;
+  area?: string;
   meal_type?: string;
   time_of_day?: string;
   mood?: string;
@@ -43,7 +43,7 @@ export async function handleQuery(
       // Fallback: broad food categories
       spots = await querySpots({
         city,
-        neighborhood: details.neighborhood,
+        area: details.area,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         limit: 5,
@@ -53,7 +53,7 @@ export async function handleQuery(
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
     spots = await querySpots({
       city,
-      neighborhood: details.neighborhood,
+      area: details.area,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
@@ -86,7 +86,7 @@ export async function handleQuery(
     spot_ids: topSpots.map(s => s.id),
     spot_names: topSpots.map(s => s.name),
     categories,
-    neighborhood: details.neighborhood,
+    area: details.area,
   });
 
   // Build traveler preferences for context
@@ -107,7 +107,9 @@ ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
 ${weatherContext}
 
-Here are the matching spots from your knowledge graph. Recommend them naturally — include operational details (payment, what to order, tips). Don't list them robotically; make it feel like a friend's recommendation.
+Here are the matching spots from your knowledge graph. Recommend them naturally — make it feel like a friend's recommendation.
+
+CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
 
 ${spotContext}`;
 
@@ -158,7 +160,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
   return spots
     .map((s, i) => {
       const lines = [`${i + 1}. ${s.name}`];
-      if (s.neighborhood) lines.push(`   Neighborhood: ${s.neighborhood}`);
+      if (s.area) lines.push(`   Neighborhood: ${s.area}`);
       if (s.category) lines.push(`   Category: ${s.category}`);
       if (s.address) lines.push(`   Address: ${s.address}`);
       if (s.price_range) lines.push(`   Price: ${s.price_range}`);

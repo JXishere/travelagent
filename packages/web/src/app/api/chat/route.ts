@@ -63,14 +63,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { sessionId, message } = (await req.json()) as {
+  const { sessionId, message, initFlow } = (await req.json()) as {
     sessionId: string;
-    message: string;
+    message?: string;
+    initFlow?: string;
   };
 
-  if (!sessionId || !message) {
+  if (!sessionId) {
     return new Response(
-      JSON.stringify({ error: "sessionId and message required" }),
+      JSON.stringify({ error: "sessionId required" }),
+      { status: 400 }
+    );
+  }
+
+  // Initialize a flow without processing a message (e.g. "Tell Sam" sets contribution flow)
+  if (initFlow && !message) {
+    await getOrCreateConversation(sessionId);
+    await updateConversation(sessionId, {
+      current_flow: initFlow,
+      flow_state: { stage: "collecting", extracted: {}, source: "text", messagesReceived: 0 },
+    });
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  }
+
+  if (!message) {
+    return new Response(
+      JSON.stringify({ error: "message required" }),
       { status: 400 }
     );
   }
@@ -167,8 +185,10 @@ export async function POST(req: NextRequest) {
 
     return sseTextResponse(response, remaining);
   } catch (error) {
-    console.error("[web-chat] Error:", error);
-    return sseTextResponse("Sorry, something went wrong on my end. Try again?");
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[web-chat] Error:", msg, error);
+    // Keep the user in flow — don't reset state so they can retry
+    return sseTextResponse("Sorry, something went wrong on my end. Try sending that again?");
   }
 }
 

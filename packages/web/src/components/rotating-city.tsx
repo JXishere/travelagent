@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-export function RotatingCity({ cities }: { cities: string[] }) {
+export function RotatingCity({ cities, suffix, lowercase = true }: { cities: string[]; suffix?: string; lowercase?: boolean }) {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
 
@@ -20,27 +20,25 @@ export function RotatingCity({ cities }: { cities: string[] }) {
     return () => clearInterval(interval);
   }, [cities]);
 
-  if (cities.length <= 1) {
-    return <span>{cities[0]?.toLowerCase()}</span>;
-  }
+  const fmt = (s: string) => lowercase ? s.toLowerCase() : s;
+  const text = fmt(cities[index] ?? cities[0]);
 
   return (
-    <span className="relative inline-block">
-      {/* Hidden cities size the container to the widest name */}
-      {cities.map((city) => (
-        <span key={city} className="block invisible h-0" aria-hidden>
-          {city.toLowerCase()}
+    <span className="relative inline-block text-left">
+      {/* Hidden items size the container to the widest name */}
+      {cities.map((c) => (
+        <span key={c} className="invisible block h-0" aria-hidden>
+          {fmt(c)}{suffix}
         </span>
       ))}
-      {/* Visible city, absolutely positioned so it doesn't affect size */}
+      {/* Visible item */}
       <span
         className="block transition-all duration-300"
         style={{
           opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(4px)",
         }}
       >
-        {cities[index].toLowerCase()}
+        {text}{suffix}
       </span>
     </span>
   );

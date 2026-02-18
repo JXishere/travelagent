@@ -10,6 +10,9 @@ import {
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
 
+/** Regex to detect food/dining requests that should bypass the profile flow */
+export const FOOD_SIGNALS = /\b(hungry|eat|eating|food|restaurant|cafe|dinner|lunch|breakfast|supper|brunch|bar|japanese|korean|chinese|thai|indian|malay|italian|western|mexican|vietnamese|sushi|ramen|noodles|curry|pizza|burger|seafood|bbq|steak|dessert|coffee|cocktail|grab some|place to (eat|go)|birthday (dinner|lunch|meal)|want to try|looking for .*(food|spot|place|restaurant))\b/i;
+
 let _profilePrompt: string | null = null;
 function getProfilePrompt(): string {
   if (!_profilePrompt) _profilePrompt = loadPrompt("profile");
@@ -19,7 +22,7 @@ function getProfilePrompt(): string {
 interface ExtractedProfile {
   name?: string;
   user_type?: "local" | "traveler";
-  home_neighborhoods?: string[];
+  home_areas?: string[];
   cuisine_preferences?: string[];
   trip_dates?: { start: string; end: string };
   travel_party?: string;
@@ -66,7 +69,7 @@ export async function handleProfile(
     // interview conversation instead of a single message exchange
     const profile = await extractJSON<ExtractedProfile>(
       "continuous_profile",
-      `Extract a user profile from this conversation. Determine if they are a "local" or "traveler" based on context. For locals, extract home_neighborhoods and cuisine_preferences. For travelers, extract trip_dates, travel_party, first_time_visitor.\n\n${fullConvo}`,
+      `Extract a user profile from this conversation. Determine if they are a "local" or "traveler" based on context. For locals, extract home_areas and cuisine_preferences. For travelers, extract trip_dates, travel_party, first_time_visitor.\n\n${fullConvo}`,
       undefined,
       { templateVars: { CITY: getDefaultCity() } },
     );
@@ -88,7 +91,7 @@ export async function handleProfile(
     };
 
     if (profile.user_type === "local") {
-      travelerUpdates.home_neighborhoods = profile.home_neighborhoods ?? [];
+      travelerUpdates.home_areas = profile.home_areas ?? [];
     } else {
       travelerUpdates.trip_dates = profile.trip_dates;
       travelerUpdates.travel_party = profile.travel_party;
@@ -129,6 +132,16 @@ export async function startProfileLearning(
   phoneNumber: string,
   initialMessage?: string
 ): Promise<string> {
+  // Safety net: if the message contains a food/dining request, route to handleHungry
+  // instead of trapping the user in profile questions. The classifier should catch
+  // most cases, but this guard handles misclassifications.
+  if (initialMessage && FOOD_SIGNALS.test(initialMessage)) {
+    const { classifyIntent } = await import("../llm.js");
+    const { handleHungry } = await import("./ontrip.js");
+    const { details } = await classifyIntent(initialMessage);
+    return handleHungry(phoneNumber, initialMessage, details);
+  }
+
   // Check if we already have some profile data
   const traveler = await getOrCreateTraveler(phoneNumber);
   if (traveler.preferences && Object.keys(traveler.preferences).length > 0) {

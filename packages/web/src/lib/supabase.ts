@@ -4,7 +4,7 @@ export interface Spot {
   id: string;
   name: string;
   city: string;
-  neighborhood: string;
+  area: string;
   category: string;
   tier: number;
   address: string | null;
@@ -79,9 +79,7 @@ export async function deleteSpot(id: string): Promise<boolean> {
   return true;
 }
 
-export async function getCityStats(
-  city: string = "Kuala Lumpur"
-): Promise<{ spot_count: number; contributor_count: number }> {
+export async function getCityStats(): Promise<{ spot_count: number; contributor_count: number }> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
 
@@ -90,16 +88,16 @@ export async function getCityStats(
   }
 
   const supabase = createClient(url, key);
-  const { data, error } = await supabase.rpc("get_city_stats", {
-    target_city: city,
-  });
+  const { count, error } = await supabase
+    .from("spots")
+    .select("*", { count: "exact", head: true });
 
   if (error) {
-    console.error("Failed to fetch city stats:", error);
+    console.error("Failed to fetch stats:", error);
     return { spot_count: 0, contributor_count: 0 };
   }
 
-  return data as { spot_count: number; contributor_count: number };
+  return { spot_count: count ?? 0, contributor_count: 0 };
 }
 
 export async function getDistinctCities(): Promise<string[]> {
@@ -122,4 +120,191 @@ export async function getDistinctCities(): Promise<string[]> {
 
   const cities = [...new Set(data.map((row: { city: string }) => row.city))];
   return cities.length > 0 ? cities : ["every city"];
+}
+
+interface RecentSpot {
+  name: string;
+  area: string | null;
+  category: string;
+  what_to_order: string[] | null;
+  what_to_skip: string[] | null;
+  pro_tips: string[] | null;
+  vibe: string | null;
+  best_time_of_day: string | null;
+  price_range: string | null;
+  payment_methods: string[] | null;
+  indoor_outdoor: string | null;
+}
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function generateTeasers(spot: RecentSpot): string[] {
+  const area = spot.area;
+  if (!area) return [];
+
+  const candidates: string[] = [];
+  const cat = spot.category;
+
+  // Dish — pick a random dish, not always the first
+  const dishes = spot.what_to_order?.filter(Boolean) ?? [];
+  if (dishes.length > 0) {
+    const dish = pick(dishes).toLowerCase();
+    candidates.push(
+      `Sam just learned where to get the best ${dish} in ${area}.`,
+      `Someone just told Sam where the locals go for ${dish} in ${area}.`,
+      `Sam just found out about a ${dish} spot in ${area} you need to know about.`,
+    );
+  }
+
+  // What to skip — teases the insider "avoid" knowledge
+  if (spot.what_to_skip?.length) {
+    candidates.push(
+      `Sam just found out what NOT to order at a place in ${area}.`,
+      `Sam just learned what to skip at a ${cat} spot in ${area}.`,
+    );
+  }
+
+  // Pro tips — reference the actual tip content if short enough
+  const tips = spot.pro_tips?.filter(Boolean) ?? [];
+  if (tips.length > 0) {
+    const tip = pick(tips);
+    if (tip.length <= 60) {
+      candidates.push(`Sam just learned: "${tip.toLowerCase()}" — a spot in ${area}.`);
+    }
+    candidates.push(
+      `Sam just picked up an insider tip about a ${cat} spot in ${area}.`,
+    );
+  }
+
+  // Payment quirks
+  const payments = spot.payment_methods ?? [];
+  if (payments.length === 1 && payments[0]?.toLowerCase() === "cash") {
+    candidates.push(`Sam just got warned: cash only at a ${cat} spot in ${area}.`);
+  }
+
+  // Price range
+  if (spot.price_range) {
+    const pr = spot.price_range.toLowerCase();
+    if (pr.includes("$") || pr.includes("cheap") || pr.includes("budget")) {
+      candidates.push(`Sam just found a cheap ${cat} spot in ${area} that actually delivers.`);
+    }
+  }
+
+  // Vibe
+  if (spot.vibe) {
+    candidates.push(`Sam just found a ${spot.vibe} little ${cat} spot in ${area}.`);
+  }
+
+  // Time of day
+  if (spot.best_time_of_day) {
+    candidates.push(`Sam just picked up a ${spot.best_time_of_day} move in ${area}.`);
+  }
+
+  // Indoor/outdoor
+  if (spot.indoor_outdoor === "outdoor") {
+    candidates.push(`Sam just found an open-air ${cat} spot in ${area}.`);
+  }
+
+  // Mystery / vague (always available — these are the most intriguing)
+  candidates.push(
+    `Sam just got the inside scoop on a spot in ${area}.`,
+    `Sam just picked up a tip about a place in ${area} most people walk right past.`,
+  );
+
+  return candidates;
+}
+
+
+export async function getRecentSpotTeasers(limit = 200): Promise<string[]> {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_KEY;
+
+  if (!url || !key) return [];
+
+  const supabase = createClient(url, key);
+  // Only pull spots with real intel — at least one of what_to_order or pro_tips
+  const { data, error } = await supabase
+    .from("spots")
+    .select("name, area, category, what_to_order, what_to_skip, pro_tips, vibe, best_time_of_day, price_range, payment_methods, indoor_outdoor")
+    .not("area", "is", null)
+    .or("what_to_order.not.is.null,pro_tips.not.is.null")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data || data.length === 0) return [];
+
+  // Build a pool of all candidate teasers, then pick one random teaser per spot
+  const teasers: string[] = [];
+  for (const spot of data as RecentSpot[]) {
+    const candidates = generateTeasers(spot);
+    if (candidates.length > 0) {
+      teasers.push(pick(candidates));
+    }
+  }
+
+  // Shuffle
+  for (let i = teasers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [teasers[i], teasers[j]] = [teasers[j], teasers[i]];
+  }
+
+  return teasers;
+}
+
+/** Map cities to countries — extend as Sam expands globally */
+const CITY_TO_COUNTRY: Record<string, string> = {
+  // Malaysia
+  "Kuala Lumpur": "Malaysia",
+  "Petaling Jaya": "Malaysia",
+  "Penang": "Malaysia",
+  "Malacca": "Malaysia",
+  "Johor Bahru": "Malaysia",
+  "Ipoh": "Malaysia",
+  "Langkawi": "Malaysia",
+  // Asia
+  "Taipei": "Taiwan",
+  "Bangkok": "Thailand",
+  "Singapore": "Singapore",
+  "Tokyo": "Japan",
+  "Osaka": "Japan",
+  "Seoul": "South Korea",
+  "Hong Kong": "Hong Kong",
+  "Ho Chi Minh City": "Vietnam",
+  "Hanoi": "Vietnam",
+  "Jakarta": "Indonesia",
+  "Bali": "Indonesia",
+  "Manila": "Philippines",
+  "Phnom Penh": "Cambodia",
+};
+
+export async function getCountries(): Promise<string[]> {
+  const cities = await getDistinctCities();
+  if (cities.length === 1 && cities[0] === "every city") return [];
+  const countries = [...new Set(cities.map((c) => CITY_TO_COUNTRY[c] ?? c))];
+  return countries.sort();
+}
+
+export async function getDistinctAreas(): Promise<string[]> {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_KEY;
+
+  if (!url || !key) {
+    return ["everywhere"];
+  }
+
+  const supabase = createClient(url, key);
+  const { data, error } = await supabase
+    .from("spots")
+    .select("area")
+    .not("area", "is", null)
+    .order("area");
+
+  if (error || !data || data.length === 0) {
+    return ["everywhere"];
+  }
+
+  const areas = [...new Set(data.map((row: { area: string }) => row.area))];
+  return areas.length > 0 ? areas : ["everywhere"];
 }

@@ -5,9 +5,11 @@ import { useState, useRef, useCallback, useEffect } from "react";
 export function ChatInput({
   onSend,
   disabled,
+  placeholder = "ask Sam...",
 }: {
   onSend: (message: string) => void;
   disabled: boolean;
+  placeholder?: string;
 }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -40,7 +42,9 @@ export function ChatInput({
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 160) + "px";
+      const max = 80; // ~3 lines, then scroll
+      el.style.height = Math.min(el.scrollHeight, max) + "px";
+      el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
     }
   };
 
@@ -58,7 +62,7 @@ export function ChatInput({
             handleInput();
           }}
           onKeyDown={handleKeyDown}
-          placeholder="ask sam..."
+          placeholder={placeholder}
           disabled={disabled}
           rows={1}
           className="flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none placeholder:opacity-40"

@@ -172,7 +172,7 @@ export async function webSearchSpot(
 {
   "name": "official name",
   "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
-  "neighborhood": "area/district name",
+  "area": "area/district name",
   "address": "street address",
   "price_range": "$|$$|$$$",
   "payment_methods": ["cash", "card", etc],
@@ -232,18 +232,34 @@ export async function classifyIntent(
   const systemPrompt = `You are an intent classifier for a travel assistant focused on ${cityName}.
 
 Classify the user's message into exactly one intent:
-- "hungry": They want food/drink recommendations (mentions eating, hungry, food, restaurant, cafe, bar, breakfast, lunch, dinner)
+
+- "hungry": They want food, drink, or dining recommendations. Triggers include:
+  - Direct: hungry, eat, eating, food, restaurant, cafe, bar, breakfast, lunch, dinner, supper, brunch
+  - Cuisine types: japanese, korean, chinese, thai, indian, malay, italian, western, mexican, vietnamese, sushi, ramen, noodles, curry, pizza, burger, seafood, bbq, steak, dessert, pastry, coffee, cocktail
+  - Phrases: "place to eat", "place to go" (when food/dining context), "grab some", "birthday dinner", "birthday lunch", "want to try", "looking for a spot", "looking for food", "where to eat", "recommend me", "any good", "chill dinner", "nice place for"
+  - ANY message that implies wanting a specific food recommendation, even if wrapped in context like occasions, moods, or companions
 - "day_plan": They want help planning their day or activities ("what should I do", "plan my day", "what's good today")
 - "nearby": They want to know what's near a specific location ("I'm near", "what's around", "close to")
 - "weather": They're asking about weather or it's affecting their plans ("raining", "hot", "weather")
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
-- "profile": They're telling you about their trip or preferences, or identifying themselves ("planning a trip", "going to ${cityName}", "I like...", "I live here", "I'm local", "just moved to ${cityName}", "I'm from ${cityName}")
+- "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message.
 - "feedback": They're giving feedback about a spot they visited ("it was great", "didn't like it", rating)
 - "general": General conversation, greetings, questions about Sam, off-topic
 
-PRIORITY: If a message contains both profile information ("I live here", "I'm vegetarian", trip dates) AND an action request (food recommendation, day plan, what's nearby), classify by the ACTION — not "profile". Profile facts are captured automatically in the background.
+PRIORITY RULES:
+1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
+2. CONTINUATION: If the recent conversation shows Sam asked a clarifying question about food/dining (e.g., "what area?", "where are you based?") and the user answers with a location or preference, classify as "hungry" — the user is continuing a food request.
+3. Only use "profile" for messages with ZERO actionable food/activity requests.
 
-Also extract any relevant details: neighborhood, meal_type, time_of_day, mood/energy, specific_place.
+Examples:
+- "i need a place to go for my birthday, thinking some place chill, japanese food with my close friend" → hungry (birthday dinner + japanese food)
+- "grab some ramen tonight" → hungry
+- "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
+- "planning a trip to KL next week" → profile (no food/activity request)
+- "PJ/KL" (after Sam asked "what area?") → hungry (continuation)
+- "I like spicy food and street markets" → profile (preferences, no specific request)
+
+Also extract any relevant details: area, meal_type, time_of_day, mood/energy, specific_place, cuisine.
 
 Respond in JSON only:
 { "intent": "...", "details": { ... } }`;

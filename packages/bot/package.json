@@ -20,7 +20,7 @@
     "eval": "tsx --env-file ../../.env.local src/eval/eval-runner.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.74.0",
     "@supabase/supabase-js": "^2.49.1",
     "express": "^4.21.2",
     "openai": "^4.82.0"

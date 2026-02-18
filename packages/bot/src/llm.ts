@@ -145,6 +145,55 @@ Respond with ONLY one word: confirm, correct, or unrelated`;
   return "confirm";
 }
 
+/** Search the web for spot details and return structured data */
+export async function webSearchSpot(
+  spotName: string,
+  city: string,
+  category?: string
+): Promise<Record<string, any>> {
+  const categoryHint = category ? ` (${category})` : "";
+  const systemPrompt = `You are a research assistant. Search for "${spotName}"${categoryHint} in ${city} and return a JSON object with any details you can find. Use this exact shape (omit fields you can't find):
+
+{
+  "name": "official name",
+  "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
+  "neighborhood": "area/district name",
+  "address": "street address",
+  "price_range": "$|$$|$$$",
+  "payment_methods": ["cash", "card", etc],
+  "what_to_order": ["popular dishes/items"],
+  "pro_tips": ["useful tips for visitors"],
+  "vibe": "casual|upscale|chaotic|chill|local|touristy",
+  "opening_hours": {"monday": "9am-5pm", ...}
+}
+
+Return ONLY the JSON object, no markdown fences or extra text.`;
+
+  try {
+    const response = await client.messages.create({
+      model: HAIKU,
+      max_tokens: 1024,
+      temperature: 0.2,
+      system: systemPrompt,
+      messages: [{ role: "user", content: `Look up ${spotName} in ${city}` }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
+    });
+
+    // Get the LAST text block — earlier ones are just search narration
+    const textBlocks = response.content.filter((b) => b.type === "text");
+    const textBlock = textBlocks[textBlocks.length - 1];
+    if (!textBlock || textBlock.type !== "text") return {};
+    // Try markdown code block first, then bare JSON object anywhere in text
+    const fenceMatch = textBlock.text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const bareMatch = textBlock.text.match(/\{[\s\S]*\}/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : bareMatch ? bareMatch[0] : textBlock.text.trim();
+    return JSON.parse(jsonStr);
+  } catch (error) {
+    console.error("webSearchSpot failed:", error);
+    return {};
+  }
+}
+
 /** Classify user intent */
 export async function classifyIntent(
   message: string,

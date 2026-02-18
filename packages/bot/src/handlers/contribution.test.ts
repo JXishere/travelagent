@@ -1,10 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock modules that have side effects at import time
 vi.mock("../database.js", () => ({}));
 vi.mock("../transcription.js", () => ({}));
 vi.mock("../whatsapp.js", () => ({}));
-vi.mock("../llm.js", () => ({}));
+vi.mock("../llm.js", () => ({
+  webSearchSpot: vi.fn().mockResolvedValue({}),
+}));
 
 import {
   smartMerge,
@@ -14,7 +16,9 @@ import {
   describeNewInfo,
   buildFollowUp,
   buildWarmPrefix,
+  enrichFromWeb,
 } from "./contribution.js";
+import { webSearchSpot } from "../llm.js";
 import type { Spot } from "../database.js";
 
 describe("smartMerge", () => {
@@ -345,5 +349,63 @@ describe("buildWarmPrefix", () => {
       prev
     );
     expect(result).toBe("Got it. ");
+  });
+});
+
+describe("enrichFromWeb", () => {
+  const mockedWebSearch = vi.mocked(webSearchSpot);
+
+  beforeEach(() => {
+    mockedWebSearch.mockReset().mockResolvedValue({});
+  });
+
+  it("returns data unchanged when name is missing", async () => {
+    const data = { category: "dinner" };
+    const result = await enrichFromWeb(data);
+    expect(result.enriched).toEqual(data);
+    expect(result.didEnrich).toBe(false);
+    expect(mockedWebSearch).not.toHaveBeenCalled();
+  });
+
+  it("returns data unchanged when already isReady", async () => {
+    const data = {
+      name: "Fatty Crab",
+      category: "dinner",
+      neighborhood: "Taman Megah",
+      what_to_order: ["chilli crab"],
+    };
+    const result = await enrichFromWeb(data);
+    expect(result.enriched).toEqual(data);
+    expect(result.didEnrich).toBe(false);
+    expect(mockedWebSearch).not.toHaveBeenCalled();
+  });
+
+  it("merges web data and contributor data wins on conflicts", async () => {
+    mockedWebSearch.mockResolvedValue({
+      neighborhood: "Bangsar South",
+      category: "cafe",
+      price_range: "$$",
+      what_to_order: ["flat white"],
+    });
+
+    const data = {
+      name: "Ka'ia",
+      category: "dinner", // contributor says dinner, web says cafe — contributor wins
+    };
+
+    const result = await enrichFromWeb(data);
+    expect(result.enriched.name).toBe("Ka'ia");
+    expect(result.enriched.category).toBe("dinner"); // contributor wins
+    expect(result.enriched.neighborhood).toBe("Bangsar South"); // filled from web
+    expect(result.enriched.price_range).toBe("$$"); // filled from web
+    expect(result.didEnrich).toBe(true);
+  });
+
+  it("returns didEnrich false when web returns empty", async () => {
+    mockedWebSearch.mockResolvedValue({});
+    const data = { name: "Unknown Spot" };
+    const result = await enrichFromWeb(data);
+    expect(result.enriched).toEqual(data);
+    expect(result.didEnrich).toBe(false);
   });
 });

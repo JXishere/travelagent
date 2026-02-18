@@ -1,7 +1,7 @@
 // Contribution flow — conversational accumulation of spot knowledge
 // Two stages: collecting → confirming
 
-import { extractJSON, classifyConfirmation } from "../llm.js";
+import { extractJSON, classifyConfirmation, webSearchSpot } from "../llm.js";
 import {
   insertSpot,
   updateSpot,
@@ -41,6 +41,7 @@ interface ContributionState {
   source: "voice" | "text";
   messagesReceived: number;
   duplicateSpotId?: string;
+  webEnriched?: boolean;
 }
 
 
@@ -211,6 +212,26 @@ async function extractWithContext(
   }
 }
 
+/** Enrich extracted spot data with web search results */
+export async function enrichFromWeb(
+  data: Partial<ExtractedSpot>
+): Promise<{ enriched: Partial<ExtractedSpot>; didEnrich: boolean }> {
+  if (!data.name || isReady(data)) {
+    return { enriched: data, didEnrich: false };
+  }
+
+  const city = data.city || getDefaultCity();
+  const webData = await webSearchSpot(data.name, city, data.category);
+  if (Object.keys(webData).length === 0) {
+    return { enriched: data, didEnrich: false };
+  }
+
+  // Contributor data wins — pass it as "incoming" so it overwrites web data
+  const merged = smartMerge(webData, data);
+  const didEnrich = Object.keys(merged).length > Object.keys(data).length;
+  return { enriched: merged, didEnrich };
+}
+
 /** Process a message during the collecting stage */
 async function collectInfo(
   phoneNumber: string,
@@ -219,8 +240,17 @@ async function collectInfo(
 ): Promise<string> {
   const previous = state.extracted;
   const newData = await extractWithContext(input, previous);
-  const merged = smartMerge(previous, newData);
+  let merged = smartMerge(previous, newData);
   const messagesReceived = state.messagesReceived + 1;
+
+  // When we just learned the spot name, try to enrich from web search
+  const justLearnedName = merged.name && !previous.name;
+  let webEnriched = state.webEnriched ?? false;
+  if (justLearnedName && !webEnriched) {
+    const result = await enrichFromWeb(merged);
+    merged = result.enriched;
+    webEnriched = result.didEnrich;
+  }
 
   // Check if we have enough to show a summary
   if (isReady(merged)) {
@@ -230,9 +260,14 @@ async function collectInfo(
         extracted: merged,
         source: state.source,
         messagesReceived,
+        webEnriched,
       },
     });
-    return formatSummary(merged);
+    const summary = formatSummary(merged);
+    if (webEnriched) {
+      return `I looked this up and filled in some gaps. Double-check the details:\n\n${summary}`;
+    }
+    return summary;
   }
 
   // Not ready — save progress and ask a follow-up
@@ -242,6 +277,7 @@ async function collectInfo(
       extracted: merged,
       source: state.source,
       messagesReceived,
+      webEnriched,
     },
   });
 

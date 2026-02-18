@@ -21,13 +21,13 @@ packages/
 ├── bot/                — WhatsApp bot (Express + Claude)
 │   ├── src/
 │   │   ├── index.ts            — Express app, webhook routes, flow router
-│   │   ├── database.ts         — Supabase client + all DB operations
+│   │   ├── database.ts         — Supabase client + all DB operations + trackEvent()
 │   │   ├── llm.ts              — Claude API wrapper, prompt loading, SSE streaming
 │   │   ├── whatsapp.ts         — WhatsApp Cloud API (send/receive/media)
 │   │   ├── transcription.ts    — Whisper voice note transcription
 │   │   ├── weather.ts          — OpenWeather integration
 │   │   ├── scheduler.ts        — Proactive message engine (5-min interval)
-│   │   ├── seed.ts             — Knowledge graph seeding (50+ KL spots)
+│   │   ├── seed.ts             — Knowledge graph seeding (42 KL spots with lat/lng)
 │   │   ├── handlers/
 │   │   │   ├── query.ts              — "I'm hungry" → spot recommendations
 │   │   │   ├── contribution.ts       — Voice note → structured spot ingestion
@@ -75,7 +75,7 @@ packages/
 │   └── tsconfig.json
 
 supabase/
-└── schema.sql          — Full database schema (5 tables + RPC)
+└── schema.sql          — Full database schema (6 tables + RPC)
 
 docs/                   — Strategy docs, competitive analysis, blueprints
 ```
@@ -110,6 +110,7 @@ npm test           # Run bot tests (vitest)
 | `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_neighborhoods[], trips_taken |
 | `conversations` | State management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |
 | `feedback` | Post-trip validation | spot_id, traveler_id, rating(1-5), did_they_go, user_tips[] |
+| `events` | Analytics / usage tracking | session_id, channel(web/whatsapp), event_type, event_data(jsonb), created_at |
 
 **Spot categories**: breakfast, lunch, dinner, cafe, activity, nightlife, market
 **Spot tiers**: 1 = must-do, 2 = should-do, 3 = nice-to-have/hidden gem
@@ -155,6 +156,15 @@ Gated behind `ADMIN_PHONE_NUMBER` env var:
 
 - **Continuous profile extraction** — `maybeExtractProfile()` runs after every message exchange, silently extracting trip/preference info into the traveler profile without interrupting the conversation flow.
 - **Proactive scheduler** — `startScheduler()` runs on a 5-minute interval (WhatsApp only). Sends 4 message types: TRIP_WELCOME (day 1), MORNING_NUDGE (day 2+), DINNER_NUDGE (afternoon), FEEDBACK_CHECK (visited spots). Gates: requires 24h WhatsApp messaging window, 8h cooldown between messages, daytime hours only, skips users mid-flow.
+
+## Analytics
+
+`trackEvent()` in `database.ts` is fire-and-forget — never blocks the user. Instrumented at:
+- **Every message**: `message` event with `intent` (both WhatsApp + web)
+- **Recommendations**: `recommendation` event with `spot_ids` and `spot_names`
+- **Flow completions**: `flow_complete` event for contribution, profile, and feedback flows
+
+Query the `events` table in Supabase dashboard to analyze usage patterns.
 
 ## Environment Variables
 

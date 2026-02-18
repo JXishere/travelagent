@@ -88,23 +88,23 @@ async function runCoachAnalysis(): Promise<{ evals: ConversationEval[]; synthesi
 async function applyChanges(synthesis: string): Promise<string> {
   const currentPrompt = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
 
-  const rewriteInstruction = `You are editing Sam's system prompt based on a coaching report. Your job is to produce an improved version of the prompt.
+  const charLimit = currentPrompt.length + 200; // allow at most ~5 extra lines
+  const rewriteInstruction = `You are making a SURGICAL edit to Sam's system prompt. Not a rewrite — a targeted fix.
 
-## Current system.txt
+## Current system.txt (${currentPrompt.length} characters)
 ${currentPrompt}
 
-## Coaching Report
+## Coaching Report (read this, then apply ONE fix)
 ${synthesis}
 
-## Rules for editing — READ CAREFULLY
-- Apply ONLY the single highest-impact suggestion from the report
-- The output must be SHORTER than or EQUAL in length to the current prompt. If you add a line, remove or shorten another.
-- Tighten existing wording rather than adding new paragraphs
-- Keep Sam's personality intact — don't make him generic
-- Don't remove existing rules that aren't mentioned in the report
-- Keep the {{CITY}} template variable exactly as-is — don't replace it
-- Preserve the overall structure and tone of the prompt
-- Output ONLY the new system.txt content, nothing else — no explanation, no markdown fences, no preamble`;
+## STRICT RULES
+1. Pick the SINGLE most impactful issue from the report
+2. Make the SMALLEST possible edit that addresses it — change 1-3 lines
+3. Your output MUST be under ${charLimit} characters. The current prompt is ${currentPrompt.length} chars. You have room for ~200 extra characters at most.
+4. Do NOT rewrite sections that aren't related to your fix
+5. Do NOT add examples, lists, or explanatory paragraphs
+6. Keep {{CITY}} exactly as-is
+7. Output ONLY the updated system.txt — no explanation, no fences`;
 
   const revised = await chat(
     "You are a careful prompt editor. Output only the revised prompt text.",

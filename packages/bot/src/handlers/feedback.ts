@@ -22,8 +22,10 @@ function getFeedbackPrompt(): string {
 export async function handleFeedback(
   phoneNumber: string,
   message: string,
-  conversation: Conversation
+  conversation: Conversation,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
+  const channel = options?.channel ?? "whatsapp";
   const state = conversation.flow_state;
 
   // Step 1: Ask about a specific spot
@@ -87,7 +89,7 @@ export async function handleFeedback(
         flow_state: {},
       });
 
-      trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+      trackEvent(phoneNumber, channel, "flow_complete", {
         flow: "feedback",
         spot_id: state.spot_id,
         rating: fb.rating,

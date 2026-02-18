@@ -508,7 +508,7 @@ const spots = [
   // ============================================
   {
     name: "Batu Caves",
-    city: "Batu Caves",
+    city: "Kuala Lumpur",
     neighborhood: "Batu Caves",
     category: "activity",
     tier: 1,
@@ -970,7 +970,7 @@ const spots = [
       "Only restaurant in Malaysia on Asia's 50 Best — legit world-class",
       "Book 2-3 weeks in advance minimum",
       "Tasting menu RM550 per person, wine pairing RM350",
-      "It's in Shah Alam (30-40 min from city center) — Grab there",
+      "Located on Level 48 of Naza Tower in KLCC — stunning city views",
       "Worth the trip if food is your thing and you want to splurge once",
     ],
     vibe: "upscale",

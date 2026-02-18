@@ -24,8 +24,10 @@ export async function handleQuery(
   phoneNumber: string,
   message: string,
   details: QueryDetails,
-  travelerContext?: string
+  travelerContext?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
+  const channel = options?.channel ?? "whatsapp";
   const categories = resolveCategories(details.meal_type, details.time_of_day);
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
@@ -69,7 +71,7 @@ export async function handleQuery(
     incrementSpotUseCount(spot.id);
   }
   await markSpotsVisited(phoneNumber, topSpots.map(s => s.id));
-  trackEvent(phoneNumber, "whatsapp", "recommendation", {
+  trackEvent(phoneNumber, channel, "recommendation", {
     spot_ids: topSpots.map(s => s.id),
     spot_names: topSpots.map(s => s.name),
     categories,

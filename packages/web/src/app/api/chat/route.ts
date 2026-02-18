@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
 
     switch (intent) {
       case "contribute":
-        response = await handleContribution(sessionId, message, undefined, conversation);
+        response = await handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
         break;
 
       case "profile":
@@ -192,19 +192,19 @@ async function routeToFlow(
 
   switch (flow) {
     case "contribution":
-      return handleContribution(sessionId, message, undefined, conversation);
+      return handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
 
     case "profile_learning":
-      return handleProfile(sessionId, message, conversation);
+      return handleProfile(sessionId, message, conversation, { channel: "web" });
 
     case "strategic":
       if (conversation.flow_state.profile_just_completed) {
         return handleStrategic(sessionId);
       }
-      return handleProfile(sessionId, message, conversation);
+      return handleProfile(sessionId, message, conversation, { channel: "web" });
 
     case "feedback":
-      return handleFeedback(sessionId, message, conversation);
+      return handleFeedback(sessionId, message, conversation, { channel: "web" });
 
     default:
       await updateConversation(sessionId, {
@@ -256,7 +256,7 @@ async function streamHandlerResponse(
     }
     case "weather": {
       // Weather-aware: use handleQuery (non-streamed, returns complete string)
-      const response = await handleQuery(sessionId, message, { ...details });
+      const response = await handleQuery(sessionId, message, { ...details }, undefined, { channel: "web" });
       await appendMessages(sessionId, [
         { role: "user", content: message },
         { role: "assistant", content: response },

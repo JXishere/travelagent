@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 export function ChatInput({
   onSend,
@@ -21,6 +21,13 @@ export function ChatInput({
       textareaRef.current.style.height = "auto";
     }
   }, [value, disabled, onSend]);
+
+  // Re-focus textarea when streaming ends (disabled goes false)
+  useEffect(() => {
+    if (!disabled) {
+      textareaRef.current?.focus();
+    }
+  }, [disabled]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

@@ -34,8 +34,10 @@ interface ExtractedProfile {
 export async function handleProfile(
   phoneNumber: string,
   message: string,
-  conversation: Conversation
+  conversation: Conversation,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
+  const channel = options?.channel ?? "whatsapp";
   // Build the conversation history for Claude
   const history = conversation.messages.map((m) => ({
     role: m.role as "user" | "assistant",
@@ -95,7 +97,7 @@ export async function handleProfile(
 
     await updateTraveler(phoneNumber, travelerUpdates);
 
-    trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+    trackEvent(phoneNumber, channel, "flow_complete", {
       flow: "profile",
       user_type: profile.user_type,
     });

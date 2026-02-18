@@ -10,7 +10,7 @@ import {
   type Spot,
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
-import { resolveCategories } from "../utils/categories.js";
+import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getCityDefaults, getDefaultCity } from "../utils/city-defaults.js";
 import { formatSpotsForLLM } from "./query.js";
 import { parseCoordinates, filterByDistance, type SpotWithDistance } from "../utils/geo.js";
@@ -67,18 +67,35 @@ export async function buildHungryPrompt(
     (hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 20 ? "evening" : "late-night");
 
   const categories = resolveCategories(details.meal_type, timeOfDay);
+  const isDishQuery = categories === null;
 
-  let spots = await querySpots({
-    city: cityDefaults.name,
-    neighborhood: details.neighborhood,
-    categories,
-    indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
-    limit: 5,
-  });
+  let spots: Spot[];
 
-  // If structured query found nothing and user has a mood/vibe, try semantic search
-  if (spots.length === 0) {
-    spots = await trySemanticSearch(message, cityDefaults.name, categories);
+  if (isDishQuery) {
+    // Dish query ("roti", "laksa") — semantic search first, no category filter
+    spots = await trySemanticSearch(message, cityDefaults.name);
+    if (spots.length === 0) {
+      // Fallback: broad food categories
+      spots = await querySpots({
+        city: cityDefaults.name,
+        neighborhood: details.neighborhood,
+        categories: DEFAULT_CATEGORIES,
+        indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        limit: 5,
+      });
+    }
+  } else {
+    // Category query ("dinner", "breakfast") — structured first, semantic fallback
+    spots = await querySpots({
+      city: cityDefaults.name,
+      neighborhood: details.neighborhood,
+      categories,
+      indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      limit: 5,
+    });
+    if (spots.length === 0) {
+      spots = await trySemanticSearch(message, cityDefaults.name);
+    }
   }
 
   // Filter out visited spots only for travelers (locals may want to revisit favorites)
@@ -304,12 +321,11 @@ export async function handleNearby(
 async function trySemanticSearch(
   message: string,
   city: string,
-  categories?: string[]
 ): Promise<Spot[]> {
   try {
     const { generateEmbedding } = await import("../embeddings.js");
     const embedding = await generateEmbedding(message);
-    return await semanticSearchSpots(embedding, { city, categories });
+    return await semanticSearchSpots(embedding, { city });
   } catch {
     return [];
   }

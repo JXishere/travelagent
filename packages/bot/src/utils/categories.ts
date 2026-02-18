@@ -24,7 +24,7 @@ export const TIME_OF_DAY_CATEGORIES: Record<string, string[]> = {
 };
 
 /** Default food categories when nothing specific is requested */
-const DEFAULT_CATEGORIES = ["breakfast", "lunch", "dinner", "cafe"];
+export const DEFAULT_CATEGORIES = ["breakfast", "lunch", "dinner", "cafe"];
 
 /**
  * Resolve spot categories from a meal type and/or time of day.
@@ -33,12 +33,12 @@ const DEFAULT_CATEGORIES = ["breakfast", "lunch", "dinner", "cafe"];
 export function resolveCategories(
   mealType?: string,
   timeOfDay?: string
-): string[] {
+): string[] | null {
   if (mealType) {
-    return MEAL_TYPE_CATEGORIES[mealType.toLowerCase()] ?? [mealType.toLowerCase()];
+    return MEAL_TYPE_CATEGORIES[mealType.toLowerCase()] ?? null;
   }
   if (timeOfDay) {
-    return TIME_OF_DAY_CATEGORIES[timeOfDay.toLowerCase()] ?? [];
+    return TIME_OF_DAY_CATEGORIES[timeOfDay.toLowerCase()] ?? null;
   }
   return DEFAULT_CATEGORIES;
 }

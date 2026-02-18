@@ -3,7 +3,7 @@
 import { chat, loadPrompt, HAIKU } from "../llm.js";
 import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, trackEvent, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
-import { resolveCategories } from "../utils/categories.js";
+import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
 
 let _systemPrompt: string | null = null;
@@ -29,40 +29,51 @@ export async function handleQuery(
 ): Promise<string> {
   const channel = options?.channel ?? "whatsapp";
   const categories = resolveCategories(details.meal_type, details.time_of_day);
+  const isDishQuery = categories === null;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
+  const city = traveler.current_city ?? getDefaultCity();
 
-  // Build query filters
-  let spots = await querySpots({
-    city: traveler.current_city ?? getDefaultCity(),
-    neighborhood: details.neighborhood,
-    categories,
-    indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
-    limit: 5,
-  });
+  let spots: Spot[];
 
-  // If structured query found nothing, try semantic search as fallback
-  if (spots.length === 0) {
-    const semanticSpots = await trySemanticSearch(
-      message,
-      traveler.current_city ?? getDefaultCity(),
-      categories
-    );
-
-    if (semanticSpots.length > 0) {
-      spots.push(...semanticSpots);
-    } else {
-      return await chat(
-        getSystemPrompt(),
-        [
-          {
-            role: "user",
-            content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
-          },
-        ],
-        { maxTokens: 512, model: HAIKU }
-      );
+  if (isDishQuery) {
+    // Dish query ("roti", "laksa") — semantic search first, no category filter
+    spots = await trySemanticSearch(message, city);
+    if (spots.length === 0) {
+      // Fallback: broad food categories
+      spots = await querySpots({
+        city,
+        neighborhood: details.neighborhood,
+        categories: DEFAULT_CATEGORIES,
+        indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        limit: 5,
+      });
     }
+  } else {
+    // Category query ("dinner", "breakfast") — structured first, semantic fallback
+    spots = await querySpots({
+      city,
+      neighborhood: details.neighborhood,
+      categories,
+      indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      limit: 5,
+    });
+    if (spots.length === 0) {
+      spots = await trySemanticSearch(message, city);
+    }
+  }
+
+  if (spots.length === 0) {
+    return await chat(
+      getSystemPrompt(),
+      [
+        {
+          role: "user",
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
+        },
+      ],
+      { maxTokens: 512, model: HAIKU }
+    );
   }
 
   // Track usage and mark as visited
@@ -118,16 +129,25 @@ export function confidenceLabel(score: number | undefined): string {
   return "fresh intel";
 }
 
+export function sourceLabel(source: string | undefined): string {
+  switch (source) {
+    case "voice": return "local contributor (voice note)";
+    case "text": return "local contributor";
+    case "seed":
+    case "manual":
+    default: return "curated by Sam";
+  }
+}
+
 /** Try semantic search when structured query returns no results */
 async function trySemanticSearch(
   message: string,
   city: string,
-  categories?: string[]
 ): Promise<Spot[]> {
   try {
     const { generateEmbedding } = await import("../embeddings.js");
     const embedding = await generateEmbedding(message);
-    return await semanticSearchSpots(embedding, { city, categories });
+    return await semanticSearchSpots(embedding, { city });
   } catch {
     // Semantic search unavailable (missing API key, no embeddings, etc.)
     return [];
@@ -157,7 +177,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
       if (s.tier) lines.push(`   Tier: ${s.tier}`);
-      lines.push(`   Sam's take: ${confidenceLabel(s.confidence_score)}`);
+      lines.push(`   Sam's take: ${confidenceLabel(s.confidence_score)} (from ${sourceLabel(s.source)})`);
       return lines.join("\n");
     })
     .join("\n\n");

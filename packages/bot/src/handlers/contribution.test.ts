@@ -348,7 +348,6 @@ describe("enrichFromWeb", () => {
 
   it("merges web data and contributor data wins on conflicts", async () => {
     mockedWebSearch.mockResolvedValue({
-      neighborhood: "Bangsar South",
       category: "cafe",
       price_range: "$$",
     });
@@ -361,10 +360,8 @@ describe("enrichFromWeb", () => {
     const result = await enrichFromWeb(data);
     expect(result.enriched.name).toBe("Ka'ia");
     expect(result.enriched.category).toBe("dinner"); // contributor wins
-    expect(result.enriched.neighborhood).toBe("Bangsar South"); // filled from web
     expect(result.enriched.price_range).toBe("$$"); // filled from web
     // Only fields that were genuinely new (not already in contributor data) are web-sourced
-    expect(result.webSourcedFields).toContain("neighborhood");
     expect(result.webSourcedFields).toContain("price_range");
     expect(result.webSourcedFields).not.toContain("category"); // contributor already had this
   });
@@ -372,6 +369,7 @@ describe("enrichFromWeb", () => {
   it("strips non-allowed fields from web data via allowlist", async () => {
     mockedWebSearch.mockResolvedValue({
       neighborhood: "Bangsar South",
+      address: "10 Jalan Maarof",
       price_range: "$$",
       what_to_order: ["flat white"],
       what_to_skip: ["the pastries"],
@@ -386,8 +384,11 @@ describe("enrichFromWeb", () => {
     const result = await enrichFromWeb(data);
 
     // Allowed fields filled
-    expect(result.enriched.neighborhood).toBe("Bangsar South");
     expect(result.enriched.price_range).toBe("$$");
+
+    // Location fields stripped — must come from contributor
+    expect(result.enriched.neighborhood).toBeUndefined();
+    expect(result.enriched.address).toBeUndefined();
 
     // Non-allowed fields stripped — not present from web
     expect(result.enriched.what_to_order).toBeUndefined();
@@ -396,27 +397,31 @@ describe("enrichFromWeb", () => {
     expect(result.enriched.vibe).toBeUndefined();
     expect(result.enriched.tier).toBeUndefined();
     expect(result.enriched.best_time_of_day).toBeUndefined();
-    expect(result.webSourcedFields).toEqual(
-      expect.arrayContaining(["neighborhood", "price_range"])
-    );
+    expect(result.webSourcedFields).toEqual(["price_range"]);
   });
 
-  it("blocks unexpected fields like latitude and random keys", async () => {
+  it("blocks unexpected fields like latitude, neighborhood, and random keys", async () => {
     mockedWebSearch.mockResolvedValue({
       neighborhood: "KLCC",
+      address: "Suria KLCC",
       latitude: 3.157,
       longitude: 101.712,
       random_field: "unexpected",
+      category: "cafe",
     });
 
     const data = { name: "Petronas Cafe" };
     const result = await enrichFromWeb(data);
 
-    expect(result.enriched.neighborhood).toBe("KLCC");
+    // neighborhood and address are NOT in allowlist — blocked
+    expect(result.enriched.neighborhood).toBeUndefined();
+    expect(result.enriched.address).toBeUndefined();
     expect((result.enriched as any).latitude).toBeUndefined();
     expect((result.enriched as any).longitude).toBeUndefined();
     expect((result.enriched as any).random_field).toBeUndefined();
-    expect(result.webSourcedFields).toEqual(["neighborhood"]);
+    // category IS in allowlist
+    expect(result.enriched.category).toBe("cafe");
+    expect(result.webSourcedFields).toEqual(["category"]);
   });
 
   it("returns empty webSourcedFields when web returns only non-allowed fields", async () => {
@@ -587,7 +592,7 @@ describe("handleContribution — collecting stage", () => {
 
   it("triggers web enrichment when name is first provided", async () => {
     mockedExtract.mockResolvedValue({ name: "Ka'ia" });
-    mockedWebSearch.mockResolvedValue({ neighborhood: "Bangsar South", price_range: "$$" });
+    mockedWebSearch.mockResolvedValue({ neighborhood: "Bangsar South", price_range: "$$", category: "cafe" });
 
     const conv = makeConversation({
       flow_state: {
@@ -602,18 +607,25 @@ describe("handleContribution — collecting stage", () => {
 
     expect(mockedWebSearch).toHaveBeenCalledWith("Ka'ia", "Kuala Lumpur", undefined);
     // Enriched data should be saved in flow state with field-level provenance
+    // neighborhood and address are stripped by allowlist — only category and price_range filled
     expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
       flow_state: expect.objectContaining({
-        extracted: expect.objectContaining({ name: "Ka'ia", neighborhood: "Bangsar South" }),
-        webSourcedFields: expect.arrayContaining(["neighborhood", "price_range"]),
+        extracted: expect.objectContaining({ name: "Ka'ia", category: "cafe" }),
+        webSourcedFields: expect.arrayContaining(["price_range", "category"]),
       }),
     }));
+    // neighborhood should NOT be in enriched data
+    const flowState = mockedUpdateConv.mock.calls.find(
+      (c) => (c[1] as any).flow_state?.extracted
+    )?.[1] as any;
+    expect(flowState.flow_state.extracted.neighborhood).toBeUndefined();
   });
 
   it("shows web-enriched intro via samSays when summary is ready after enrichment", async () => {
-    // Extraction returns partial data (missing category) — not yet ready
+    // Extraction returns data with neighborhood (from contributor) but missing category
     mockedExtract.mockResolvedValue({ name: "Ka'ia", neighborhood: "Bangsar", what_to_order: ["flat white"] });
     // Web search fills in the missing category — making it ready
+    // (neighborhood from web would be stripped by allowlist, but contributor already provided it)
     mockedWebSearch.mockResolvedValue({ category: "cafe", price_range: "$$" });
 
     const conv = makeConversation({

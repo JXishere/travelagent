@@ -18,8 +18,8 @@ import { getDefaultCity } from "../utils/city-defaults.js";
 
 /** Only these fields may be filled from web search — everything else must come from the contributor */
 const WEB_ALLOWED_FIELDS = new Set([
-  "name", "category", "neighborhood", "city",
-  "address", "price_range", "payment_methods",
+  "name", "category", "city",
+  "price_range", "payment_methods",
 ]);
 
 interface ExtractedSpot {

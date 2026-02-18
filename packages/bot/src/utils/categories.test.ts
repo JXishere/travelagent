@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveCategories, MEAL_TYPE_CATEGORIES, TIME_OF_DAY_CATEGORIES } from "./categories.js";
+import { resolveCategories, MEAL_TYPE_CATEGORIES, TIME_OF_DAY_CATEGORIES, DEFAULT_CATEGORIES } from "./categories.js";
 
 describe("resolveCategories", () => {
   it("maps breakfast to breakfast + cafe", () => {
@@ -23,8 +23,11 @@ describe("resolveCategories", () => {
     expect(resolveCategories("Dinner")).toEqual(["dinner"]);
   });
 
-  it("falls back to meal type as category for unknown types", () => {
-    expect(resolveCategories("sushi")).toEqual(["sushi"]);
+  it("returns null for unknown meal types (dish queries)", () => {
+    expect(resolveCategories("sushi")).toBeNull();
+    expect(resolveCategories("roti")).toBeNull();
+    expect(resolveCategories("nasi lemak")).toBeNull();
+    expect(resolveCategories("laksa")).toBeNull();
   });
 
   it("uses time of day when no meal type", () => {
@@ -40,8 +43,14 @@ describe("resolveCategories", () => {
     expect(resolveCategories()).toEqual(["breakfast", "lunch", "dinner", "cafe"]);
   });
 
-  it("returns empty array for unknown time of day", () => {
-    expect(resolveCategories(undefined, "midnight")).toEqual([]);
+  it("returns null for unknown time of day", () => {
+    expect(resolveCategories(undefined, "midnight")).toBeNull();
+  });
+});
+
+describe("DEFAULT_CATEGORIES", () => {
+  it("includes standard food categories", () => {
+    expect(DEFAULT_CATEGORIES).toEqual(["breakfast", "lunch", "dinner", "cafe"]);
   });
 });
 

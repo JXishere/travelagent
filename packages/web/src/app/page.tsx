@@ -17,13 +17,18 @@ export default async function Home() {
   return (
     <main className="flex min-h-dvh items-center justify-center px-6">
       <div className="w-full max-w-md space-y-10 text-center">
+        {/* Tagline */}
+        <p className="text-sm uppercase tracking-widest" style={{ color: "var(--muted)" }}>
+          The friend who lives in every city
+        </p>
+
         {/* Headline */}
-        <h1 className="text-2xl font-medium tracking-tight">
+        <h1 className="-mt-6 text-2xl font-medium tracking-tight">
           Know a spot? Tell Sam.
         </h1>
 
         {/* Subhead */}
-        <p style={{ color: "var(--muted)" }}>
+        <p className="-mt-6" style={{ color: "var(--muted)" }}>
           Sam is learning <RotatingCity cities={cities} />.
         </p>
 

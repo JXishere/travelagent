@@ -7,6 +7,7 @@ vi.mock("../weather.js", () => ({}));
 
 import {
   confidenceLabel,
+  sourceLabel,
   formatOpeningHours,
   formatSpotsForLLM,
 } from "./query.js";
@@ -136,5 +137,38 @@ describe("formatSpotsForLLM", () => {
     const spot: Spot = { ...baseSpot, confidence_score: 0.95 };
     const result = formatSpotsForLLM([spot]);
     expect(result).toContain("personal favorite");
+  });
+
+  it("includes source in Sam's take line", () => {
+    const spot: Spot = { ...baseSpot, source: "voice", confidence_score: 0.7 };
+    const result = formatSpotsForLLM([spot]);
+    expect(result).toContain("Sam's take: well-vouched (from local contributor (voice note))");
+  });
+
+  it("defaults source to 'curated by Sam' when missing", () => {
+    const result = formatSpotsForLLM([baseSpot]);
+    expect(result).toContain("Sam's take: well-vouched (from curated by Sam)");
+  });
+});
+
+describe("sourceLabel", () => {
+  it("returns 'local contributor (voice note)' for voice", () => {
+    expect(sourceLabel("voice")).toBe("local contributor (voice note)");
+  });
+
+  it("returns 'local contributor' for text", () => {
+    expect(sourceLabel("text")).toBe("local contributor");
+  });
+
+  it("returns 'curated by Sam' for seed", () => {
+    expect(sourceLabel("seed")).toBe("curated by Sam");
+  });
+
+  it("returns 'curated by Sam' for manual", () => {
+    expect(sourceLabel("manual")).toBe("curated by Sam");
+  });
+
+  it("returns 'curated by Sam' for undefined", () => {
+    expect(sourceLabel(undefined)).toBe("curated by Sam");
   });
 });

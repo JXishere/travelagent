@@ -14,7 +14,9 @@ const supabase = createClient(
 
 async function loadResearchSpots(): Promise<any[]> {
   const results: any[] = [];
+  // @ts-ignore — optional seed files that may not exist
   try { results.push(...(await import("./seeds/kl-research.js")).spots); } catch {}
+  // @ts-ignore — optional seed files that may not exist
   try { results.push(...(await import("./seeds/pj-research.js")).spots); } catch {}
   return results;
 }

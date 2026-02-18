@@ -11,6 +11,7 @@ Sam is a travel intelligence bot for Kuala Lumpur, available on WhatsApp and the
 - **LLM**: Claude API via `@anthropic-ai/sdk` — default model is Haiku (`claude-haiku-4-5-20251001`), Sonnet (`claude-sonnet-4-5-20250929`) available for heavier tasks
 - **Voice**: OpenAI Whisper (voice note transcription)
 - **Weather**: OpenWeather API (context-aware recommendations)
+- **Embeddings**: OpenAI `text-embedding-3-small` (pgvector semantic search)
 
 ## Monorepo Structure
 
@@ -28,6 +29,13 @@ packages/
 │   │   ├── weather.ts          — OpenWeather integration
 │   │   ├── scheduler.ts        — Proactive message engine (5-min interval)
 │   │   ├── seed.ts             — Knowledge graph seeding (42 KL spots with lat/lng)
+│   │   ├── coach.ts            — Self-coaching: reviews conversations, suggests prompt improvements
+│   │   ├── coach-auto.ts       — Automated coaching: analyze → apply → validate → commit
+│   │   ├── embeddings.ts       — OpenAI embeddings for pgvector semantic search
+│   │   ├── backfill-embeddings.ts — Backfill script for spots missing embeddings
+│   │   ├── eval/
+│   │   │   ├── eval-runner.ts         — Prompt evaluation framework
+│   │   │   └── scenarios/             — JSONL test scenarios per prompt
 │   │   ├── handlers/
 │   │   │   ├── query.ts              — "I'm hungry" → spot recommendations
 │   │   │   ├── contribution.ts       — Voice note → structured spot ingestion
@@ -45,10 +53,12 @@ packages/
 │   │   │   ├── strategic.txt          — Strategic trip planning format
 │   │   │   ├── proactive.txt          — Proactive message voice + style
 │   │   │   ├── feedback.txt           — Feedback response parsing
-│   │   │   └── generate.txt           — Spot content generation prompt
+│   │   │   ├── generate.txt           — Spot content generation prompt
+│   │   │   └── coach.txt              — Coaching evaluation prompt
 │   │   └── utils/
 │   │       ├── categories.ts          — Category mappings + synonyms
-│   │       └── city-defaults.ts       — Per-city coordinates, timezone, locale
+│   │       ├── city-defaults.ts       — Per-city coordinates, timezone, locale
+│   │       └── geo.ts                 — Haversine distance, nearby filtering
 │   ├── vitest.config.ts
 │   ├── package.json
 │   └── tsconfig.json
@@ -60,6 +70,8 @@ packages/
 │   │   │   ├── globals.css            — Tailwind v4 + custom vars
 │   │   │   ├── chat/
 │   │   │   │   └── page.tsx           — Chat interface page
+│   │   │   ├── review/
+│   │   │   │   └── page.tsx           — Spot review/curation admin UI
 │   │   │   └── api/
 │   │   │       └── chat/
 │   │   │           └── route.ts       — SSE streaming endpoint (imports @sam/bot)
@@ -67,9 +79,13 @@ packages/
 │   │   │   ├── chat-bubble.tsx        — Message bubble (user/Sam)
 │   │   │   ├── chat-input.tsx         — Message input bar
 │   │   │   ├── chat-messages.tsx      — Scrollable message list
-│   │   │   └── prompt-input.tsx       — Landing page prompt input
+│   │   │   ├── prompt-input.tsx       — Landing page prompt input
+│   │   │   ├── rotating-city.tsx      — Animated city name rotator for landing page
+│   │   │   ├── spot-card.tsx          — Expandable spot card with edit/approve/delete
+│   │   │   └── spot-filters.tsx       — Filter by category/neighborhood/tier/source
 │   │   └── lib/
-│   │       └── supabase.ts            — Supabase client + getCityStats()
+│   │       ├── rate-limit.ts          — Rate limiting utility
+│   │       └── supabase.ts            — Supabase client, getAllSpots(), updateSpot(), deleteSpot(), getCityStats()
 │   ├── next.config.ts                 — Env forwarding, @sam/bot transpilation
 │   ├── package.json
 │   └── tsconfig.json
@@ -91,6 +107,8 @@ npm run build:web  # Build web only
 npm run start      # Run compiled bot
 npm run seed       # Populate knowledge graph with KL spots
 npm test           # Run bot tests (vitest)
+npm run coach      # Run self-coaching analysis on recent conversations
+npm run coach:auto # Automated coaching: analyze → apply → validate → commit
 ```
 
 ## Code Rules
@@ -106,7 +124,7 @@ npm test           # Run bot tests (vitest)
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `spots` | Knowledge graph | name, neighborhood, category, tier(1-3), what_to_order[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, confidence_score, use_count, source, contributor_id |
+| `spots` | Knowledge graph | name, neighborhood, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
 | `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], spots_contributed |
 | `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_neighborhoods[], trips_taken |
 | `conversations` | State management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |

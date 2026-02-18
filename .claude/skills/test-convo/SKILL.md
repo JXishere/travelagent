@@ -23,6 +23,8 @@ Read these files to understand the full flow:
 - `src/llm.ts` — intent classification and chat functions
 - `src/database.ts` — DB query patterns
 - `src/handlers/` — all handler files (query.ts, ontrip.ts, profile.ts, continuous-profile.ts, strategic.ts, contribution.ts, feedback.ts, generate.ts)
+- `src/utils/geo.ts` — haversine distance, nearby filtering
+- `src/utils/categories.ts` — category mappings + synonyms
 - `src/prompts/` — all prompt files (system.txt, extraction.txt, profile.txt, continuous_profile.txt, strategic.txt, generate.txt)
 
 ### 2. Simulate the Flow

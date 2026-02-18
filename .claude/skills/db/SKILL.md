@@ -52,6 +52,8 @@ console.log(JSON.stringify(data, null, 2));
 
 **feedback**: id, spot_id, traveler_id, rating (1-5), did_they_go, comments, user_tips[]
 
+**events**: id, session_id, channel (web|whatsapp), event_type, event_data (jsonb), created_at
+
 ## Output
 
 Always format results as a clean markdown table. Include a row count at the bottom.

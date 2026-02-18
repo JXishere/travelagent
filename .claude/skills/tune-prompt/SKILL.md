@@ -25,6 +25,7 @@ Read the prompt file and understand its purpose:
 - `continuous_profile.txt` — Background profile extraction from every message
 - `strategic.txt` — Pre-trip strategic planning format
 - `generate.txt` — Spot content generation prompt (admin)
+- `coach.txt` — Coaching evaluation prompt
 
 Also read `src/llm.ts` to understand how the prompt is used (temperature, max tokens, expected output format).
 

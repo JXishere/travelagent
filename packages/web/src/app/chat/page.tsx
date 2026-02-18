@@ -23,14 +23,36 @@ function Chat() {
   const initialSent = useRef(false);
 
   useEffect(() => {
-    sessionIdRef.current = getOrCreateSessionId();
+    const q = searchParams.get("q");
+    if (q) {
+      // Arriving from landing page — start fresh
+      const newId = crypto.randomUUID();
+      localStorage.setItem("sam-session-id", newId);
+      sessionIdRef.current = newId;
+    } else {
+      sessionIdRef.current = getOrCreateSessionId();
+      // Load existing conversation history
+      fetch(`/api/chat?sessionId=${sessionIdRef.current}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.messages?.length) {
+            setMessages(
+              data.messages.map((m: { role: string; content: string }) => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+              }))
+            );
+          }
+        })
+        .catch(() => {}); // silently fail — empty chat is fine
+    }
   }, []);
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (isStreaming) return;
 
-      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setMessages((prev) => [...prev, { role: "user", content: text, timestamp: Date.now() }]);
       setIsStreaming(true);
 
       // Don't add empty assistant message yet — let typing indicator show
@@ -55,6 +77,7 @@ function Chat() {
               content:
                 data.error ||
                 "Hey, you've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+              timestamp: Date.now(),
             },
           ]);
           return;
@@ -94,7 +117,7 @@ function Chat() {
                   assistantAdded = true;
                   setMessages((prev) => [
                     ...prev,
-                    { role: "assistant", content: parsed.text },
+                    { role: "assistant", content: parsed.text, timestamp: Date.now() },
                   ]);
                 } else {
                   setMessages((prev) => {
@@ -127,7 +150,7 @@ function Chat() {
 
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: errorMessage },
+          { role: "assistant", content: errorMessage, timestamp: Date.now() },
         ]);
       } finally {
         setIsStreaming(false);

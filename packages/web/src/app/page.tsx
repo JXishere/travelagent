@@ -14,9 +14,6 @@ export default async function Home() {
     getDistinctCities(),
   ]);
   const pct = Math.min(Math.round((stats.spot_count / GOAL) * 100), 100);
-  const whatsappNumber = process.env.ADMIN_PHONE_NUMBER || "";
-  const waLink = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent("I know a spot")}`;
-
   return (
     <main className="flex min-h-dvh items-center justify-center px-6">
       <div className="w-full max-w-md space-y-10 text-center">
@@ -54,13 +51,11 @@ export default async function Home() {
 
         {/* CTA */}
         <a
-          href={waLink}
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/chat"
           className="inline-block rounded-lg px-8 py-3 text-sm font-semibold text-black transition-colors hover:opacity-90"
           style={{ backgroundColor: "var(--green)" }}
         >
-          Tell Sam what you know
+          Chat with Sam
         </a>
       </div>
     </main>

@@ -29,6 +29,18 @@ import {
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
 
+export async function GET(req: NextRequest) {
+  const sessionId = req.nextUrl.searchParams.get("sessionId");
+  if (!sessionId) return Response.json({ messages: [] });
+
+  try {
+    const conversation = await getOrCreateConversation(sessionId);
+    return Response.json({ messages: conversation.messages });
+  } catch {
+    return Response.json({ messages: [] });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";

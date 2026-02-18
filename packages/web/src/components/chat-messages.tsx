@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatBubble } from "./chat-bubble";
 
-export type Message = { role: "user" | "assistant"; content: string };
+export type Message = { role: "user" | "assistant"; content: string; timestamp?: number };
 
 export function ChatMessages({
   messages,
@@ -57,7 +57,7 @@ export function ChatMessages({
         </div>
       )}
       {messages.map((msg, i) => (
-        <ChatBubble key={i} role={msg.role} content={msg.content} />
+        <ChatBubble key={i} role={msg.role} content={msg.content} timestamp={msg.timestamp} />
       ))}
       {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
         <div className="flex justify-start mb-3">

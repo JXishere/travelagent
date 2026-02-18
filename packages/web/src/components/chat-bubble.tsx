@@ -1,5 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+/** Format a timestamp as relative time */
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
 /** Render inline formatting: **bold**, *italic* */
 function renderInline(line: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
@@ -77,26 +91,72 @@ function renderMarkdown(text: string): React.ReactNode[] {
 export function ChatBubble({
   role,
   content,
+  timestamp,
 }: {
   role: "user" | "assistant";
   content: string;
+  timestamp?: number;
 }) {
   const isUser = role === "user";
+  const [timeStr, setTimeStr] = useState(() => timestamp ? relativeTime(timestamp) : "");
+  const [copied, setCopied] = useState(false);
+
+  // Update relative time every 30s
+  useEffect(() => {
+    if (!timestamp) return;
+    const interval = setInterval(() => {
+      setTimeStr(relativeTime(timestamp));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [timestamp]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-          isUser
-            ? "rounded-br-sm"
-            : "rounded-bl-sm"
-        }`}
-        style={{
-          backgroundColor: isUser ? "var(--green)" : "var(--bar-bg)",
-          color: isUser ? "#0a0a0a" : "var(--fg)",
-        }}
-      >
-        {isUser ? content : renderMarkdown(content)}
+      <div className="flex flex-col" style={{ maxWidth: "85%" }}>
+        <div
+          className={`group relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+            isUser
+              ? "rounded-br-sm"
+              : "rounded-bl-sm"
+          }`}
+          style={{
+            backgroundColor: isUser ? "var(--green)" : "var(--bar-bg)",
+            color: isUser ? "#0a0a0a" : "var(--fg)",
+          }}
+        >
+          {isUser ? content : renderMarkdown(content)}
+          {!isUser && (
+            <button
+              onClick={handleCopy}
+              className="absolute top-1.5 right-1.5 rounded p-1 opacity-0 transition-opacity group-hover:opacity-70 hover:!opacity-100 max-sm:opacity-40"
+              style={{ color: "var(--muted)" }}
+              aria-label="Copy message"
+            >
+              {copied ? (
+                <span className="text-[11px]">Copied!</span>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
+        {timeStr && (
+          <span
+            className={`mt-1 text-[10px] ${isUser ? "text-right" : "text-left"}`}
+            style={{ color: "var(--muted)", opacity: 0.6 }}
+          >
+            {timeStr}
+          </span>
+        )}
       </div>
     </div>
   );

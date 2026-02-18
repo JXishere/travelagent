@@ -100,6 +100,7 @@ npm test           # Run bot tests (vitest)
 3. **Keep WhatsApp messages concise.** People read these on phones — short paragraphs, no walls of text.
 4. **Operational intelligence is the product.** Always include: what to order, payment, hours, pro tips. Not just "it's good."
 5. **Sam has personality.** Warm, opinionated, slightly irreverent. He's your friend who lives in KL, not a search engine.
+6. **SQL changes go in migrations, not schema.sql.** `supabase/schema.sql` is the reference schema — don't append to it. Create a new migration file in `supabase/migrations/` using the naming convention `YYYYMMDD_HHMMSS_description.sql`. Update the migration log in `supabase/migrations/README.md`.
 
 ## Schema Overview
 

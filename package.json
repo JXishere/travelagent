@@ -10,6 +10,8 @@
     "build:web": "npm run build -w @sam/web",
     "start": "npm run start -w @sam/bot",
     "seed": "npm run seed -w @sam/bot",
-    "test": "npm run test -w @sam/bot"
+    "test": "npm run test -w @sam/bot",
+    "coach": "npm run coach -w @sam/bot",
+    "coach:auto": "npm run coach:auto -w @sam/bot"
   }
 }

@@ -1,0 +1,66 @@
+name: Self-Coach
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9am UTC (5pm MYT)
+  workflow_dispatch: {} # Manual trigger from GitHub UI
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  coach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run self-coach
+        id: coach
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npx tsx packages/bot/src/coach-auto.ts
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet packages/bot/src/prompts/system.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="coach/$(date +%Y-%m-%d)"
+          git checkout -b "$BRANCH"
+          git add packages/bot/src/prompts/system.txt
+          git config user.name "Sam Self-Coach"
+          git config user.email "noreply@samiseverywhere.com"
+          git commit -m "coach: improve system.txt based on conversation analysis"
+          git push -u origin "$BRANCH"
+
+          REPORT=""
+          if [ -f packages/bot/coach-report.md ]; then
+            REPORT=$(cat packages/bot/coach-report.md)
+          fi
+
+          gh pr create \
+            --title "Coach: system.txt improvements ($(date +%b\ %d))" \
+            --body "$REPORT" \
+            --base main \
+            --head "$BRANCH"

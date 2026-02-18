@@ -20,6 +20,12 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - name: Build
+        env:
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_KEY: placeholder
+          ANTHROPIC_API_KEY: placeholder
+          OPENAI_API_KEY: placeholder
+        run: npm run build
 
       - run: npm test

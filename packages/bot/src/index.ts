@@ -3,7 +3,7 @@
 
 import express from "express";
 import { parseWebhook, sendMessage, showTyping } from "./whatsapp.js";
-import { chatAsSam, classifyIntent, extractJSON } from "./llm.js";
+import { chatAsSam, classifyIntent, extractJSON, startUsageTracking, flushUsage } from "./llm.js";
 import {
   getOrCreateConversation,
   updateConversation,
@@ -91,8 +91,13 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   touchLastUserMessage(from).catch(() => {});
   const currentFlow = conversation.current_flow;
 
+  startUsageTracking(from);
+  let usageIntent: string = currentFlow;
+
+  try {
   // Location pin → route to nearby handler
   if (type === "location" && location) {
+    usageIntent = "nearby";
     const response = await handleNearby(from, `I'm at ${location.latitude}, ${location.longitude}`, {
       area: undefined,
       specific_place: `${location.latitude},${location.longitude}`,
@@ -227,6 +232,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     .join("\n");
 
   const { intent, details } = await classifyIntent(text, recentContext);
+  usageIntent = intent;
 
   trackEvent(from, "whatsapp", "message", { intent });
 
@@ -296,6 +302,18 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     { role: "user", content: text },
     { role: "assistant", content: response },
   ], intent).catch(() => {});
+
+  } finally {
+    const usage = flushUsage(from);
+    if (usage && usage.calls > 0) {
+      trackEvent(from, "whatsapp", "llm_usage", {
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        calls: usage.calls,
+        intent: usageIntent,
+      });
+    }
+  }
 }
 
 /** Route to the current active flow */

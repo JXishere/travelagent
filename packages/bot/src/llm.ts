@@ -10,6 +10,36 @@ const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 export const SONNET = "claude-sonnet-4-5-20250929";
 export const HAIKU = "claude-haiku-4-5-20251001";
 
+// --- Per-request token tracking ---
+interface UsageBucket {
+  input_tokens: number;
+  output_tokens: number;
+  calls: number;
+}
+const _usage = new Map<string, UsageBucket>();
+
+/** Start tracking tokens for a session (call at start of processMessage) */
+export function startUsageTracking(sessionId: string): void {
+  _usage.set(sessionId, { input_tokens: 0, output_tokens: 0, calls: 0 });
+}
+
+/** Flush accumulated usage and return it (call at end of processMessage) */
+export function flushUsage(sessionId: string): UsageBucket | null {
+  const bucket = _usage.get(sessionId);
+  _usage.delete(sessionId);
+  return bucket ?? null;
+}
+
+/** Internal: accumulate tokens for the active session */
+function recordUsage(model: string, usage: { input_tokens: number; output_tokens: number }): void {
+  // Accumulate into all active buckets (typically just one)
+  for (const bucket of _usage.values()) {
+    bucket.input_tokens += usage.input_tokens;
+    bucket.output_tokens += usage.output_tokens;
+    bucket.calls += 1;
+  }
+}
+
 let promptsDir = join(__dirname, "prompts");
 
 /** Override the prompts directory (for use outside the bot package, e.g. Next.js) */
@@ -35,13 +65,16 @@ export async function chat(
   messages: ChatMessage[],
   options?: { maxTokens?: number; temperature?: number; model?: string }
 ): Promise<string> {
+  const model = options?.model ?? HAIKU;
   const response = await client.messages.create({
-    model: options?.model ?? HAIKU,
+    model,
     max_tokens: options?.maxTokens ?? 512,
     system: systemPrompt,
     messages,
     temperature: options?.temperature ?? 0.7,
   });
+
+  recordUsage(model, response.usage);
 
   const block = response.content[0];
   if (block.type === "text") return block.text;
@@ -78,13 +111,21 @@ export function chatStream(
   messages: ChatMessage[],
   options?: { maxTokens?: number; temperature?: number; model?: string }
 ) {
-  return client.messages.stream({
-    model: options?.model ?? HAIKU,
+  const model = options?.model ?? HAIKU;
+  const stream = client.messages.stream({
+    model,
     max_tokens: options?.maxTokens ?? 512,
     system: systemPrompt,
     messages,
     temperature: options?.temperature ?? 0.7,
   });
+
+  // Auto-record usage when stream completes
+  stream.on('message', (msg) => {
+    recordUsage(model, msg.usage);
+  });
+
+  return stream;
 }
 
 /** Streaming chat with Sam's personality */
@@ -193,6 +234,8 @@ Return ONLY the JSON object, no markdown fences or extra text.`;
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
     });
 
+    recordUsage(HAIKU, response.usage);
+
     // Get the LAST text block — earlier ones are just search narration
     const textBlocks = response.content.filter((b) => b.type === "text");
     const textBlock = textBlocks[textBlocks.length - 1];
@@ -248,15 +291,18 @@ Classify the user's message into exactly one intent:
 
 PRIORITY RULES:
 1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
-2. CONTINUATION: If the recent conversation shows Sam asked a clarifying question about food/dining (e.g., "what area?", "where are you based?") and the user answers with a location or preference, classify as "hungry" — the user is continuing a food request.
-3. Only use "profile" for messages with ZERO actionable food/activity requests.
+2. CONTINUATION: If the recent conversation shows the user asked about food/dining and Sam responded with a clarifying question (e.g., "what area?", "where are you?", "where are you based?", "what part of KL?"), then the user's answer is a CONTINUATION of the food request — classify as "hungry". This applies even if the user's reply is just a location name like "PJ" or "Bangsar" or "maybe KL".
+3. Only use "profile" for messages with ZERO actionable food/activity requests AND no recent food conversation context.
+4. "nearby" is ONLY for when the user says they are physically AT a location and want to see what's around them (e.g., "I'm near KLCC", "what's around Bukit Bintang"). Do NOT use "nearby" for follow-up answers to food questions.
 
 Examples:
 - "i need a place to go for my birthday, thinking some place chill, japanese food with my close friend" → hungry (birthday dinner + japanese food)
 - "grab some ramen tonight" → hungry
 - "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
 - "planning a trip to KL next week" → profile (no food/activity request)
-- "PJ/KL" (after Sam asked "what area?") → hungry (continuation)
+- "PJ/KL" (after Sam asked "what area?" about food) → hungry (continuation)
+- "maybe around PJ or KL" (after Sam asked "where are you?" about food) → hungry (continuation — extract area)
+- "Bangsar" (after Sam asked "where are you heading?") → hungry (continuation)
 - "I like spicy food and street markets" → profile (preferences, no specific request)
 
 Also extract any relevant details: area, meal_type, time_of_day, mood/energy, specific_place, cuisine.
@@ -278,7 +324,17 @@ Respond in JSON only:
   try {
     const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)```/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : result.trim();
-    return JSON.parse(jsonStr);
+    const parsed = JSON.parse(jsonStr);
+    // Normalize details: the LLM sometimes returns arrays (e.g. area: ["PJ", "KL"])
+    // but downstream code expects string values. Join arrays with " or ".
+    if (parsed.details) {
+      for (const [key, value] of Object.entries(parsed.details)) {
+        if (Array.isArray(value)) {
+          parsed.details[key] = value.join(" or ");
+        }
+      }
+    }
+    return parsed;
   } catch (error) {
     console.error("classifyIntent JSON parse failed:", error, "raw:", result);
     return { intent: "general", details: {} };

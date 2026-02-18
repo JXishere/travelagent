@@ -17,6 +17,8 @@ import {
   classifyIntent,
   chatAsSamStream,
   chatStream,
+  startUsageTracking,
+  flushUsage,
 } from "@sam/bot/llm";
 import { handleContribution } from "@sam/bot/handlers/contribution";
 import { handleQuery } from "@sam/bot/handlers/query";
@@ -94,6 +96,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    startUsageTracking(sessionId);
     const conversation = await getOrCreateConversation(sessionId);
     const currentFlow = conversation.current_flow;
 
@@ -121,6 +124,7 @@ export async function POST(req: NextRequest) {
         currentFlow
       ).catch(() => {});
 
+      flushAndTrackUsage(sessionId, currentFlow);
       return sseTextResponse(response, remaining);
     }
 
@@ -183,11 +187,12 @@ export async function POST(req: NextRequest) {
       intent
     ).catch(() => {});
 
+    flushAndTrackUsage(sessionId, intent);
     return sseTextResponse(response, remaining);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[web-chat] Error:", msg, error);
-    // Keep the user in flow — don't reset state so they can retry
+    flushUsage(sessionId); // Clean up tracking bucket
     return sseTextResponse("Sorry, something went wrong on my end. Try sending that again?");
   }
 }
@@ -285,6 +290,7 @@ async function streamHandlerResponse(
         { role: "user", content: message },
         { role: "assistant", content: response },
       ], intent).catch(() => {});
+      flushAndTrackUsage(sessionId, "weather");
       return sseTextResponse(response, rateLimitRemaining);
     }
     case "general":
@@ -318,6 +324,20 @@ async function handleGeneral(
   );
 }
 
+// --- Usage tracking helper ---
+
+function flushAndTrackUsage(sessionId: string, intent: string) {
+  const usage = flushUsage(sessionId);
+  if (usage && usage.calls > 0) {
+    trackEvent(sessionId, "web", "llm_usage", {
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens,
+      calls: usage.calls,
+      intent,
+    });
+  }
+}
+
 // --- SSE helpers ---
 
 /** Stream a Claude MessageStream as SSE, save conversation after */
@@ -346,6 +366,9 @@ function streamSSE(
             );
           }
         }
+
+        // Flush token usage tracking after stream completes
+        flushAndTrackUsage(sessionId, intent);
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

@@ -3,6 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { getDefaultCity } from "./utils/city-defaults.js";
 
 const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 
@@ -50,9 +51,11 @@ export async function chat(
 /** Chat with Sam's personality — the main conversation mode */
 export async function chatAsSam(
   history: ChatMessage[],
-  userMessage: string
+  userMessage: string,
+  options?: { city?: string }
 ): Promise<string> {
-  const systemPrompt = loadPrompt("system");
+  const city = options?.city ?? getDefaultCity();
+  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city);
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },
@@ -78,9 +81,11 @@ export function chatStream(
 /** Streaming chat with Sam's personality */
 export function chatAsSamStream(
   history: ChatMessage[],
-  userMessage: string
+  userMessage: string,
+  options?: { city?: string }
 ) {
-  const systemPrompt = loadPrompt("system");
+  const city = options?.city ?? getDefaultCity();
+  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city);
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },

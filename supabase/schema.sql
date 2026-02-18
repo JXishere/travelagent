@@ -157,3 +157,22 @@ create policy "Service role full access" on contributors for all using (true);
 create policy "Service role full access" on travelers for all using (true);
 create policy "Service role full access" on conversations for all using (true);
 create policy "Service role full access" on feedback for all using (true);
+
+-- ============================================
+-- EVENTS — Analytics / usage tracking
+-- ============================================
+create table events (
+  id uuid primary key default uuid_generate_v4(),
+  session_id text not null,
+  channel text not null check (channel in ('web', 'whatsapp')),
+  event_type text not null,
+  event_data jsonb default '{}',
+  created_at timestamp with time zone default now()
+);
+
+create index idx_events_session on events(session_id);
+create index idx_events_type on events(event_type);
+create index idx_events_created on events(created_at);
+
+alter table events enable row level security;
+create policy "Service role full access" on events for all using (true);

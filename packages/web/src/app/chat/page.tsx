@@ -33,8 +33,8 @@ function Chat() {
       setMessages((prev) => [...prev, { role: "user", content: text }]);
       setIsStreaming(true);
 
-      // Add empty assistant message that we'll stream into
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      // Don't add empty assistant message yet — let typing indicator show
+      let assistantAdded = false;
 
       try {
         const res = await fetch("/api/chat", {
@@ -48,24 +48,25 @@ function Chat() {
 
         if (res.status === 429) {
           const data = await res.json();
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last?.role === "assistant") {
-              updated[updated.length - 1] = {
-                ...last,
-                content:
-                  data.error ||
-                  "Hey, you've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
-              };
-            }
-            return updated;
-          });
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                data.error ||
+                "Hey, you've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+            },
+          ]);
           return;
         }
 
         if (!res.ok || !res.body) {
-          throw new Error("Failed to connect");
+          const isServerError = res.status >= 500;
+          throw new Error(
+            isServerError
+              ? "Sam's taking a breather — try again in a moment."
+              : "Failed to connect"
+          );
         }
 
         const reader = res.body.getReader();
@@ -88,17 +89,26 @@ function Chat() {
             try {
               const parsed = JSON.parse(data);
               if (parsed.text) {
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last?.role === "assistant") {
-                    updated[updated.length - 1] = {
-                      ...last,
-                      content: last.content + parsed.text,
-                    };
-                  }
-                  return updated;
-                });
+                if (!assistantAdded) {
+                  // Add assistant message on first chunk
+                  assistantAdded = true;
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "assistant", content: parsed.text },
+                  ]);
+                } else {
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last?.role === "assistant") {
+                      updated[updated.length - 1] = {
+                        ...last,
+                        content: last.content + parsed.text,
+                      };
+                    }
+                    return updated;
+                  });
+                }
               }
             } catch {
               // skip malformed chunks
@@ -107,23 +117,32 @@ function Chat() {
         }
       } catch (error) {
         console.error("Chat error:", error);
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === "assistant" && !last.content) {
-            updated[updated.length - 1] = {
-              ...last,
-              content: "Sorry, something went wrong. Try again?",
-            };
-          }
-          return updated;
-        });
+        const isNetworkError =
+          error instanceof TypeError && error.message === "Failed to fetch";
+        const errorMessage = isNetworkError
+          ? "Looks like you're offline — check your connection and try again."
+          : error instanceof Error && error.message !== "Failed to connect"
+            ? error.message
+            : "Sam's taking a breather — try again in a moment.";
+
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: errorMessage },
+        ]);
       } finally {
         setIsStreaming(false);
       }
     },
     [isStreaming]
   );
+
+  const newConversation = useCallback(() => {
+    if (isStreaming) return;
+    const newId = crypto.randomUUID();
+    localStorage.setItem("sam-session-id", newId);
+    sessionIdRef.current = newId;
+    setMessages([]);
+  }, [isStreaming]);
 
   // Auto-send initial query from search params
   useEffect(() => {
@@ -143,9 +162,21 @@ function Chat() {
         <a href="/" className="text-sm font-medium" style={{ color: "var(--green)" }}>
           sam
         </a>
-        <span className="text-xs" style={{ color: "var(--muted)" }}>
-          {(process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur").toLowerCase()}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs" style={{ color: "var(--muted)" }}>
+            {(process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur").toLowerCase()}
+          </span>
+          {messages.length > 0 && (
+            <button
+              onClick={newConversation}
+              disabled={isStreaming}
+              className="rounded-md px-2 py-1 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+              style={{ backgroundColor: "var(--bar-bg)", color: "var(--muted)" }}
+            >
+              new chat
+            </button>
+          )}
+        </div>
       </header>
 
       <ChatMessages messages={messages} isStreaming={isStreaming} />

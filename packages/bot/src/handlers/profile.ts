@@ -5,6 +5,7 @@ import {
   getOrCreateTraveler,
   updateTraveler,
   updateConversation,
+  trackEvent,
   type Conversation,
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
@@ -64,6 +65,8 @@ export async function handleProfile(
     const profile = await extractJSON<ExtractedProfile>(
       "continuous_profile",
       `Extract a user profile from this conversation. Determine if they are a "local" or "traveler" based on context. For locals, extract home_neighborhoods and cuisine_preferences. For travelers, extract trip_dates, travel_party, first_time_visitor.\n\n${fullConvo}`,
+      undefined,
+      { templateVars: { CITY: getDefaultCity() } },
     );
 
     // Save to database
@@ -91,6 +94,11 @@ export async function handleProfile(
     }
 
     await updateTraveler(phoneNumber, travelerUpdates);
+
+    trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+      flow: "profile",
+      user_type: profile.user_type,
+    });
 
     // Branch flow based on user type
     if (profile.user_type === "local") {
@@ -148,7 +156,8 @@ export async function startProfileLearning(
     );
   }
 
-  return `Hey! I'm Sam — your KL insider.
+  const city = getDefaultCity();
+  return `Hey! I'm Sam — your ${city} insider.
 
-Whether you're visiting or you live here, I'll point you to the best spots. Quick question: are you planning a trip to KL, or do you live here?`;
+Whether you're visiting or you live here, I'll point you to the best spots. Quick question: are you planning a trip to ${city}, or do you live here?`;
 }

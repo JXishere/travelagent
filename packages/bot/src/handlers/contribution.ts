@@ -10,6 +10,7 @@ import {
   getOrCreateContributor,
   incrementContributorCount,
   updateConversation,
+  trackEvent,
   type Conversation,
   type Spot,
 } from "../database.js";
@@ -205,7 +206,9 @@ async function extractWithContext(
     : undefined;
 
   try {
-    return await extractJSON<ExtractedSpot>("extraction", input, context);
+    return await extractJSON<ExtractedSpot>("extraction", input, context, {
+      templateVars: { CITY: getDefaultCity() },
+    });
   } catch (error) {
     console.error("Spot extraction failed:", error, "input:", input.slice(0, 200));
     return {};
@@ -222,6 +225,14 @@ export async function enrichFromWeb(
 
   const city = data.city || getDefaultCity();
   const webData = await webSearchSpot(data.name, city, data.category);
+
+  // Strip opinion fields — web search should only fill operational/factual data.
+  // Contributor voice is Sam's core value; opinions stay contributor-only.
+  const opinionFields = ["what_to_order", "what_to_skip", "pro_tips", "vibe", "tier", "best_time_of_day"];
+  for (const field of opinionFields) {
+    delete webData[field];
+  }
+
   if (Object.keys(webData).length === 0) {
     return { enriched: data, didEnrich: false };
   }
@@ -479,6 +490,12 @@ async function saveSpot(
   await updateConversation(phoneNumber, {
     current_flow: "general",
     flow_state: {},
+  });
+
+  trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+    flow: "contribution",
+    spot_name: data.name,
+    source,
   });
 
   return `Added *${data.name}* to the knowledge graph! 🎉\n\nYou've contributed ${updated.spots_contributed} spot${updated.spots_contributed === 1 ? "" : "s"} total. The more you share, the better Sam gets for everyone.`;

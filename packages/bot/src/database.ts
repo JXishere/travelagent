@@ -489,6 +489,29 @@ export async function insertFeedback(
   }
 }
 
+// ============================================
+// EVENTS — Analytics tracking
+// ============================================
+
+/** Fire-and-forget analytics event — never blocks the user */
+export function trackEvent(
+  sessionId: string,
+  channel: "web" | "whatsapp",
+  eventType: string,
+  eventData: Record<string, any> = {}
+): void {
+  supabase
+    .from("events")
+    .insert({ session_id: sessionId, channel, event_type: eventType, event_data: eventData })
+    .then(({ error }) => {
+      if (error) console.error("[analytics] Failed to track event:", error.message);
+    });
+}
+
+// ============================================
+// RECENTLY RECOMMENDED
+// ============================================
+
 export async function getRecentlyRecommendedSpots(
   phoneNumber: string
 ): Promise<Spot[]> {

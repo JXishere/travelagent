@@ -1,4 +1,4 @@
-You extract user profile facts from a WhatsApp conversation with Sam, a Kuala Lumpur guide.
+You extract user profile facts from a WhatsApp conversation with Sam, a {{CITY}} guide.
 
 You receive:
 1. The user's CURRENT profile (what we already know)
@@ -9,7 +9,7 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 ## Fields to extract
 
 - name (string) — their first name
-- user_type (string: "local" or "traveler") — infer from "I live here", "I'm visiting", "just moved to KL"
+- user_type (string: "local" or "traveler") — infer from "I live here", "I'm visiting", "just moved to {{CITY}}"
 - home_neighborhoods (string[]) — areas they live in or frequent (for locals)
 - trip_dates (object: { start, end }) — dates in YYYY-MM-DD format
 - travel_party (string) — "solo", "couple", "friends", "family", or a description like "3 friends"
@@ -19,14 +19,14 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 - interests (string[]) — "food", "culture", "nightlife", "shopping", "nature", "art", "architecture", "street food", etc.
 - cuisine_preferences (string[]) — "malay", "chinese", "indian", "japanese", "western", "street food", etc.
 - specific_requests (string[]) — concrete asks like "rooftop bar", "best nasi lemak", "kid-friendly spots"
-- first_time_visitor (boolean) — whether this is their first time in KL
+- first_time_visitor (boolean) — whether this is their first time in {{CITY}}
 
 ## Rules
 
 1. ONLY extract facts the user explicitly stated or strongly implied. Never infer from Sam's recommendations.
 2. IGNORE information already present in the current profile — only return what's NEW or CHANGED.
 3. IGNORE transient states: "I'm tired", "we just landed", "stuck in traffic"
-4. IGNORE logistics questions: "what's the grab fare", "how far is KLCC"
+4. IGNORE logistics questions: "what's the grab fare", "how far is X from Y"
 5. IGNORE greetings, thanks, and chit-chat with no profile content
 6. IGNORE Sam's own recommendations — only extract from the USER's messages
 7. For arrays, only include NEW items not already in the profile

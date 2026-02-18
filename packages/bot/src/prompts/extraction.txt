@@ -35,5 +35,5 @@ Rules:
 - Set "tier" based on how enthusiastically the contributor describes it (1 = "you MUST go here", 2 = recommended, 3 = nice to have).
 - "missing_fields" should list critical fields that were NOT mentioned: name, category, neighborhood are critical.
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
-- Always extract the city if mentioned. If not mentioned, default to "Kuala Lumpur".
+- Always extract the city if mentioned. If not mentioned, default to "{{CITY}}".
 - For neighborhood, capture the location as the contributor describes it — a neighborhood, mall, building, or complex name. Do NOT discard a location just because it's not a traditional neighborhood name. "X in Y" means Y is the neighborhood.

@@ -11,6 +11,7 @@ import {
   getOrCreateConversation,
   appendMessages,
   updateConversation,
+  trackEvent,
 } from "@sam/bot/database";
 import {
   classifyIntent,
@@ -68,6 +69,8 @@ export async function POST(req: NextRequest) {
 
     // --- Mid-flow routing (multi-turn conversations) ---
     if (currentFlow !== "general") {
+      trackEvent(sessionId, "web", "message", { flow: currentFlow });
+
       const response = await routeToFlow(
         sessionId,
         message,
@@ -99,6 +102,8 @@ export async function POST(req: NextRequest) {
 
     const { intent, details } = await classifyIntent(message, recentContext);
     console.log("[web-chat] intent:", intent, "details:", details);
+
+    trackEvent(sessionId, "web", "message", { intent });
 
     // Intents that produce long responses → stream them
     const streamableIntents = new Set([

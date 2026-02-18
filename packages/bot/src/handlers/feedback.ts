@@ -8,6 +8,7 @@ import {
   getOrCreateTraveler,
   updateTraveler,
   updateConversation,
+  trackEvent,
   type Conversation,
   type Spot,
 } from "../database.js";
@@ -84,6 +85,12 @@ export async function handleFeedback(
       await updateConversation(phoneNumber, {
         current_flow: "general",
         flow_state: {},
+      });
+
+      trackEvent(phoneNumber, "whatsapp", "flow_complete", {
+        flow: "feedback",
+        spot_id: state.spot_id,
+        rating: fb.rating,
       });
 
       return "Thanks for all the feedback! This keeps the knowledge fresh for everyone.\n\nAnytime you want to share more or add new spots you discovered, just say the word.";

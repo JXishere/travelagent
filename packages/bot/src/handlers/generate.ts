@@ -107,7 +107,8 @@ export async function handleGenerate(
   const extracted = await extractJSON<Record<string, any>>(
     "extraction",
     message,
-    `We're enriching this spot: ${JSON.stringify(current)}\nThe admin is providing additional details or corrections. Extract and merge.`
+    `We're enriching this spot: ${JSON.stringify(current)}\nThe admin is providing additional details or corrections. Extract and merge.`,
+    { templateVars: { CITY: getDefaultCity() } }
   );
 
   const { notes: _n, missing_fields: _m, ...currentClean } = current as any;

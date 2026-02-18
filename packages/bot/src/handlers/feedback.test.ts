@@ -8,6 +8,7 @@ vi.mock("../database.js", () => ({
   getOrCreateTraveler: vi.fn(),
   updateTraveler: vi.fn(),
   updateConversation: vi.fn(),
+  trackEvent: vi.fn(),
 }));
 vi.mock("../llm.js", () => ({
   chat: vi.fn(),

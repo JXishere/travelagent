@@ -40,7 +40,7 @@ export function ChatInput({
   return (
     <div
       className="border-t px-4 py-3"
-      style={{ borderColor: "var(--bar-bg)" }}
+      style={{ borderColor: "var(--bar-bg)", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       <div className="mx-auto flex max-w-2xl items-end gap-2">
         <textarea

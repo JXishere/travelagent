@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatBubble } from "./chat-bubble";
 
 export type Message = { role: "user" | "assistant"; content: string };
@@ -12,14 +12,43 @@ export function ChatMessages({
   messages: Message[];
   isStreaming: boolean;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
 
-  useEffect(() => {
+  const isNearBottom = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, messages[messages.length - 1]?.content]);
+    setUserScrolledUp(false);
+  }, []);
+
+  // Auto-scroll when new content arrives (unless user scrolled up)
+  useEffect(() => {
+    if (!userScrolledUp) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, messages[messages.length - 1]?.content, userScrolledUp]);
+
+  // Track scroll position
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      setUserScrolledUp(!isNearBottom());
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [isNearBottom]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div ref={containerRef} className="relative flex-1 overflow-y-auto px-4 py-6">
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center">
           <p className="text-sm" style={{ color: "var(--muted)" }}>
@@ -41,6 +70,16 @@ export function ChatMessages({
         </div>
       )}
       <div ref={bottomRef} />
+
+      {userScrolledUp && (
+        <button
+          onClick={scrollToBottom}
+          className="sticky bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs shadow-lg transition-opacity hover:opacity-90"
+          style={{ backgroundColor: "var(--bar-bg)", color: "var(--muted)" }}
+        >
+          ↓ scroll down
+        </button>
+      )}
     </div>
   );
 }

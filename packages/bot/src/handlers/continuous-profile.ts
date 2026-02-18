@@ -7,6 +7,7 @@ import {
   updateTraveler,
   type Traveler,
 } from "../database.js";
+import { getDefaultCity } from "../utils/city-defaults.js";
 
 interface ProfileDelta {
   _no_changes?: boolean;
@@ -90,7 +91,9 @@ async function extractProfileDelta(
     .join("\n");
 
   try {
-    return await extractJSON<ProfileDelta>("continuous_profile", input, context);
+    return await extractJSON<ProfileDelta>("continuous_profile", input, context, {
+      templateVars: { CITY: getDefaultCity() },
+    });
   } catch {
     return null;
   }

@@ -385,7 +385,6 @@ describe("enrichFromWeb", () => {
       neighborhood: "Bangsar South",
       category: "cafe",
       price_range: "$$",
-      what_to_order: ["flat white"],
     });
 
     const data = {
@@ -399,6 +398,48 @@ describe("enrichFromWeb", () => {
     expect(result.enriched.neighborhood).toBe("Bangsar South"); // filled from web
     expect(result.enriched.price_range).toBe("$$"); // filled from web
     expect(result.didEnrich).toBe(true);
+  });
+
+  it("strips opinion fields from web data", async () => {
+    mockedWebSearch.mockResolvedValue({
+      neighborhood: "Bangsar South",
+      price_range: "$$",
+      what_to_order: ["flat white"],
+      what_to_skip: ["the pastries"],
+      pro_tips: ["sit upstairs"],
+      vibe: "chill",
+      tier: 2,
+      best_time_of_day: "morning",
+    });
+
+    const data = { name: "Ka'ia" };
+    const result = await enrichFromWeb(data);
+
+    // Operational fields filled
+    expect(result.enriched.neighborhood).toBe("Bangsar South");
+    expect(result.enriched.price_range).toBe("$$");
+
+    // Opinion fields stripped — not present from web
+    expect(result.enriched.what_to_order).toBeUndefined();
+    expect(result.enriched.what_to_skip).toBeUndefined();
+    expect(result.enriched.pro_tips).toBeUndefined();
+    expect(result.enriched.vibe).toBeUndefined();
+    expect(result.enriched.tier).toBeUndefined();
+    expect(result.enriched.best_time_of_day).toBeUndefined();
+    expect(result.didEnrich).toBe(true);
+  });
+
+  it("returns didEnrich false when web returns only opinion fields", async () => {
+    mockedWebSearch.mockResolvedValue({
+      what_to_order: ["flat white"],
+      vibe: "chill",
+      pro_tips: ["go early"],
+    });
+
+    const data = { name: "Ka'ia" };
+    const result = await enrichFromWeb(data);
+    expect(result.enriched).toEqual(data);
+    expect(result.didEnrich).toBe(false);
   });
 
   it("returns didEnrich false when web returns empty", async () => {

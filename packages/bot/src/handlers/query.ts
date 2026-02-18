@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
 import { chat, loadPrompt, HAIKU } from "../llm.js";
-import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, type Spot } from "../database.js";
+import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, trackEvent, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories } from "../utils/categories.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
@@ -64,10 +64,17 @@ export async function handleQuery(
   }
 
   // Track usage and mark as visited
-  for (const spot of spots.slice(0, 3)) {
+  const topSpots = spots.slice(0, 3);
+  for (const spot of topSpots) {
     incrementSpotUseCount(spot.id);
   }
-  await markSpotsVisited(phoneNumber, spots.slice(0, 3).map(s => s.id));
+  await markSpotsVisited(phoneNumber, topSpots.map(s => s.id));
+  trackEvent(phoneNumber, "whatsapp", "recommendation", {
+    spot_ids: topSpots.map(s => s.id),
+    spot_names: topSpots.map(s => s.name),
+    categories,
+    neighborhood: details.neighborhood,
+  });
 
   // Build traveler preferences for context
   const prefs = traveler.preferences ?? {};

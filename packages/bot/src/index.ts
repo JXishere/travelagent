@@ -11,6 +11,7 @@ import {
   insertSpot,
   findDuplicateSpot,
   touchLastUserMessage,
+  trackEvent,
 } from "./database.js";
 import { getDefaultCity } from "./utils/city-defaults.js";
 import { handleContribution } from "./handlers/contribution.js";
@@ -152,7 +153,9 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   // Admin rapid-add: "add: Fatty Crab, Taman Megah, dinner, tier 1. ..."
   if (ADMIN_PHONE && from === ADMIN_PHONE && text.toLowerCase().startsWith("add:")) {
     const spotText = text.slice(4).trim();
-    const extracted = await extractJSON<Record<string, any>>("extraction", spotText);
+    const extracted = await extractJSON<Record<string, any>>("extraction", spotText, undefined, {
+      templateVars: { CITY: getDefaultCity() },
+    });
 
     const criticalMissing = (extracted.missing_fields ?? []).filter((f: string) =>
       ["name", "category", "neighborhood"].includes(f)
@@ -224,6 +227,8 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     .join("\n");
 
   const { intent, details } = await classifyIntent(text, recentContext);
+
+  trackEvent(from, "whatsapp", "message", { intent });
 
   let response: string;
 

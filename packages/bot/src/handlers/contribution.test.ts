@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock modules that have side effects at import time
 vi.mock("../database.js", () => ({
   updateConversation: vi.fn().mockResolvedValue(undefined),
-  insertSpot: vi.fn().mockResolvedValue(undefined),
+  insertSpot: vi.fn().mockResolvedValue({ id: "spot-1", name: "Test Spot" }),
   updateSpot: vi.fn().mockResolvedValue(undefined),
   findDuplicateSpot: vi.fn().mockResolvedValue(null),
   getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", spots_contributed: 1 }),
   incrementContributorCount: vi.fn().mockResolvedValue(undefined),
+  insertSpotContribution: vi.fn().mockResolvedValue(undefined),
   getSpotById: vi.fn().mockResolvedValue(null),
   trackEvent: vi.fn(),
 }));
@@ -466,7 +467,6 @@ import {
   findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
-  getSpotById,
   updateSpot,
   trackEvent,
 } from "../database.js";
@@ -481,7 +481,6 @@ const mockedInsertSpot = vi.mocked(insertSpot);
 const mockedFindDuplicate = vi.mocked(findDuplicateSpot);
 const mockedGetContributor = vi.mocked(getOrCreateContributor);
 const mockedIncrementCount = vi.mocked(incrementContributorCount);
-const mockedGetSpotById = vi.mocked(getSpotById);
 const mockedUpdateSpot = vi.mocked(updateSpot);
 const mockedTrackEvent = vi.mocked(trackEvent);
 
@@ -514,7 +513,6 @@ beforeEach(() => {
   mockedClassify.mockResolvedValue("confirm");
   mockedFindDuplicate.mockResolvedValue(null);
   mockedGetContributor.mockResolvedValue({ id: "c1", spots_contributed: 1 } as any);
-  mockedGetSpotById.mockResolvedValue(null);
 });
 
 describe("handleContribution — first message (no stage)", () => {
@@ -840,7 +838,7 @@ describe("handleContribution — duplicate detection", () => {
     expect(typeof result).toBe("string");
   });
 
-  it("handles duplicate with new info — transitions to update_existing via samSays", async () => {
+  it("handles duplicate with new info — auto-merges and tells contributor spot already exists", async () => {
     mockedClassify.mockResolvedValue("confirm");
     mockedFindDuplicate.mockResolvedValue({
       id: "dup-1",
@@ -853,75 +851,16 @@ describe("handleContribution — duplicate detection", () => {
 
     const result = await handleContribution("+60123", "save it", undefined, confirmingConv());
 
+    // No new spot inserted — existing one updated
     expect(mockedInsertSpot).not.toHaveBeenCalled();
-    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
-      flow_state: expect.objectContaining({
-        stage: "update_existing",
-        duplicateSpotId: "dup-1",
-      }),
-    }));
+    expect(mockedUpdateSpot).toHaveBeenCalledWith("dup-1", expect.any(Object));
+    // Conversation reset to general immediately
+    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", { current_flow: "general", flow_state: {} });
+    // Sam tells contributor the spot existed + their intel was added
     expect(mockedSamSays).toHaveBeenCalledWith(
       expect.stringContaining("already exists")
     );
     expect(typeof result).toBe("string");
-  });
-});
-
-describe("handleContribution — update_existing stage", () => {
-  const updateConv = () => makeConversation({
-    flow_state: {
-      stage: "update_existing",
-      extracted: { ...readySpot, vibe: "chaotic" },
-      source: "text",
-      messagesReceived: 0,
-      duplicateSpotId: "spot-99",
-    },
-  });
-
-  it("updates spot on confirm and thanks via samSays", async () => {
-    mockedClassify.mockResolvedValue("confirm");
-    mockedGetSpotById.mockResolvedValue({
-      id: "spot-99",
-      name: "Fatty Crab",
-      what_to_order: ["chilli crab"],
-    } as Spot);
-
-    const result = await handleContribution("+60123", "yes update it", undefined, updateConv());
-
-    expect(mockedUpdateSpot).toHaveBeenCalledWith("spot-99", expect.objectContaining({
-      vibe: "chaotic",
-    }));
-    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
-      current_flow: "general",
-    }));
-    expect(mockedSamSays).toHaveBeenCalledWith(
-      expect.stringContaining("updated")
-    );
-    expect(typeof result).toBe("string");
-  });
-
-  it("appends transition suffix on unrelated during update", async () => {
-    mockedClassify.mockResolvedValue("unrelated");
-    mockedGetSpotById.mockResolvedValue({ id: "spot-99", name: "Fatty Crab" } as Spot);
-
-    const result = await handleContribution("+60123", "I'm hungry", undefined, updateConv());
-
-    expect(mockedUpdateSpot).toHaveBeenCalled();
-    expect(result).toContain("Now — what's up?");
-  });
-
-  it("declines update gracefully via samSays", async () => {
-    mockedClassify.mockResolvedValue("correct"); // not confirm/unrelated
-
-    const result = await handleContribution("+60123", "nah keep it", undefined, updateConv());
-
-    expect(mockedUpdateSpot).not.toHaveBeenCalled();
-    expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
-      current_flow: "general",
-    }));
-    expect(mockedSamSays).toHaveBeenCalledWith(
-      expect.stringContaining("decided not to update")
-    );
   });
 });
 

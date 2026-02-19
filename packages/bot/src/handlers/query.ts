@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
 import { chat, loadPrompt, HAIKU } from "../llm.js";
-import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, trackEvent, type Spot } from "../database.js";
+import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
@@ -45,30 +45,9 @@ export async function handleQuery(
   let areaWidened = false;
 
   if (isDishQuery) {
-    // Dish query ("roti", "laksa") — semantic search first, no category filter
+    // Dish query ("roti", "laksa") — semantic search only, no category fallback
+    // If semantic search returns nothing, go straight to no-results (honest response)
     spots = await trySemanticSearch(message, resolvedCity ?? city);
-    if (spots.length === 0) {
-      // Fallback: broad food categories
-      spots = await querySpots({
-        city: queryCity,
-        cities: queryCities,
-        area: areaFilter,
-        categories: DEFAULT_CATEGORIES,
-        indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
-        limit: 5,
-      });
-      // If still empty and area was filtered, retry without area constraint
-      if (spots.length === 0 && areaFilter) {
-        areaWidened = true;
-        spots = await querySpots({
-          city: queryCity,
-          cities: queryCities,
-          categories: DEFAULT_CATEGORIES,
-          indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
-          limit: 5,
-        });
-      }
-    }
   } else {
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
     spots = await querySpots({
@@ -130,8 +109,12 @@ export async function handleQuery(
   if (prefs.cuisine_preferences?.length) prefLines.push(`Cuisine preferences: ${prefs.cuisine_preferences.join(", ")}`);
   const prefContext = prefLines.length > 0 ? `\nUser preferences:\n${prefLines.join("\n")}` : "";
 
-  // Format spots for Claude
-  const spotContext = formatSpotsForLLM(spots.slice(0, 3));
+  // Format spots for Claude (with optional contributor perspectives)
+  const spotContext = formatSpotsForLLM(topSpots);
+  const spotContributions = await Promise.all(
+    topSpots.map(s => getSpotContributions(s.id).catch(() => [] as SpotContribution[]))
+  );
+  const perspectivesContext = buildContributorPerspectives(topSpots, spotContributions);
   const weatherContext = weather ? `\nCurrent weather: ${weather.summary}` : "";
 
   // Detect area mismatch — user asked for a specific area but results are from elsewhere
@@ -156,7 +139,7 @@ Here are the matching spots from your knowledge graph. Recommend them naturally 
 
 CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
 ${areaNote}
-${spotContext}`;
+${spotContext}${perspectivesContext}`;
 
   return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {
     maxTokens: 512,
@@ -228,4 +211,54 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       return lines.join("\n");
     })
     .join("\n\n");
+}
+
+/** Build a contributor perspectives block for the LLM prompt.
+ *  Only added when ≥2 contributors have meaningfully different what_to_order suggestions. */
+function buildContributorPerspectives(
+  spots: Spot[],
+  contributions: SpotContribution[][]
+): string {
+  const notes: string[] = [];
+  for (let i = 0; i < spots.length; i++) {
+    const note = formatSpotWithContributorPerspectives(contributions[i] ?? []);
+    if (note) notes.push(`${i + 1}. ${spots[i].name}: ${note}`);
+  }
+  if (notes.length === 0) return "";
+  return `\n\nContributor perspectives (use this to add colour if relevant):\n${notes.join("\n")}`;
+}
+
+/** Returns a formatted perspectives string if ≥2 contributors differ on what_to_order, else null. */
+export function formatSpotWithContributorPerspectives(
+  contributions: SpotContribution[]
+): string | null {
+  if (contributions.length < 2) return null;
+
+  const orderSets = contributions
+    .filter(c => c.what_to_order?.length)
+    .map(c => c.what_to_order!);
+
+  if (orderSets.length < 2) return null;
+
+  // Check for meaningful differences
+  const firstSetLower = new Set(orderSets[0].map(s => s.toLowerCase()));
+  const hasDifferences = orderSets.some(orders =>
+    orders.some(o => !firstSetLower.has(o.toLowerCase()))
+  );
+  if (!hasDifferences) return null;
+
+  // Collect unique suggestions preserving original casing
+  const seen = new Set<string>();
+  const displayOrders: string[] = [];
+  for (const orders of orderSets) {
+    for (const o of orders) {
+      if (!seen.has(o.toLowerCase())) {
+        seen.add(o.toLowerCase());
+        displayOrders.push(o);
+      }
+    }
+  }
+  if (displayOrders.length <= 1) return null;
+
+  return `${contributions.length} contributors, ${displayOrders.length} takes on what to order: ${displayOrders.join(", ")}`;
 }

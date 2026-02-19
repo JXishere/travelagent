@@ -30,3 +30,4 @@ npm run migrate
 | `20260218_020000_add_daily_stats_rpc.sql` | RPC function for analytics dashboard (daily sessions, messages by channel, top intent, recommendations, flow completions) | pending |
 | `20260218_030000_rename_neighborhood_to_area.sql` | Rename spots.neighborhood → area, travelers.home_neighborhoods → home_areas, recreate index + match_spots RPC | pending |
 | `20260218_040000_global_stats_rpc.sql` | Global stats RPC for landing page — counts all spots across cities, not just one | pending |
+| `20260219_000000_spot_contributions.sql` | Per-contributor attribution table — tracks each contributor's specific notes (what_to_order, pro_tips, etc.) separately from the aggregated spots arrays | pending |

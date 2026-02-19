@@ -165,17 +165,61 @@ export async function findDuplicateSpot(
   name: string,
   area?: string
 ): Promise<Spot | null> {
-  let query = supabase
-    .from("spots")
-    .select("*")
-    .ilike("name", name);
-
-  if (area) {
-    query = query.ilike("area", `%${area}%`);
+  // Pass 1: Exact case-insensitive match (existing behaviour, fast path)
+  {
+    let q = supabase.from("spots").select("*").ilike("name", name);
+    if (area) q = q.ilike("area", `%${area}%`);
+    const { data } = await q.limit(1).maybeSingle();
+    if (data) return data as Spot;
   }
 
-  const { data } = await query.limit(1).maybeSingle();
-  return (data as Spot) ?? null;
+  // Pass 1b: Fuzzy matching — catch partial/variant names ("Fatty Crab Restaurant", "The Fatty Crab")
+  const candidates = await fetchFuzzyCandidates(name, area);
+  if (candidates.length === 0) return null;
+
+  // Pass 2: LLM verification — confirm if any candidate is the same physical place
+  return await llmVerifyDuplicate(name, area, candidates);
+}
+
+async function fetchFuzzyCandidates(
+  name: string,
+  area?: string
+): Promise<Array<{ id: string; name: string; area: string | null }>> {
+  let q = supabase
+    .from("spots")
+    .select("id,name,area")
+    .ilike("name", `%${name}%`);
+  if (area) q = q.ilike("area", `%${area}%`);
+  const { data } = await q.limit(5);
+  return (data ?? []) as Array<{ id: string; name: string; area: string | null }>;
+}
+
+async function llmVerifyDuplicate(
+  name: string,
+  area: string | undefined,
+  candidates: Array<{ id: string; name: string; area: string | null }>
+): Promise<Spot | null> {
+  try {
+    const { chat, HAIKU } = await import("./llm.js");
+    const list = candidates
+      .map(c => `ID: ${c.id} | Name: ${c.name} | Area: ${c.area ?? "unknown"}`)
+      .join("\n");
+    const locationStr = area ? ` in ${area}` : "";
+    const prompt = `Is "${name}"${locationStr} the same physical restaurant/place as any of these?\n${list}\n\nReply with ONLY the matching ID, or "none".`;
+    const result = await chat(
+      "You identify whether two place names refer to the same physical location. Reply with just the ID or 'none'.",
+      [{ role: "user", content: prompt }],
+      { maxTokens: 50, model: HAIKU }
+    );
+    const matchedId = result.trim().replace(/['"]/g, "").split(/\s+/)[0];
+    if (!matchedId || matchedId === "none") return null;
+    const validIds = new Set(candidates.map(c => c.id));
+    if (!validIds.has(matchedId)) return null;
+    return await getSpotById(matchedId);
+  } catch (err) {
+    console.error("[dedup] LLM verification failed:", err);
+    return null; // Safe default — avoids false positives
+  }
 }
 
 export async function getSpotById(spotId: string): Promise<Spot | null> {
@@ -511,6 +555,44 @@ export function trackEvent(
     .then(({ error }) => {
       if (error) console.error("[analytics] Failed to track event:", error.message);
     });
+}
+
+// ============================================
+// SPOT CONTRIBUTIONS — per-contributor attribution
+// ============================================
+
+export interface SpotContribution {
+  id: string;
+  spot_id: string;
+  contributor_id: string;
+  what_to_order?: string[];
+  what_to_skip?: string[];
+  pro_tips?: string[];
+  vibe?: string;
+  tier?: number;
+  created_at: string;
+}
+
+export async function insertSpotContribution(contribution: {
+  spot_id: string;
+  contributor_id: string;
+  what_to_order?: string[];
+  what_to_skip?: string[];
+  pro_tips?: string[];
+  vibe?: string;
+  tier?: number;
+}): Promise<void> {
+  const { error } = await supabase.from("spot_contributions").insert(contribution);
+  if (error) console.error("[attribution] Failed to insert spot contribution:", error);
+}
+
+export async function getSpotContributions(spot_id: string): Promise<SpotContribution[]> {
+  const { data } = await supabase
+    .from("spot_contributions")
+    .select("*")
+    .eq("spot_id", spot_id)
+    .order("created_at", { ascending: true });
+  return (data ?? []) as SpotContribution[];
 }
 
 // ============================================

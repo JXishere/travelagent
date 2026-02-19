@@ -5,10 +5,10 @@ import { extractJSON, classifyConfirmation, classifyIntent, webSearchSpot, samSa
 import {
   insertSpot,
   updateSpot,
-  getSpotById,
   findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
+  insertSpotContribution,
   updateConversation,
   trackEvent,
   type Conversation,
@@ -43,11 +43,10 @@ interface ExtractedSpot {
 }
 
 interface ContributionState {
-  stage: "collecting" | "confirming" | "update_existing";
+  stage: "collecting" | "confirming";
   extracted: Partial<ExtractedSpot>;
   source: "voice" | "text";
   messagesReceived: number;
-  duplicateSpotId?: string;
   webSourcedFields?: string[];
 }
 
@@ -157,55 +156,6 @@ export async function handleContribution(
     });
 
     return formatSummary(merged, updatedWebFields);
-  }
-
-  // Update existing stage — user confirmed or declined updating a duplicate spot
-  if (state.stage === "update_existing") {
-    const input = await resolveInput(phoneNumber, message, audioId);
-    const intent = await classifyConfirmation(input, "update this spot");
-
-    if (intent === "confirm" || intent === "unrelated") {
-      const spotId = state.duplicateSpotId!;
-      const existing = await getSpotById(spotId);
-      // Strip web-sourced fields before updating
-      const webFields = state.webSourcedFields ?? [];
-      const cleanedData = { ...(state.extracted ?? {}) };
-      for (const field of webFields) {
-        delete (cleanedData as any)[field];
-      }
-      delete (cleanedData as any).opening_hours;
-      const updates = smartMergeForUpdate(cleanedData);
-      // Merge array fields: append new items to existing arrays
-      if (existing) {
-        const arrayFields = ["what_to_order", "what_to_skip", "pro_tips", "payment_methods"] as const;
-        for (const field of arrayFields) {
-          const incomingArr: string[] = (cleanedData as any)?.[field] ?? [];
-          if (incomingArr.length > 0) {
-            const existingArr: string[] = (existing as any)[field] ?? [];
-            const existingLower = new Set(existingArr.map(s => s.toLowerCase()));
-            const merged = [...existingArr, ...incomingArr.filter(s => !existingLower.has(s.toLowerCase()))];
-            (updates as any)[field] = merged;
-          }
-        }
-      }
-      await updateSpot(spotId, updates);
-      await updateConversation(phoneNumber, {
-        current_flow: "general",
-        flow_state: {},
-      });
-      const response = await samSays(`You just updated "${state.extracted?.name}" with new contributor intel. Thank them warmly, one sentence.`);
-      if (intent === "unrelated") {
-        return `${response}\n\nNow — what's up?`;
-      }
-      return response;
-    }
-
-    // Declined — go back to general
-    await updateConversation(phoneNumber, {
-      current_flow: "general",
-      flow_state: {},
-    });
-    return samSays("A contributor decided not to update an existing spot. Let them know it's all good and ask what else you can help with. One sentence.");
   }
 
   // Fallback
@@ -556,37 +506,69 @@ async function saveSpot(
   // Belt-and-suspenders: never persist opening_hours
   delete spotData.opening_hours;
 
-  // Check for duplicate — offer to update instead of silently discarding
+  // Check for duplicate — auto-merge new intel, tell contributor the spot already exists
   const duplicate = await findDuplicateSpot(spotData.name, spotData.area);
   if (duplicate) {
     const newInfo = describeNewInfo(duplicate, data);
+
+    await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+
     if (newInfo.length === 0) {
-      await updateConversation(phoneNumber, {
-        current_flow: "general",
-        flow_state: {},
-      });
-      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.area}, but it's already in your knowledge graph with the same info. Let them know warmly. One sentence.`);
+      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.area}, but it's already in your knowledge graph with the same info. Let them know warmly, tell them the spot is well-covered. One sentence.`);
     }
 
-    await updateConversation(phoneNumber, {
-      current_flow: "contribution",
-      flow_state: {
-        stage: "update_existing",
-        extracted: data,
-        source,
-        messagesReceived: 0,
-        duplicateSpotId: duplicate.id,
-        webSourcedFields,
-      },
+    // Auto-merge: append their new info to the existing spot
+    const updates = smartMergeForUpdate(spotData);
+    const arrayFields = ["what_to_order", "what_to_skip", "pro_tips", "payment_methods"] as const;
+    for (const field of arrayFields) {
+      const incomingArr: string[] = spotData[field] ?? [];
+      if (incomingArr.length > 0) {
+        const existingArr: string[] = (duplicate as any)[field] ?? [];
+        const existingLower = new Set(existingArr.map((s: string) => s.toLowerCase()));
+        (updates as any)[field] = [...existingArr, ...incomingArr.filter(s => !existingLower.has(s.toLowerCase()))];
+      }
+    }
+    await updateSpot(duplicate.id, updates);
+
+    // Record contributor attribution
+    insertSpotContribution({
+      spot_id: duplicate.id,
+      contributor_id: contributor.id,
+      what_to_order: spotData.what_to_order?.length ? spotData.what_to_order : undefined,
+      what_to_skip: spotData.what_to_skip?.length ? spotData.what_to_skip : undefined,
+      pro_tips: spotData.pro_tips?.length ? spotData.pro_tips : undefined,
+      vibe: spotData.vibe,
+      tier: spotData.tier,
+    }).catch(err => console.error("[attribution] Failed to save contribution:", err));
+
+    await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
+
+    trackEvent(phoneNumber, channel, "flow_complete", {
+      flow: "contribution",
+      spot_name: duplicate.name,
+      action: "updated_existing",
+      source,
     });
-    return samSays(`A contributor added "${duplicate.name}" which already exists, but they have new intel:\n${newInfo.join("\n")}\nAsk if they want to update the existing entry. Keep it brief.`);
+
+    return samSays(`A contributor added intel to "${duplicate.name}" which already exists in your knowledge graph. Their new info:\n${newInfo.join("\n")}\nTell them the spot is already in the graph, but every new perspective makes it better — you've added their intel. Warm, one sentence.`);
   }
 
-  await insertSpot({
+  const newSpot = await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
     source,
   });
+
+  // Record this contributor's specific notes for attribution
+  insertSpotContribution({
+    spot_id: newSpot.id,
+    contributor_id: contributor.id,
+    what_to_order: spotData.what_to_order,
+    what_to_skip: spotData.what_to_skip,
+    pro_tips: spotData.pro_tips,
+    vibe: spotData.vibe,
+    tier: spotData.tier,
+  }).catch(err => console.error("[attribution] Failed to save contribution:", err));
 
   await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
   const updated = await getOrCreateContributor(phoneNumber);

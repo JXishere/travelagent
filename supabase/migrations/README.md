@@ -34,3 +34,4 @@ npm run migrate
 | `20260219_010000_add_travelers_user_type_home_areas.sql` | Add missing `user_type` (text, default 'unknown', CHECK constraint) and `home_areas` (text[]) columns to travelers — fixes proactive scheduler silently returning no travelers | applied via MCP |
 | `20260219_020000_enable_rls_spot_contributions.sql` | Enable RLS on spot_contributions; add public read policy — closes security gap where anon key had unrestricted write access | applied via MCP |
 | `20260219_030000_fix_security_and_perf_advisors.sql` | Fix function search paths (daily_stats, match_spots); scope RLS policies to service_role only; add missing FK indexes (feedback.traveler_id, spots.contributor_id) | applied via MCP |
+| `20260219_040000_add_contribution_count.sql` | Add contribution_count integer column to spots; backfill from spot_contributions | applied via MCP |

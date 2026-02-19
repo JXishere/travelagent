@@ -156,6 +156,9 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
           {((spot.confidence_score ?? 0) * 100).toFixed(0)}%
         </span>
         <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>
+          {spot.contribution_count ? `${spot.contribution_count}c` : "—"}
+        </span>
+        <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>
           {spot.source ?? "—"}
         </span>
         {approved && (

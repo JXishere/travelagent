@@ -93,6 +93,7 @@ export interface Spot {
   contributor_id?: string;
   confidence_score?: number;
   use_count?: number;
+  contribution_count?: number;
   source?: string;
   embedding?: number[];
   last_verified?: string;
@@ -275,6 +276,21 @@ export async function incrementSpotUseCount(spotId: string): Promise<void> {
     await supabase
       .from("spots")
       .update({ use_count: ((data as Pick<Spot, 'use_count'>).use_count ?? 0) + 1 })
+      .eq("id", spotId);
+  }
+}
+
+export async function incrementSpotContributionCount(spotId: string): Promise<void> {
+  const { data } = await supabase
+    .from("spots")
+    .select("contribution_count")
+    .eq("id", spotId)
+    .single();
+
+  if (data) {
+    await supabase
+      .from("spots")
+      .update({ contribution_count: ((data as any).contribution_count ?? 0) + 1 })
       .eq("id", spotId);
   }
 }

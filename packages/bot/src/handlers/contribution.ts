@@ -8,6 +8,7 @@ import {
   findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
+  incrementSpotContributionCount,
   insertSpotContribution,
   updateConversation,
   trackEvent,
@@ -514,7 +515,7 @@ async function saveSpot(
     await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
 
     if (newInfo.length === 0) {
-      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.area}, but it's already in your knowledge graph with the same info. Let them know warmly, tell them the spot is well-covered. One sentence.`);
+      return samSays(`A contributor tried to add "${duplicate.name}" in ${duplicate.area}, but it's already in your knowledge graph with the same info. Respond warmly — ${duplicate.name} is already in your knowledge graph and well-covered. One sentence.`);
     }
 
     // Auto-merge: append their new info to the existing spot
@@ -540,6 +541,7 @@ async function saveSpot(
       vibe: spotData.vibe,
       tier: spotData.tier,
     }).catch(err => console.error("[attribution] Failed to save contribution:", err));
+    incrementSpotContributionCount(duplicate.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
     await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
 
@@ -550,7 +552,7 @@ async function saveSpot(
       source,
     });
 
-    return samSays(`A contributor added intel to "${duplicate.name}" which already exists in your knowledge graph. Their new info:\n${newInfo.join("\n")}\nTell them the spot is already in the graph, but every new perspective makes it better — you've added their intel. Warm, one sentence.`);
+    return samSays(`A contributor added intel to "${duplicate.name}" which already exists in your knowledge graph. Their new info:\n${newInfo.join("\n")}\nRespond warmly — ${duplicate.name} already exists in your graph, but their new perspective makes it richer and you've merged it in. One sentence.`);
   }
 
   const newSpot = await insertSpot({
@@ -569,6 +571,7 @@ async function saveSpot(
     vibe: spotData.vibe,
     tier: spotData.tier,
   }).catch(err => console.error("[attribution] Failed to save contribution:", err));
+  incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
   await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
   const updated = await getOrCreateContributor(phoneNumber);

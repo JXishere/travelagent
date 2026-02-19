@@ -8,6 +8,7 @@ vi.mock("../database.js", () => ({
   findDuplicateSpot: vi.fn().mockResolvedValue(null),
   getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", spots_contributed: 1 }),
   incrementContributorCount: vi.fn().mockResolvedValue(undefined),
+  incrementSpotContributionCount: vi.fn().mockResolvedValue(undefined),
   insertSpotContribution: vi.fn().mockResolvedValue(undefined),
   getSpotById: vi.fn().mockResolvedValue(null),
   trackEvent: vi.fn(),

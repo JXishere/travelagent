@@ -23,6 +23,7 @@ export interface Spot {
   opening_hours: Record<string, string> | null;
   source: string | null;
   use_count: number | null;
+  contribution_count: number | null;
   created_at: string;
 }
 

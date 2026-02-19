@@ -121,6 +121,7 @@ export function HomeClient({
         </div>
 
         <footer className="py-6 text-center text-xs" style={{ color: "var(--muted)" }}>
+          <p className="mb-2 opacity-50">food · travel · everywhere</p>
           <a href="https://samiseverywhere.com" className="hover:opacity-70 transition-opacity">samiseverywhere.com</a>
           <span className="mx-2">·</span>
           <span>© 2026 Sam</span>

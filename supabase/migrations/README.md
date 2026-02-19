@@ -31,3 +31,6 @@ npm run migrate
 | `20260218_030000_rename_neighborhood_to_area.sql` | Rename spots.neighborhood → area, travelers.home_neighborhoods → home_areas, recreate index + match_spots RPC | pending |
 | `20260218_040000_global_stats_rpc.sql` | Global stats RPC for landing page — counts all spots across cities, not just one | pending |
 | `20260219_000000_spot_contributions.sql` | Per-contributor attribution table — tracks each contributor's specific notes (what_to_order, pro_tips, etc.) separately from the aggregated spots arrays | pending |
+| `20260219_010000_add_travelers_user_type_home_areas.sql` | Add missing `user_type` (text, default 'unknown', CHECK constraint) and `home_areas` (text[]) columns to travelers — fixes proactive scheduler silently returning no travelers | applied via MCP |
+| `20260219_020000_enable_rls_spot_contributions.sql` | Enable RLS on spot_contributions; add public read policy — closes security gap where anon key had unrestricted write access | applied via MCP |
+| `20260219_030000_fix_security_and_perf_advisors.sql` | Fix function search paths (daily_stats, match_spots); scope RLS policies to service_role only; add missing FK indexes (feedback.traveler_id, spots.contributor_id) | applied via MCP |

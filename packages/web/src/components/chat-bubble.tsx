@@ -134,7 +134,7 @@ export function ChatBubble({
           {!isUser && (
             <button
               onClick={handleCopy}
-              className="absolute top-1.5 right-1.5 rounded p-1 opacity-0 transition-opacity group-hover:opacity-70 hover:!opacity-100 max-sm:opacity-40"
+              className="absolute top-1.5 right-1.5 rounded p-1.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-70 sm:hover:!opacity-100 max-sm:opacity-50"
               style={{ color: "var(--muted)" }}
               aria-label="Copy message"
             >
@@ -151,7 +151,7 @@ export function ChatBubble({
         </div>
         {timeStr && (
           <span
-            className={`mt-1 text-[10px] ${isUser ? "text-right" : "text-left"}`}
+            className={`mt-1 text-[11px] ${isUser ? "text-right" : "text-left"}`}
             style={{ color: "var(--muted)", opacity: 0.6 }}
           >
             {timeStr}

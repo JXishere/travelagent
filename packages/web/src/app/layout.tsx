@@ -10,7 +10,10 @@ const geistMono = Geist_Mono({
 const city = (process.env.NEXT_PUBLIC_DEFAULT_CITY || "Kuala Lumpur").toLowerCase();
 
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#0a0a0a",
 };
 
 const title = "Sam — the friend who lives everywhere";

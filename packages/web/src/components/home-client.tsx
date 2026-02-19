@@ -77,9 +77,9 @@ export function HomeClient({
 
   return (
     <div className="flex min-h-dvh">
-      <main className="flex flex-1 flex-col px-6 transition-all duration-300">
+      <main className="flex flex-1 flex-col px-4 sm:px-6 transition-all duration-300">
         <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-md space-y-10 text-center">
+          <div className="w-full max-w-md space-y-6 sm:space-y-10 text-center">
           {/* Tagline */}
           <p
             className="text-left text-sm uppercase tracking-widest"

@@ -197,7 +197,7 @@ export function ChatPanel({
           <a href="/" className="text-sm font-medium" style={{ color: "var(--green)" }}>
             Sam
           </a>
-          <p className="text-[11px]" style={{ color: "var(--fg)", opacity: 0.5 }}>
+          <p className="text-xs" style={{ color: "var(--fg)", opacity: 0.5 }}>
             the friend who lives everywhere
           </p>
         </div>
@@ -206,7 +206,7 @@ export function ChatPanel({
             <button
               onClick={newConversation}
               disabled={isStreaming}
-              className="rounded-md px-2 py-1 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+              className="rounded-md px-3 py-2 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
               style={{ color: "var(--muted)" }}
             >
               new chat
@@ -215,7 +215,7 @@ export function ChatPanel({
           {onClose && (
             <button
               onClick={onClose}
-              className="rounded-md px-2 py-1 text-lg leading-none transition-opacity hover:opacity-80"
+              className="rounded-md p-2.5 text-lg leading-none transition-opacity hover:opacity-80"
               style={{ color: "var(--muted)" }}
               aria-label="Close chat"
             >

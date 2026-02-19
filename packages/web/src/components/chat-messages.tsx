@@ -48,7 +48,7 @@ export function ChatMessages({
   }, [isNearBottom]);
 
   return (
-    <div ref={containerRef} className="relative flex-1 overflow-y-auto px-4 py-6">
+    <div ref={containerRef} className="relative flex-1 overflow-y-auto px-4 py-4">
       {messages.length === 0 && (
         <div className="flex h-full items-center justify-center">
           <p className="text-sm" style={{ color: "var(--muted)", opacity: 0.5 }}>
@@ -74,7 +74,7 @@ export function ChatMessages({
       {userScrolledUp && (
         <button
           onClick={scrollToBottom}
-          className="sticky bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 text-xs shadow-lg transition-opacity hover:opacity-90"
+          className="sticky bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-2 text-xs shadow-lg transition-opacity hover:opacity-90"
           style={{ backgroundColor: "var(--bar-bg)", color: "var(--muted)" }}
         >
           ↓ scroll down

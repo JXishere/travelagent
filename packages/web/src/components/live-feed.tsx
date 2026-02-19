@@ -111,7 +111,7 @@ export function LiveFeed({ teasers: initialTeasers }: { teasers: string[] }) {
   return (
     <span
       className="block transition-opacity duration-400"
-      style={{ opacity: visible ? 1 : 0, minHeight: "3lh" }}
+      style={{ opacity: visible ? 1 : 0, minHeight: "2lh", overflow: "hidden" }}
     >
       {teasers[index]}
     </span>

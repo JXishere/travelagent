@@ -6,7 +6,7 @@ import { resolve } from "path";
 setPromptsDir(resolve(process.cwd(), "../bot/src/prompts"));
 
 import { NextRequest } from "next/server";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, DAILY_LIMIT } from "@/lib/rate-limit";
 import {
   getOrCreateConversation,
   appendMessages,
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     return new Response(
       JSON.stringify({
         error:
-          "You've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+          `You've hit your ${DAILY_LIMIT} messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.`,
         remaining: 0,
       }),
       {

@@ -43,7 +43,7 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
     spot.tier === 1
       ? "var(--green)"
       : spot.tier === 2
-        ? "#60a5fa"
+        ? "var(--blue)"
         : "var(--muted)";
 
   const handleParseAndSave = async () => {
@@ -447,6 +447,6 @@ const btnMuted: React.CSSProperties = {
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
-  backgroundColor: "#ef4444",
+  backgroundColor: "var(--red)",
   color: "white",
 };

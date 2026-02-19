@@ -13,9 +13,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const title = "Sam — the friend who lives everywhere";
+const description = `Sam is learning ${city}. Help build the knowledge graph — tell Sam what you know.`;
+
 export const metadata: Metadata = {
-  title: "Sam — the friend who lives everywhere",
-  description: `Sam is learning ${city}. Help build the knowledge graph — tell Sam what you know.`,
+  title,
+  description,
+  openGraph: {
+    title,
+    description,
+    url: "https://samiseverywhere.com",
+    siteName: "Sam",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

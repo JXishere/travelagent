@@ -1,4 +1,4 @@
-const DAILY_LIMIT = 30;
+export const DAILY_LIMIT = 30;
 
 interface RateLimitEntry {
   count: number;

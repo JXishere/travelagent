@@ -79,36 +79,26 @@ export async function deleteSpot(id: string): Promise<boolean> {
   return true;
 }
 
-export async function getCityStats(): Promise<{ spot_count: number; contributor_count: number }> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_KEY;
+export async function getCityStats(): Promise<{ spot_count: number }> {
+  const supabase = getClient();
+  if (!supabase) return { spot_count: 0 };
 
-  if (!url || !key) {
-    return { spot_count: 0, contributor_count: 0 };
-  }
-
-  const supabase = createClient(url, key);
   const { count, error } = await supabase
     .from("spots")
     .select("*", { count: "exact", head: true });
 
   if (error) {
     console.error("Failed to fetch stats:", error.message, error.code, error.hint);
-    return { spot_count: 0, contributor_count: 0 };
+    return { spot_count: 0 };
   }
 
-  return { spot_count: count ?? 0, contributor_count: 0 };
+  return { spot_count: count ?? 0 };
 }
 
 export async function getDistinctCities(): Promise<string[]> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_KEY;
+  const supabase = getClient();
+  if (!supabase) return ["every city"];
 
-  if (!url || !key) {
-    return ["every city"];
-  }
-
-  const supabase = createClient(url, key);
   const { data, error } = await supabase
     .from("spots")
     .select("city")
@@ -218,12 +208,9 @@ function generateTeasers(spot: RecentSpot): string[] {
 
 
 export async function getRecentSpotTeasers(limit = 200): Promise<string[]> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_KEY;
+  const supabase = getClient();
+  if (!supabase) return [];
 
-  if (!url || !key) return [];
-
-  const supabase = createClient(url, key);
   // Only pull spots with real intel — at least one of what_to_order or pro_tips
   const { data, error } = await supabase
     .from("spots")
@@ -287,14 +274,9 @@ export async function getCountries(): Promise<string[]> {
 }
 
 export async function getDistinctAreas(): Promise<string[]> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_KEY;
+  const supabase = getClient();
+  if (!supabase) return ["everywhere"];
 
-  if (!url || !key) {
-    return ["everywhere"];
-  }
-
-  const supabase = createClient(url, key);
   const { data, error } = await supabase
     .from("spots")
     .select("area")

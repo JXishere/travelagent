@@ -145,6 +145,12 @@ export default function ReviewPage() {
           No spots match filters
         </div>
       )}
+
+      <footer className="py-6 text-center text-xs" style={{ color: "var(--muted)" }}>
+        <a href="https://samiseverywhere.com" className="hover:opacity-70 transition-opacity">samiseverywhere.com</a>
+        <span className="mx-2">·</span>
+        <span>© 2026 Sam</span>
+      </footer>
     </div>
   );
 }

@@ -127,7 +127,7 @@ export function ChatBubble({
           }`}
           style={{
             backgroundColor: isUser ? "var(--green)" : "var(--bar-bg)",
-            color: isUser ? "#0a0a0a" : "var(--fg)",
+            color: isUser ? "var(--bg)" : "var(--fg)",
           }}
         >
           {isUser ? content : renderMarkdown(content)}

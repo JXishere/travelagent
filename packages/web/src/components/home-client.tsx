@@ -14,7 +14,7 @@ export function HomeClient({
   teasers,
   countries,
 }: {
-  stats: { spot_count: number; contributor_count: number };
+  stats: { spot_count: number };
   teasers: string[];
   countries: string[];
 }) {
@@ -77,8 +77,9 @@ export function HomeClient({
 
   return (
     <div className="flex min-h-dvh">
-      <main className="flex flex-1 items-center justify-center px-6 transition-all duration-300">
-        <div className="w-full max-w-md space-y-10 text-center">
+      <main className="flex flex-1 flex-col px-6 transition-all duration-300">
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-md space-y-10 text-center">
           {/* Tagline */}
           <p
             className="text-left text-sm uppercase tracking-widest"
@@ -116,7 +117,14 @@ export function HomeClient({
           <p className="text-sm" style={{ color: "var(--muted)" }}>
             WhatsApp coming soon.
           </p>
+          </div>
         </div>
+
+        <footer className="py-6 text-center text-xs" style={{ color: "var(--muted)" }}>
+          <a href="https://samiseverywhere.com" className="hover:opacity-70 transition-opacity">samiseverywhere.com</a>
+          <span className="mx-2">·</span>
+          <span>© 2026 Sam</span>
+        </footer>
       </main>
 
       {/* Slide-out chat panel (desktop only) */}

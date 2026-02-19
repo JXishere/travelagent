@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessages, type Message } from "@/components/chat-messages";
 import { ChatInput } from "@/components/chat-input";
+import { DAILY_LIMIT } from "@/lib/rate-limit";
 
 function getOrCreateSessionId(): string {
   const key = "sam-session-id";
@@ -91,7 +92,7 @@ export function ChatPanel({
               role: "assistant",
               content:
                 data.error ||
-                "Hey, you've hit your 30 messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.",
+                `Hey, you've hit your ${DAILY_LIMIT} messages for today — I need a breather! Catch me on WhatsApp for unlimited chat.`,
               timestamp: Date.now(),
             },
           ]);

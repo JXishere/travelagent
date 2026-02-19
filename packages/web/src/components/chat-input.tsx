@@ -65,7 +65,7 @@ export function ChatInput({
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none placeholder:opacity-40"
+          className="flex-1 resize-none rounded-xl border px-4 py-2.5 text-base sm:text-sm outline-none placeholder:opacity-40"
           style={{
             backgroundColor: "var(--bar-bg)",
             borderColor: "var(--bar-bg)",

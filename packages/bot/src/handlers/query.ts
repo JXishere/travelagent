@@ -4,7 +4,7 @@ import { chat, loadPrompt, HAIKU } from "../llm.js";
 import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
+import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES } from "../utils/city-defaults.js";
 
 let _systemPrompt: string | null = null;
 function getSystemPrompt(): string {
@@ -48,7 +48,9 @@ export async function handleQuery(
   const resolvedCity = resolveCityFromArea(effectiveArea);
   const queryCities = areaCities.length > 0 ? areaCities : undefined;
   const queryCity = queryCities ? undefined : city;
-  const areaFilter = effectiveArea; // Always pass — city + area work together
+  // Don't use city-level aliases as sub-area filters — "pj" is not a spot area tag
+  const isCityAlias = CITY_LEVEL_ALIASES.has(effectiveArea?.toLowerCase().trim() ?? "");
+  const areaFilter = isCityAlias ? undefined : effectiveArea;
 
   let spots: Spot[];
   let areaWidened = false;
@@ -145,14 +147,14 @@ ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
 ${weatherContext}
 
-Here are the matching spots from your knowledge graph. Recommend them naturally — make it feel like a friend's recommendation.
+Here are the matching spots from your knowledge graph. Give one short sentence per spot — name, what to order, done. No intros, no walls of text. Max 3 spots.
 
 CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
 ${areaNote}
 ${spotContext}${perspectivesContext}`;
 
   return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {
-    maxTokens: 512,
+    maxTokens: 256,
   });
 }
 

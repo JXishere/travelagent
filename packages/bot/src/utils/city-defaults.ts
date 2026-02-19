@@ -94,6 +94,17 @@ const AREA_CITY_MAP: Record<string, string> = {
   "georgetown": "Penang",
 };
 
+/**
+ * Terms that refer to a whole city, not a sub-area within it.
+ * When users say "pj" or "kl" they mean the city, not a neighbourhood tag.
+ * These should never be used as sub-area filters in DB queries.
+ */
+export const CITY_LEVEL_ALIASES = new Set([
+  "pj", "petaling jaya",
+  "kl", "kuala lumpur",
+  "penang", "george town", "georgetown",
+]);
+
 export function resolveCityFromArea(area: string | string[] | undefined): string | undefined {
   if (!area) return undefined;
   // If the classifier returned an array, try the first element

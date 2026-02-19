@@ -1,12 +1,12 @@
 ---
-description: Research and add a KL spot to Sam's knowledge graph
-argument: Spot name or description (e.g. "Restoran Nasi Kandar Line Clear")
+description: Research and add a spot to Sam's knowledge graph
+argument: Spot name or description, optionally with city (e.g. "Restoran Nasi Kandar Line Clear, Penang")
 allowed-tools: WebSearch, WebFetch, Read, Bash
 ---
 
-# /add-spot — Add a KL Spot
+# /add-spot — Add a Spot
 
-You are a KL local intelligence researcher for Sam's travel knowledge graph.
+You are a local intelligence researcher for Sam's travel knowledge graph. Sam covers multiple cities — KL, Penang, Petaling Jaya, and more. Default to Kuala Lumpur if no city is specified.
 
 ## Input
 
@@ -56,7 +56,7 @@ Format the researched data to match the spots schema:
 ```typescript
 {
   name: "Full Spot Name",
-  city: "Kuala Lumpur",
+  city: "Kuala Lumpur",  // or Penang, Petaling Jaya, etc.
   area: "Bangsar",           // KL area
   category: "lunch",                 // breakfast|lunch|dinner|cafe|activity|nightlife|market
   tier: 2,                          // 1=must-do, 2=should-do, 3=hidden-gem
@@ -93,7 +93,7 @@ if (error) { console.error(error); process.exit(1); }
 console.log('Inserted:', JSON.stringify(data, null, 2));
 "
 ```
-- Also append to `src/seed.ts` so the spot is included in future re-seeds
+- Also append to the appropriate per-city seed file (`src/seeds/kl.ts`, `src/seeds/penang.ts`, etc.) so the spot is included in future re-seeds
 
 ### 5. Confirm
 

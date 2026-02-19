@@ -114,12 +114,15 @@ export async function queryX(filters: { ... }): Promise<X[]> {
 | Weather | `src/weather.ts` |
 | Voice notes | `src/transcription.ts` |
 | Entry point | `src/index.ts` |
-| Seed data | `src/seed.ts` |
-| Schema | `supabase/schema.sql` |
+| Seed runner | `src/seed.ts` |
+| Per-city seeds | `src/seeds/kl.ts`, `src/seeds/penang.ts`, `src/seeds/pj.ts` |
+| Migrations | `supabase/migrations/` |
 
 ## Schema Quick Reference
 
-**spots**: name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, lat/lon, payment_methods[], opening_hours (jsonb), price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count
+**spots**: name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, lat/lon, payment_methods[], opening_hours (jsonb), price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source, embedding
+
+**spot_contributions**: spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier, created_at
 
 **travelers**: whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
 
@@ -128,6 +131,8 @@ export async function queryX(filters: { ... }): Promise<X[]> {
 **contributors**: whatsapp_number, name, cities_contributed[], spots_contributed
 
 **feedback**: spot_id, traveler_id, rating (1-5), did_they_go, comments, user_tips[]
+
+**events**: session_id, channel (web|whatsapp), event_type, event_data (jsonb), created_at
 
 ## Validation Checklist
 

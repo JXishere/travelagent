@@ -65,7 +65,7 @@ import { readFileSync } from 'fs';
 const client = new Anthropic();
 const prompt = readFileSync('src/prompts/$ARGUMENTS.txt', 'utf-8');
 const res = await client.messages.create({
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-6',
   max_tokens: 1024,
   system: prompt,
   messages: [{ role: 'user', content: '<TEST_INPUT>' }],

@@ -1,6 +1,6 @@
-# Sam — Travel Intelligence for KL
+# Sam — Travel Intelligence, Everywhere
 
-Sam is a travel intelligence bot for Kuala Lumpur, available on WhatsApp and the web. He guides travelers with opinionated, operationally-detailed recommendations drawn from a proprietary knowledge graph built by real local contributors.
+Sam is a global travel intelligence bot, starting in Kuala Lumpur and expanding city by city. Available on WhatsApp and the web, he guides travelers with opinionated, operationally-detailed recommendations drawn from a proprietary knowledge graph built by real local contributors.
 
 ## Stack
 
@@ -8,7 +8,7 @@ Sam is a travel intelligence bot for Kuala Lumpur, available on WhatsApp and the
 - **Framework**: Express (webhook server for WhatsApp Cloud API)
 - **Web**: Next.js 15 (landing page at `packages/web/`)
 - **Database**: Supabase (PostgreSQL)
-- **LLM**: Claude API via `@anthropic-ai/sdk` — default model is Haiku (`claude-haiku-4-5-20251001`), Sonnet (`claude-sonnet-4-5-20250929`) available for heavier tasks
+- **LLM**: Claude API via `@anthropic-ai/sdk` — default model is Haiku (`claude-haiku-4-5-20251001`), Sonnet (`claude-sonnet-4-6`) available for heavier tasks
 - **Voice**: OpenAI Whisper (voice note transcription)
 - **Weather**: OpenWeather API (context-aware recommendations)
 - **Embeddings**: OpenAI `text-embedding-3-small` (pgvector semantic search)
@@ -57,8 +57,10 @@ packages/
 │   │   │   └── coach.txt              — Coaching evaluation prompt
 │   │   ├── seeds/
 │   │   │   ├── kl.ts                  — 49 Kuala Lumpur spots
+│   │   │   ├── kl-research.ts         — Research-phase KL spot candidates
 │   │   │   ├── penang.ts             — 87 Penang spots (island + mainland)
-│   │   │   └── pj.ts                  — 4 Petaling Jaya spots
+│   │   │   ├── pj.ts                  — 4 Petaling Jaya spots
+│   │   │   └── pj-research.ts         — Research-phase PJ spot candidates
 │   │   └── utils/
 │   │       ├── categories.ts          — Category mappings + synonyms
 │   │       ├── city-defaults.ts       — Per-city coordinates, timezone, locale
@@ -77,25 +79,38 @@ packages/
 │   │   │   ├── review/
 │   │   │   │   └── page.tsx           — Spot review/curation admin UI
 │   │   │   └── api/
-│   │   │       └── chat/
-│   │   │           └── route.ts       — SSE streaming endpoint (imports @sam/bot)
+│   │   │       ├── chat/
+│   │   │       │   └── route.ts       — SSE streaming endpoint (imports @sam/bot)
+│   │   │       └── extract/
+│   │   │           └── route.ts       — Spot extraction endpoint (text → structured fields)
 │   │   ├── components/
+│   │   │   ├── home-client.tsx        — Landing page client component
+│   │   │   ├── chat-panel.tsx         — Chat container with session mgmt + contribution flow init
 │   │   │   ├── chat-bubble.tsx        — Message bubble (user/Sam)
 │   │   │   ├── chat-input.tsx         — Message input bar
 │   │   │   ├── chat-messages.tsx      — Scrollable message list
+│   │   │   ├── live-feed.tsx          — Real-time contribution teasers feed
 │   │   │   ├── prompt-input.tsx       — Landing page prompt input
 │   │   │   ├── rotating-city.tsx      — Animated city name rotator for landing page
 │   │   │   ├── spot-card.tsx          — Expandable spot card with edit/approve/delete
 │   │   │   └── spot-filters.tsx       — Filter by category/area/tier/source
 │   │   └── lib/
 │   │       ├── rate-limit.ts          — Rate limiting utility
-│   │       └── supabase.ts            — Supabase client, getAllSpots(), updateSpot(), deleteSpot(), getCityStats()
+│   │       ├── supabase.ts            — Supabase client, getAllSpots(), updateSpot(), deleteSpot(), getCityStats()
+│   │       └── use-media-query.ts     — Responsive breakpoint hook
 │   ├── next.config.ts                 — Env forwarding, @sam/bot transpilation
 │   ├── package.json
 │   └── tsconfig.json
 
 supabase/
-└── schema.sql          — Full database schema (6 tables + RPC)
+└── migrations/         — Migration files (YYYYMMDD_HHMMSS_description.sql)
+
+scripts/                — Batch research + seed tooling
+├── batch-research.ts   — Multi-city batch spot research runner
+├── analyze-spots.ts    — Spot data analysis utility
+├── count-spots.ts      — Spot count by city/category
+├── generate-seeds.ts   — Generate seed file from research output
+└── seed-new-only.ts    — Seed only spots not yet in DB
 
 docs/                   — Strategy docs, competitive analysis, blueprints
 ```
@@ -109,10 +124,16 @@ npm run build      # Build both packages
 npm run build:bot  # Build bot only
 npm run build:web  # Build web only
 npm run start      # Run compiled bot
-npm run seed       # Populate knowledge graph with KL spots
+npm run seed       # Populate knowledge graph with city spots
 npm test           # Run bot tests (vitest)
 npm run coach      # Run self-coaching analysis on recent conversations
 npm run coach:auto # Automated coaching: analyze → apply → validate → commit
+npm run research   # Batch spot research across cities (scripts/batch-research.ts)
+
+# Bot-only (run with npm run <cmd> -w @sam/bot):
+#   eval                — Run prompt evaluation scenarios
+#   backfill-embeddings — Backfill pgvector embeddings for existing spots
+#   test:watch          — Vitest in watch mode
 ```
 
 ## Code Rules
@@ -121,14 +142,15 @@ npm run coach:auto # Automated coaching: analyze → apply → validate → comm
 2. **Only use DB data.** All spot details (address, hours, tips) must come from the `spots` table, not LLM imagination.
 3. **Keep WhatsApp messages concise.** People read these on phones — short paragraphs, no walls of text.
 4. **Operational intelligence is the product.** Always include: what to order, payment, hours, pro tips. Not just "it's good."
-5. **Sam has personality.** Warm, opinionated, slightly irreverent. He's your friend who lives in KL, not a search engine.
+5. **Sam has personality.** Warm, opinionated, slightly irreverent. He's your friend who lives in the city, not a search engine.
 6. **SQL changes go in migrations, not schema.sql.** `supabase/schema.sql` is the reference schema — don't append to it. Create a new migration file in `supabase/migrations/` using the naming convention `YYYYMMDD_HHMMSS_description.sql`. Update the migration log in `supabase/migrations/README.md`.
 
 ## Schema Overview
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `spots` | Knowledge graph | name, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
+| `spots` | Knowledge graph | name, city, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
+| `spot_contributions` | Per-contributor attribution | spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier |
 | `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], spots_contributed |
 | `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_areas[], trips_taken |
 | `conversations` | State management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |
@@ -166,6 +188,11 @@ function loadPrompt(name: string): string {
 Both flows share the same handlers. The web route imports them directly from `@sam/bot` via the workspace dependency — no HTTP indirection.
 
 Intents: hungry, day_plan, nearby, weather, contribute, profile, feedback, general
+
+### Contribution Flow (two-stage)
+
+1. **Collecting** — LLM extracts structured spot data from voice/text; missing operational fields (address, price, hours) are auto-filled from web search (tracked in `webSourcedFields[]`)
+2. **Confirming** — Shows formatted summary with web-sourced fields annotated; contributor can confirm, correct, or ask questions. On confirm: `saveSpot()` runs duplicate detection (exact → fuzzy → LLM verify). If duplicate found, new intel is auto-merged into the existing spot. Every contribution (new or merged) is recorded in `spot_contributions` for contributor attribution. Web-sourced fields are never persisted — only contributor-verified data is saved.
 
 Each user has a `current_flow` in the `conversations` table. Flow-specific state is stored in `flow_state` (JSONB).
 

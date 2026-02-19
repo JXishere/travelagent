@@ -20,7 +20,10 @@ All prompts live in `src/prompts/`:
 | `profile.txt` | Conversational profile learning | Profile handler |
 | `continuous_profile.txt` | Background profile extraction | `maybeExtractProfile()` — runs after every message |
 | `strategic.txt` | Pre-trip strategic planning | Strategic handler |
+| `proactive.txt` | Proactive message voice + style | Scheduler (TRIP_WELCOME, MORNING_NUDGE, etc.) |
+| `feedback.txt` | Post-trip feedback response parsing | Feedback handler |
 | `generate.txt` | Spot content generation | Generate handler (admin) |
+| `coach.txt` | Coaching evaluation | `coach.ts` / `coach-auto.ts` |
 
 Prompts are loaded by `src/llm.ts` via `loadPrompt(name)` which reads `src/prompts/{name}.txt`.
 
@@ -67,7 +70,7 @@ const client = new Anthropic();
 const systemPrompt = readFileSync('src/prompts/system.txt', 'utf-8');
 
 const response = await client.messages.create({
-  model: 'claude-sonnet-4-5-20250929',
+  model: 'claude-sonnet-4-6',
   max_tokens: 1024,
   system: systemPrompt,
   messages: [{ role: 'user', content: 'TEST MESSAGE HERE' }],
@@ -112,6 +115,5 @@ console.log(response.content[0].text);
 ## Strategy Reference
 
 Read these for Sam's voice and product philosophy:
-- `docs/PAUL_STRATEGY_SUMMARY.md` — core product thesis
-- `docs/paul_system_prompt_v5.md` — prompt iteration history
-- `docs/Sam_Strategic_Blueprint.txt` — detailed product vision
+- `docs/archive/` — pre-rebrand Paul-era docs preserved for reference
+- `docs/Sam_Strategic_Blueprint.txt` — detailed product vision (primary reference)

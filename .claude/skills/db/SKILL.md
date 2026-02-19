@@ -44,6 +44,8 @@ console.log(JSON.stringify(data, null, 2));
 
 **spots**: id, name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source (seed|voice|text|llm_verified|manual), last_verified
 
+**spot_contributions**: id, spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier, created_at
+
 **travelers**: id, whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
 
 **contributors**: id, whatsapp_number, name, cities_contributed[], spots_contributed

@@ -18,6 +18,7 @@ interface QueryDetails {
   time_of_day?: string;
   mood?: string;
   specific_place?: string;
+  cuisine?: string;
 }
 
 export async function handleQuery(
@@ -28,18 +29,26 @@ export async function handleQuery(
   options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
   const channel = options?.channel ?? "whatsapp";
-  const categories = resolveCategories(details.meal_type, details.time_of_day);
+  // Use cuisine as fallback for meal_type — the LLM sometimes puts "coffee" in cuisine instead of meal_type
+  const effectiveMealType = details.meal_type || details.cuisine;
+  const categories = resolveCategories(effectiveMealType, details.time_of_day);
   const isDishQuery = categories === null;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
 
-  // Resolve city from area — "PJ" maps to "Petaling Jaya", etc.
-  const areaCities = resolveCitiesFromArea(details.area);
-  const resolvedCity = resolveCityFromArea(details.area);
+  // Use specific_place as area fallback if no explicit area given
+  // e.g. "I'm near KLCC, want coffee" → area=undefined, specific_place="KLCC" → effectiveArea="KLCC"
+  const effectiveArea = details.area || details.specific_place;
+
+  // Resolve city from area — "PJ" / "SS2" maps to "Petaling Jaya", etc.
+  // Area filter is always passed through so spots tagged "SS2" are found first.
+  // City resolution is additive — it scopes to the right city while area filter narrows within it.
+  const areaCities = resolveCitiesFromArea(effectiveArea);
+  const resolvedCity = resolveCityFromArea(effectiveArea);
   const queryCities = areaCities.length > 0 ? areaCities : undefined;
   const queryCity = queryCities ? undefined : city;
-  const areaFilter = areaCities.length > 0 ? undefined : details.area;
+  const areaFilter = effectiveArea; // Always pass — city + area work together
 
   let spots: Spot[];
   let areaWidened = false;
@@ -75,12 +84,13 @@ export async function handleQuery(
   }
 
   if (spots.length === 0) {
+    console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
     return await chat(
       getSystemPrompt(),
       [
         {
           role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${effectiveArea ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend.`,
         },
       ],
       { maxTokens: 512, model: HAIKU }
@@ -97,7 +107,7 @@ export async function handleQuery(
     spot_ids: topSpots.map(s => s.id),
     spot_names: topSpots.map(s => s.name),
     categories,
-    area: details.area,
+    area: effectiveArea,
   });
 
   // Build traveler preferences for context
@@ -118,7 +128,7 @@ export async function handleQuery(
   const weatherContext = weather ? `\nCurrent weather: ${weather.summary}` : "";
 
   // Detect area mismatch — user asked for a specific area but results are from elsewhere
-  const requestedArea = details.area;
+  const requestedArea = effectiveArea;
   const hasAreaMismatch =
     requestedArea &&
     spots.length > 0 &&

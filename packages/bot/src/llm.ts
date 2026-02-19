@@ -305,7 +305,13 @@ Examples:
 - "Bangsar" (after Sam asked "where are you heading?") → hungry (continuation)
 - "I like spicy food and street markets" → profile (preferences, no specific request)
 
-Also extract any relevant details: area, meal_type, time_of_day, mood/energy, specific_place, cuisine.
+Extract relevant details with these exact field names:
+- area: neighbourhood or district they want (e.g. "Bangsar", "SS2", "KLCC")
+- meal_type: category of food/drink — only use known categories: breakfast, brunch, lunch, dinner, coffee, cafe, dessert, drinks, bar, supper
+- cuisine: specific dish or food type they want (e.g. "roti canai", "laksa", "sushi", "nasi lemak") — use this when it's NOT a meal category
+- time_of_day: morning, afternoon, evening, late-night
+- specific_place: a landmark or venue they're currently AT (not where they want to eat)
+- mood: chill, adventurous, tired, celebratory
 
 Respond in JSON only:
 { "intent": "...", "details": { ... } }`;

@@ -25,7 +25,7 @@
     "@anthropic-ai/sdk": "^0.74.0",
     "@supabase/supabase-js": "^2.49.1",
     "express": "^4.21.2",
-    "openai": "^4.82.0"
+    "openai": "^5.0.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

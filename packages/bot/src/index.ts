@@ -240,15 +240,15 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
 
   switch (intent) {
     case "hungry":
-      response = await handleHungry(from, text, details);
+      response = await handleHungry(from, text, details, recentContext);
       break;
 
     case "day_plan":
-      response = await handleDayPlan(from, text, details);
+      response = await handleDayPlan(from, text, details, recentContext);
       break;
 
     case "nearby":
-      response = await handleNearby(from, text, details);
+      response = await handleNearby(from, text, details, recentContext);
       break;
 
     case "contribute":

@@ -11,7 +11,7 @@ import {
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getCityDefaults, getDefaultCity } from "../utils/city-defaults.js";
+import { getCityDefaults, getDefaultCity, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
 import { formatSpotsForLLM } from "./query.js";
 import { parseCoordinates, filterByDistance, type SpotWithDistance } from "../utils/geo.js";
 
@@ -55,7 +55,8 @@ export function buildPrefContext(traveler: { dietary_restrictions?: string[]; pr
 export async function buildHungryPrompt(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<PromptPayload> {
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
@@ -69,16 +70,26 @@ export async function buildHungryPrompt(
   const categories = resolveCategories(details.meal_type, timeOfDay);
   const isDishQuery = categories === null;
 
+  // Resolve city from area — "PJ" maps to "Petaling Jaya", etc.
+  const areaCities = resolveCitiesFromArea(details.area);
+  const resolvedCity = resolveCityFromArea(details.area);
+  // Use area-resolved cities if available, otherwise default city
+  const queryCities = areaCities.length > 0 ? areaCities : undefined;
+  const queryCity = queryCities ? undefined : cityDefaults.name;
+  // Don't filter by area if it resolved to city names (e.g. "PJ" or "PJ or KL")
+  const areaFilter = areaCities.length > 0 ? undefined : details.area;
+
   let spots: Spot[];
 
   if (isDishQuery) {
     // Dish query ("roti", "laksa") — semantic search first, no category filter
-    spots = await trySemanticSearch(message, cityDefaults.name);
+    spots = await trySemanticSearch(message, resolvedCity ?? cityDefaults.name);
     if (spots.length === 0) {
       // Fallback: broad food categories
       spots = await querySpots({
-        city: cityDefaults.name,
-        area: details.area,
+        city: queryCity,
+        cities: queryCities,
+        area: areaFilter,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         limit: 5,
@@ -87,14 +98,15 @@ export async function buildHungryPrompt(
   } else {
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
     spots = await querySpots({
-      city: cityDefaults.name,
-      area: details.area,
+      city: queryCity,
+      cities: queryCities,
+      area: areaFilter,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
     });
     if (spots.length === 0) {
-      spots = await trySemanticSearch(message, cityDefaults.name);
+      spots = await trySemanticSearch(message, resolvedCity ?? cityDefaults.name);
     }
   }
 
@@ -147,9 +159,9 @@ Keep it short — this is WhatsApp.`,
   return {
     systemPrompt: getSystemPrompt(),
     userPrompt: `The user says: "${message}"
-
+${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 Time: ${timeOfDay} (KL time)
-${details.area ? `They're near: ${details.area}` : "Location not specified — you can ask."}
+${details.area ? `They're near: ${details.area}` : ""}
 ${weatherNote}
 ${tiredNote}
 ${prefContext}
@@ -158,7 +170,7 @@ Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-Recommend naturally. Include full operational details. Respect their dietary restrictions — do NOT recommend dishes or spots that conflict. End by asking which one appeals or if they want something different. Keep it concise — this is WhatsApp, not email.`,
+Lead with your #1 pick and commit to it — be the friend who just says "go here." Mention 1-2 alternatives briefly. One must-order and one tip per spot, max. Respect their dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.`,
     spotIds: toRecommend.map(s => s.id),
     maxTokens: 512,
   };
@@ -168,9 +180,10 @@ Recommend naturally. Include full operational details. Respect their dietary res
 export async function handleHungry(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<string> {
-  const payload = await buildHungryPrompt(phoneNumber, message, details);
+  const payload = await buildHungryPrompt(phoneNumber, message, details, conversationHistory);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
     model: payload.spotIds.length === 0 ? HAIKU : undefined,
@@ -181,7 +194,8 @@ export async function handleHungry(
 export async function buildDayPlanPrompt(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<PromptPayload> {
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
@@ -204,7 +218,7 @@ export async function buildDayPlanPrompt(
   return {
     systemPrompt: getSystemPrompt(),
     userPrompt: `The user asks: "${message}"
-
+${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
 ${prefContext}
@@ -214,7 +228,7 @@ Available spots for building a day plan:
 
 ${spotsContext}
 
-Build a loose, conversational day structure. NOT a rigid itinerary — more like "here's a nice flow for today." Ask about their energy level if they didn't mention it. Include operational details for each spot. Respect their dietary restrictions — skip dishes that conflict. End with "text me when you're hungry or want to adjust!"`,
+Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."`,
     spotIds: allDaySpots.map(s => s.id),
     maxTokens: 1024,
   };
@@ -224,9 +238,10 @@ Build a loose, conversational day structure. NOT a rigid itinerary — more like
 export async function handleDayPlan(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<string> {
-  const payload = await buildDayPlanPrompt(phoneNumber, message, details);
+  const payload = await buildDayPlanPrompt(phoneNumber, message, details, conversationHistory);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
   });
@@ -236,7 +251,8 @@ export async function handleDayPlan(
 export async function buildNearbyPrompt(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<PromptPayload> {
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
@@ -289,9 +305,9 @@ export async function buildNearbyPrompt(
   return {
     systemPrompt: getSystemPrompt(),
     userPrompt: `The user says: "${message}"
-
+${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
-${area ? `They're near: ${area}` : coords ? `They shared coordinates: ${coords.lat}, ${coords.lng}` : "Location unclear — ask them."}
+${area ? `They're near: ${area}` : coords ? `They shared coordinates: ${coords.lat}, ${coords.lng}` : ""}
 ${distanceContext ? `\nDistances:\n${distanceContext}` : ""}
 ${prefContext}
 
@@ -309,9 +325,10 @@ Give them a quick, varied list of what's nearby — mix food and activities. Res
 export async function handleNearby(
   phoneNumber: string,
   message: string,
-  details: IntentDetails
+  details: IntentDetails,
+  conversationHistory?: string
 ): Promise<string> {
-  const payload = await buildNearbyPrompt(phoneNumber, message, details);
+  const payload = await buildNearbyPrompt(phoneNumber, message, details, conversationHistory);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
   });

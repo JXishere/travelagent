@@ -250,10 +250,15 @@ async function streamHandlerResponse(
   conversation: Awaited<ReturnType<typeof getOrCreateConversation>>,
   rateLimitRemaining?: number
 ): Promise<Response> {
+  const recentHistory = conversation.messages
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content}`)
+    .join("\n");
+
   // Use prompt builders for structured handlers, then stream the LLM call
   switch (intent) {
     case "hungry": {
-      const payload = await buildHungryPrompt(sessionId, message, details);
+      const payload = await buildHungryPrompt(sessionId, message, details, recentHistory);
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],
@@ -262,7 +267,7 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "day_plan": {
-      const payload = await buildDayPlanPrompt(sessionId, message, details);
+      const payload = await buildDayPlanPrompt(sessionId, message, details, recentHistory);
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],
@@ -271,7 +276,7 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "nearby": {
-      const payload = await buildNearbyPrompt(sessionId, message, details);
+      const payload = await buildNearbyPrompt(sessionId, message, details, recentHistory);
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],

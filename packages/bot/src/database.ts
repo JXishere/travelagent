@@ -21,6 +21,7 @@ export interface Conversation {
   flow_state: Record<string, any>;
   messages: Array<{ role: string; content: string }>;
   updated_at: string;
+  last_user_message_at?: string;
 }
 
 export async function getOrCreateConversation(
@@ -93,6 +94,9 @@ export interface Spot {
   confidence_score?: number;
   use_count?: number;
   source?: string;
+  embedding?: number[];
+  last_verified?: string;
+  created_at?: string;
 }
 
 export async function querySpots(filters: {
@@ -295,6 +299,7 @@ export interface Traveler {
   spots_liked: string[];
   spots_disliked: string[];
   last_proactive_at?: string;
+  trips_taken?: number;
   spots_feedback_asked: string[];
 }
 
@@ -358,6 +363,8 @@ export interface Contributor {
   whatsapp_number: string;
   name?: string;
   spots_contributed: number;
+  cities_contributed?: string[];
+  created_at?: string;
 }
 
 export async function getOrCreateContributor(

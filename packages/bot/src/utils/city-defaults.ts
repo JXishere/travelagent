@@ -83,19 +83,24 @@ const AREA_CITY_MAP: Record<string, string> = {
   "georgetown": "Penang",
 };
 
-export function resolveCityFromArea(area: string | undefined): string | undefined {
+export function resolveCityFromArea(area: string | string[] | undefined): string | undefined {
   if (!area) return undefined;
-  return AREA_CITY_MAP[area.toLowerCase().trim()];
+  // If the classifier returned an array, try the first element
+  const areaStr = Array.isArray(area) ? area[0] : area;
+  if (!areaStr) return undefined;
+  return AREA_CITY_MAP[areaStr.toLowerCase().trim()];
 }
 
 /**
  * Given an area string that might mention multiple areas (e.g. "PJ or KL"),
  * return the unique set of cities those areas belong to.
  */
-export function resolveCitiesFromArea(area: string | undefined): string[] {
+export function resolveCitiesFromArea(area: string | string[] | undefined): string[] {
   if (!area) return [];
-  // Split on "or", "/", ","
-  const parts = area.split(/\s+or\s+|\/|,/i).map((s) => s.trim()).filter(Boolean);
+  // The classifier may return area as an array — normalize to a flat list of parts
+  const parts = Array.isArray(area)
+    ? area.flatMap((a) => a.split(/\s+or\s+|\/|,/i)).map((s) => s.trim()).filter(Boolean)
+    : area.split(/\s+or\s+|\/|,/i).map((s) => s.trim()).filter(Boolean);
   const cities = new Set<string>();
   for (const part of parts) {
     const city = resolveCityFromArea(part);

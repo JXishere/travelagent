@@ -4,7 +4,7 @@ import { chat, loadPrompt, HAIKU } from "../llm.js";
 import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, trackEvent, type Spot } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getDefaultCity } from "../utils/city-defaults.js";
+import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
 
 let _systemPrompt: string | null = null;
 function getSystemPrompt(): string {
@@ -34,32 +34,64 @@ export async function handleQuery(
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
 
+  // Resolve city from area — "PJ" maps to "Petaling Jaya", etc.
+  const areaCities = resolveCitiesFromArea(details.area);
+  const resolvedCity = resolveCityFromArea(details.area);
+  const queryCities = areaCities.length > 0 ? areaCities : undefined;
+  const queryCity = queryCities ? undefined : city;
+  const areaFilter = areaCities.length > 0 ? undefined : details.area;
+
   let spots: Spot[];
+  let areaWidened = false;
 
   if (isDishQuery) {
     // Dish query ("roti", "laksa") — semantic search first, no category filter
-    spots = await trySemanticSearch(message, city);
+    spots = await trySemanticSearch(message, resolvedCity ?? city);
     if (spots.length === 0) {
       // Fallback: broad food categories
       spots = await querySpots({
-        city,
-        area: details.area,
+        city: queryCity,
+        cities: queryCities,
+        area: areaFilter,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         limit: 5,
       });
+      // If still empty and area was filtered, retry without area constraint
+      if (spots.length === 0 && areaFilter) {
+        areaWidened = true;
+        spots = await querySpots({
+          city: queryCity,
+          cities: queryCities,
+          categories: DEFAULT_CATEGORIES,
+          indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+          limit: 5,
+        });
+      }
     }
   } else {
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
     spots = await querySpots({
-      city,
-      area: details.area,
+      city: queryCity,
+      cities: queryCities,
+      area: areaFilter,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
     });
+    // If empty and area was filtered, retry without area constraint
+    if (spots.length === 0 && areaFilter) {
+      areaWidened = true;
+      spots = await querySpots({
+        city: queryCity,
+        cities: queryCities,
+        categories,
+        indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        limit: 5,
+      });
+    }
     if (spots.length === 0) {
-      spots = await trySemanticSearch(message, city);
+      spots = await trySemanticSearch(message, resolvedCity ?? city);
     }
   }
 
@@ -69,7 +101,7 @@ export async function handleQuery(
       [
         {
           role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet. Keep it short — this is WhatsApp.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend.`,
         },
       ],
       { maxTokens: 512, model: HAIKU }
@@ -102,6 +134,19 @@ export async function handleQuery(
   const spotContext = formatSpotsForLLM(spots.slice(0, 3));
   const weatherContext = weather ? `\nCurrent weather: ${weather.summary}` : "";
 
+  // Detect area mismatch — user asked for a specific area but results are from elsewhere
+  const requestedArea = details.area;
+  const hasAreaMismatch =
+    requestedArea &&
+    spots.length > 0 &&
+    !spots.some((s) =>
+      s.area?.toLowerCase().includes(requestedArea.toLowerCase())
+    );
+  const areaNote =
+    hasAreaMismatch || areaWidened
+      ? `\n\nNote: The user asked for spots near "${requestedArea}" but you don't have picks in that exact area for this. These are the best options from the broader city. Be upfront about it — acknowledge the gap, then recommend these nearby alternatives naturally. Don't say "ask locals" — you ARE the local.`
+      : "";
+
   const prompt = `The user asked: "${message}"
 ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
@@ -110,7 +155,7 @@ ${weatherContext}
 Here are the matching spots from your knowledge graph. Recommend them naturally — make it feel like a friend's recommendation.
 
 CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
-
+${areaNote}
 ${spotContext}`;
 
   return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {

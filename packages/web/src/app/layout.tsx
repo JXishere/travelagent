@@ -14,8 +14,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "sam — a friend who lives in every city",
-  description: `sam is learning ${city}. help build the knowledge graph — tell sam what you know.`,
+  title: "Sam — the friend who lives everywhere",
+  description: `Sam is learning ${city}. Help build the knowledge graph — tell Sam what you know.`,
 };
 
 export default function RootLayout({

@@ -24,7 +24,6 @@ import { join } from "path";
 // CONFIG
 // ============================================
 
-const SONNET = "claude-sonnet-4-5-20250929";
 const HAIKU = "claude-haiku-4-5-20251001";
 
 const PROGRESS_FILE = join(__dirname, "research-progress.json");
@@ -132,7 +131,6 @@ class RateLimiter {
   }
 }
 
-const sonnetLimiter = new RateLimiter(15, 5);
 const haikuLimiter = new RateLimiter(30, 10);
 
 function sleep(ms: number): Promise<void> {
@@ -426,12 +424,12 @@ ${existingList}
 Return JSON array:
 [{"name": "Spot Name", "reason": "Why it's good"}]`;
 
-  await sonnetLimiter.acquire();
+  await haikuLimiter.acquire();
 
   try {
     const response = await retryWithBackoff(() =>
       anthropic.messages.create({
-        model: SONNET,
+        model: HAIKU,
         max_tokens: 1024,
         temperature: 0.4,
         system:
@@ -447,16 +445,7 @@ Return JSON array:
       (b): b is Anthropic.TextBlock => b.type === "text"
     );
     const text = textBlocks[textBlocks.length - 1]?.text || "";
-
-    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const bareMatch = text.match(/\[[\s\S]*\]/);
-    const jsonStr = fenceMatch
-      ? fenceMatch[1].trim()
-      : bareMatch
-        ? bareMatch[0]
-        : text.trim();
-
-    const results: Array<{ name: string; reason: string }> = JSON.parse(sanitizeJSON(jsonStr));
+    const results: Array<{ name: string; reason: string }> = parseJSONArray(text);
 
     return results
       .filter((r) => r.name && !existingNames.some((n) => normalize(n) === normalize(r.name)))
@@ -533,23 +522,20 @@ RULES:
       (b): b is Anthropic.TextBlock => b.type === "text"
     );
     const text = textBlocks[textBlocks.length - 1]?.text || "";
-
-    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const bareMatch = text.match(/\{[\s\S]*\}/);
-    const jsonStr = fenceMatch
-      ? fenceMatch[1].trim()
-      : bareMatch
-        ? bareMatch[0]
-        : text.trim();
-
-    const data = JSON.parse(sanitizeJSON(jsonStr));
+    const data = parseJSONObject(text);
 
     // Validate minimum quality
     if (
       !data.name ||
       (!data.what_to_order?.length && !data.pro_tips?.length)
     ) {
-      console.warn(`    Skipping ${spot.name} — insufficient data from web`);
+      // Debug: show what we got
+      const keys = Object.keys(data);
+      if (keys.length === 0) {
+        console.warn(`    Skipping ${spot.name} — empty parse (text: ${text.slice(0, 120)}...)`);
+      } else {
+        console.warn(`    Skipping ${spot.name} — insufficient data (keys: ${keys.join(", ")})`);
+      }
       return null;
     }
 
@@ -742,6 +728,66 @@ function normalize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/** Strip control characters that break JSON.parse (common in web search results) */
+function sanitizeJSON(str: string): string {
+  return str.replace(/[\x00-\x1F\x7F]/g, (ch) => {
+    if (ch === "\n" || ch === "\r" || ch === "\t") return ch;
+    return "";
+  });
+}
+
+/** Robustly extract a JSON array from LLM output */
+function parseJSONArray(text: string): any[] {
+  const clean = sanitizeJSON(text);
+  // Try markdown code fence first
+  const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+  // Try to find balanced brackets
+  const start = clean.indexOf("[");
+  if (start !== -1) {
+    let depth = 0;
+    for (let i = start; i < clean.length; i++) {
+      if (clean[i] === "[") depth++;
+      else if (clean[i] === "]") depth--;
+      if (depth === 0) {
+        try { return JSON.parse(clean.slice(start, i + 1)); } catch {}
+        break;
+      }
+    }
+  }
+  // Last resort: try the whole thing
+  try { return JSON.parse(clean.trim()); } catch {}
+  return [];
+}
+
+/** Robustly extract a JSON object from LLM output */
+function parseJSONObject(text: string): Record<string, any> {
+  const clean = sanitizeJSON(text);
+  // Try markdown code fence first
+  const fenceMatch = clean.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+  // Try to find balanced braces
+  const start = clean.indexOf("{");
+  if (start !== -1) {
+    let depth = 0;
+    for (let i = start; i < clean.length; i++) {
+      if (clean[i] === "{") depth++;
+      else if (clean[i] === "}") depth--;
+      if (depth === 0) {
+        try { return JSON.parse(clean.slice(start, i + 1)); } catch {}
+        break;
+      }
+    }
+  }
+  // Last resort
+  try { return JSON.parse(clean.trim()); } catch {}
+  return {};
+}
+
 // ============================================
 // MAIN
 // ============================================
@@ -749,6 +795,7 @@ function normalize(name: string): string {
 async function main() {
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const enrichOnly = args.includes("--enrich-only");
   const filterCategory = getArg(args, "--category") as Category | undefined;
   const filterArea = getArg(args, "--area");
   const filterCity = getArg(args, "--city");
@@ -794,7 +841,10 @@ async function main() {
     }
   }
 
-  // Phase 1: Discovery
+  // Phase 1: Discovery (skip with --enrich-only)
+  if (enrichOnly) {
+    console.log("\n--enrich-only: skipping discovery, jumping to enrichment\n");
+  } else {
   console.log(`\n=== PHASE 1: DISCOVERY (${gaps.length} gap cells) ===\n`);
 
   let discoveredTotal = 0;
@@ -838,6 +888,7 @@ async function main() {
   }
 
   console.log(`\nDiscovery complete: ${discoveredTotal} total spots found`);
+  } // end discovery block
 
   // Phase 2: Enrichment
   const allDiscovered = Object.values(progress.discovered).flat();

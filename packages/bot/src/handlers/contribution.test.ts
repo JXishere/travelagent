@@ -16,6 +16,7 @@ vi.mock("../whatsapp.js", () => ({}));
 vi.mock("../llm.js", () => ({
   webSearchSpot: vi.fn().mockResolvedValue({}),
   classifyConfirmation: vi.fn().mockResolvedValue("confirm"),
+  classifyIntent: vi.fn().mockResolvedValue({ intent: "general", details: {} }),
   extractJSON: vi.fn().mockResolvedValue({}),
   samSays: vi.fn().mockImplementation((instruction: string) => Promise.resolve(`[sam: ${instruction.slice(0, 60)}]`)),
 }));

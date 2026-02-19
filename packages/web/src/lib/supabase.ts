@@ -93,7 +93,7 @@ export async function getCityStats(): Promise<{ spot_count: number; contributor_
     .select("*", { count: "exact", head: true });
 
   if (error) {
-    console.error("Failed to fetch stats:", error);
+    console.error("Failed to fetch stats:", error.message, error.code, error.hint);
     return { spot_count: 0, contributor_count: 0 };
   }
 

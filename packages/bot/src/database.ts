@@ -97,6 +97,7 @@ export interface Spot {
 
 export async function querySpots(filters: {
   city?: string;
+  cities?: string[];
   area?: string;
   category?: string;
   categories?: string[];
@@ -110,7 +111,11 @@ export async function querySpots(filters: {
     .order("tier", { ascending: true })
     .order("confidence_score", { ascending: false });
 
-  if (filters.city) query = query.eq("city", filters.city);
+  if (filters.cities && filters.cities.length > 0) {
+    query = query.in("city", filters.cities);
+  } else if (filters.city) {
+    query = query.eq("city", filters.city);
+  }
   if (filters.area)
     query = query.ilike("area", `%${filters.area}%`);
   if (filters.category) query = query.eq("category", filters.category);

@@ -80,6 +80,7 @@ export async function buildHungryPrompt(
   const areaFilter = areaCities.length > 0 ? undefined : details.area;
 
   let spots: Spot[];
+  let areaWidened = false;
 
   if (isDishQuery) {
     // Dish query ("roti", "laksa") — semantic search first, no category filter
@@ -94,6 +95,17 @@ export async function buildHungryPrompt(
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         limit: 5,
       });
+      // If still empty and area was filtered, retry without area constraint
+      if (spots.length === 0 && areaFilter) {
+        areaWidened = true;
+        spots = await querySpots({
+          city: queryCity,
+          cities: queryCities,
+          categories: DEFAULT_CATEGORIES,
+          indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+          limit: 5,
+        });
+      }
     }
   } else {
     // Category query ("dinner", "breakfast") — structured first, semantic fallback
@@ -105,6 +117,17 @@ export async function buildHungryPrompt(
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       limit: 5,
     });
+    // If empty and area was filtered, retry without area constraint
+    if (spots.length === 0 && areaFilter) {
+      areaWidened = true;
+      spots = await querySpots({
+        city: queryCity,
+        cities: queryCities,
+        categories,
+        indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        limit: 5,
+      });
+    }
     if (spots.length === 0) {
       spots = await trySemanticSearch(message, resolvedCity ?? cityDefaults.name);
     }
@@ -136,9 +159,7 @@ export async function buildHungryPrompt(
       systemPrompt: getSystemPrompt(),
       userPrompt: `The user says: "${message}"
 
-You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have recommendations yet. Ask what they're in the mood for so you can help when your knowledge grows, or suggest they contribute spots they discover.
-
-Keep it short — this is WhatsApp.`,
+You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
       spotIds: [],
       maxTokens: 512,
     };
@@ -156,6 +177,19 @@ Keep it short — this is WhatsApp.`,
 
   const prefContext = buildPrefContext(traveler);
 
+  // Detect area mismatch — user asked for a specific area but results are from elsewhere
+  const requestedArea = details.area;
+  const hasAreaMismatch =
+    requestedArea &&
+    toRecommend.length > 0 &&
+    !toRecommend.some((s) =>
+      s.area?.toLowerCase().includes(requestedArea.toLowerCase())
+    );
+  const areaNote =
+    hasAreaMismatch || areaWidened
+      ? `\n\nNote: The user asked for spots near "${requestedArea}" but you don't have picks in that exact area for this. These are the best options from the broader city. Be upfront about it — acknowledge the gap, then recommend these nearby alternatives naturally. Don't say "ask locals" — you ARE the local.`
+      : "";
+
   return {
     systemPrompt: getSystemPrompt(),
     userPrompt: `The user says: "${message}"
@@ -165,6 +199,7 @@ ${details.area ? `They're near: ${details.area}` : ""}
 ${weatherNote}
 ${tiredNote}
 ${prefContext}
+${areaNote}
 
 Here are spots from your knowledge graph:
 

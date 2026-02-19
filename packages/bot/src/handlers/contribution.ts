@@ -1,7 +1,7 @@
 // Contribution flow — conversational accumulation of spot knowledge
 // Two stages: collecting → confirming
 
-import { extractJSON, classifyConfirmation, webSearchSpot, samSays } from "../llm.js";
+import { extractJSON, classifyConfirmation, classifyIntent, webSearchSpot, samSays } from "../llm.js";
 import {
   insertSpot,
   updateSpot,
@@ -15,6 +15,7 @@ import {
   type Spot,
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
+import { handleQuery } from "./query.js";
 
 /** Only these fields may be filled from web search — everything else must come from the contributor */
 const WEB_ALLOWED_FIELDS = new Set([
@@ -113,13 +114,25 @@ export async function handleContribution(
       return samSays(instruction);
     }
 
-    if (intent === "confirm" || intent === "unrelated") {
+    if (intent === "unrelated") {
+      // Check if it's a food query — answer from DB and stay in flow
+      const { intent: subIntent, details } = await classifyIntent(input);
+      const foodIntents = new Set(["hungry", "day_plan", "nearby"]);
+
+      if (foodIntents.has(subIntent)) {
+        const answer = await handleQuery(phoneNumber, input, details, undefined, { channel: options?.channel ?? "whatsapp" });
+        return `${answer}\n\nBy the way — still want to save that spot? Or any tweaks?`;
+      }
+
+      // Truly unrelated — save and move on
       const webFields = state.webSourcedFields ?? [];
       const saveResponse = await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
-      if (intent === "unrelated") {
-        return `${saveResponse}\n\nNow — what's up?`;
-      }
-      return saveResponse;
+      return `${saveResponse}\n\nNow — what's up?`;
+    }
+
+    if (intent === "confirm") {
+      const webFields = state.webSourcedFields ?? [];
+      return await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
     }
 
     // "correct" — replace-merge corrections and re-show summary
@@ -296,6 +309,30 @@ async function collectInfo(
   const newData = await extractWithContext(input, previous);
   // Belt-and-suspenders: strip opening_hours from extraction
   delete (newData as any).opening_hours;
+
+  // If extraction returned nothing meaningful, the user probably asked a question
+  const meaningfulKeys = Object.keys(newData).filter(k => k !== "missing_fields");
+  if (meaningfulKeys.length === 0) {
+    // Check if it's a food query we can answer from the DB
+    const { intent, details } = await classifyIntent(input);
+    const foodIntents = new Set(["hungry", "day_plan", "nearby"]);
+
+    if (foodIntents.has(intent)) {
+      // Answer with real DB data, then nudge back
+      const answer = await handleQuery(phoneNumber, input, details, undefined, { channel: "web" });
+      const nudge = Object.keys(previous).length > 0
+        ? `\n\nNow — back to that spot you were telling me about. What else should I know?`
+        : `\n\nNow — you mentioned you know a spot? Tell me about it.`;
+      return answer + nudge;
+    }
+
+    // General question — answer briefly with Sam's personality
+    const known = Object.keys(previous).length > 0
+      ? `You're currently collecting info about a spot. So far you know: ${JSON.stringify(previous)}.`
+      : "You're in the middle of collecting a new spot from a contributor.";
+    return samSays(`${known} The contributor said: "${input}". Answer their question briefly (one sentence), then nudge them back to adding their spot.`);
+  }
+
   let merged = smartMerge(previous, newData);
   const messagesReceived = state.messagesReceived + 1;
 

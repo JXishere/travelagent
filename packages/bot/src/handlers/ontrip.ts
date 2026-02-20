@@ -374,11 +374,15 @@ export async function buildDayPlanPrompt(
 
   const prefContext = buildPrefContext(traveler);
 
+  // Use the resolved city name (first from cities, or defaultCity) for the system prompt
+  const systemCity = (cities?.[0]) ?? defaultCity;
+
   return {
-    systemPrompt: buildSystemPrompt(city, channel) + langInstruction(message),
+    systemPrompt: buildSystemPrompt(systemCity, channel) + langInstruction(message),
     userPrompt: `The user asks: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
+${details.area ? `Area focus: ${details.area}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
 ${prefContext}
 Spots they've already visited: ${traveler.spots_visited?.length ?? 0}

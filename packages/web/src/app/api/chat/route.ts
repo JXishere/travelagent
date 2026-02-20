@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 import { checkRateLimit, DAILY_LIMIT } from "@/lib/rate-limit";
 import {
   getOrCreateConversation,
+  getOrCreateTraveler,
   appendMessages,
   updateConversation,
   trackEvent,
@@ -45,10 +46,16 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const LOCALHOST_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
 export async function POST(req: NextRequest) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const { allowed, remaining } = checkRateLimit(ip);
+  // "unknown" is NOT localhost — treat as its own rate-limit bucket to prevent bypass
+  const isLocalhost = LOCALHOST_IPS.has(ip);
+  const { allowed, remaining } = isLocalhost
+    ? { allowed: true, remaining: 9999 }
+    : checkRateLimit(ip);
 
   if (!allowed) {
     return new Response(
@@ -238,7 +245,10 @@ async function routeToFlow(
       const { pending_query, pending_details } = conversation.flow_state;
       const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
       await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
-      return handleHungry(sessionId, `${pending_query}. ${message}`, pending_details, recentCtx);
+      // Re-classify the clarifying answer to capture fresh signals (area, meal_type, etc.)
+      const { details: freshDetails } = await classifyIntent(message, recentCtx);
+      const mergedDetails = { ...pending_details, ...freshDetails };
+      return handleHungry(sessionId, `${pending_query}. ${message}`, mergedDetails, recentCtx, { channel: "web" });
     }
 
     default:
@@ -269,7 +279,14 @@ async function streamHandlerResponse(
   switch (intent) {
     case "hungry": {
       const alreadyAsked = conversation.flow_state?.asked_clarifying;
-      if (!alreadyAsked && (isVagueQuery(details) || isUnclearQuery(details, recentHistory))) {
+      // If the user is telling Sam to stop asking questions, skip clarification entirely
+      const isImpatient = /\b(stop ask|just tell|just give|just show|no more question|enough question|don't ask|quit asking|stop with the question)\b/i.test(message);
+      // Skip clarifying question for cities we don't cover — let buildHungryPrompt return
+      // an honest no-coverage response instead of asking "what are you feeling?"
+      const { isSupportedCity } = await import("@sam/bot/utils/city-defaults");
+      const travelerForCity = await getOrCreateTraveler(sessionId);
+      const inUnsupportedCity = !!(travelerForCity.current_city && !isSupportedCity(travelerForCity.current_city));
+      if (!inUnsupportedCity && !alreadyAsked && !isImpatient && (isVagueQuery(details) || isUnclearQuery(details, recentHistory, message))) {
         const question = isVagueQuery(details)
           ? getClarifyingQuestion(details)
           : UNCLEAR_CLARIFYING_QUESTION;
@@ -285,7 +302,7 @@ async function streamHandlerResponse(
         flushAndTrackUsage(sessionId, "hungry");
         return sseTextResponse(question, rateLimitRemaining);
       }
-      const payload = await buildHungryPrompt(sessionId, message, details, recentHistory);
+      const payload = await buildHungryPrompt(sessionId, message, details, recentHistory, { channel: "web" });
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],
@@ -294,7 +311,7 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "day_plan": {
-      const payload = await buildDayPlanPrompt(sessionId, message, details, recentHistory);
+      const payload = await buildDayPlanPrompt(sessionId, message, details, recentHistory, { channel: "web" });
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],
@@ -303,7 +320,7 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "nearby": {
-      const payload = await buildNearbyPrompt(sessionId, message, details, recentHistory);
+      const payload = await buildNearbyPrompt(sessionId, message, details, recentHistory, { channel: "web" });
       const stream = chatStream(
         payload.systemPrompt,
         [{ role: "user", content: payload.userPrompt }],
@@ -329,7 +346,7 @@ async function streamHandlerResponse(
       const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
       const spotName = details.spot_name ?? message;
       const city = getDefaultCity();
-      const response = await handleSpotInfo(sessionId, message, spotName, city);
+      const response = await handleSpotInfo(sessionId, message, spotName, city, { channel: "web" });
       await appendMessages(sessionId, [
         { role: "user", content: message },
         { role: "assistant", content: response },
@@ -346,7 +363,7 @@ async function streamHandlerResponse(
         content: m.content,
       }));
 
-      const stream = chatAsSamStream(history, message);
+      const stream = chatAsSamStream(history, message, { channel: "web" });
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
   }
@@ -365,7 +382,8 @@ async function handleGeneral(
       role: m.role as "user" | "assistant",
       content: m.content,
     })),
-    message
+    message,
+    { channel: "web" }
   );
 }
 

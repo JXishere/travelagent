@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock modules with side effects at import time
-vi.mock("../llm.js", () => ({
-  loadPrompt: vi.fn().mockReturnValue("system prompt"),
-  langInstruction: vi.fn().mockReturnValue(""),
-  langUserNote: vi.fn().mockReturnValue(""),
-}));
+vi.mock("../llm.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../llm.js")>();
+  return {
+    ...actual,
+    loadPrompt: vi.fn().mockReturnValue("system prompt"),
+    buildSystemPrompt: vi.fn().mockReturnValue("system prompt"),
+    langInstruction: vi.fn().mockReturnValue(""),
+    langUserNote: vi.fn().mockReturnValue(""),
+  };
+});
 vi.mock("../database.js", () => ({
   querySpots: vi.fn().mockResolvedValue([]),
   semanticSearchSpots: vi.fn().mockResolvedValue([]),
@@ -36,7 +41,7 @@ const mamakSpot: Spot = {
   name: "Nasi Kandar Pelita",
   city: "Kuala Lumpur",
   area: "KLCC",
-  category: "dinner",
+  categories: ["dinner"],
   what_to_order: ["roti canai", "nasi kandar"],
 };
 
@@ -45,7 +50,7 @@ const dinnerSpot: Spot = {
   name: "Fatty Crab",
   city: "Kuala Lumpur",
   area: "Taman Megah",
-  category: "dinner",
+  categories: ["dinner"],
   what_to_order: ["chilli crab"],
 };
 

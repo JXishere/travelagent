@@ -10,6 +10,26 @@ const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 export const SONNET = "claude-sonnet-4-5-20250929";
 export const HAIKU = "claude-haiku-4-5-20251001";
 
+/** Detect if a message is primarily Malay — checks for common Malay function words */
+export function detectLanguage(message: string): "ms" | "en" {
+  const malay = /\b(nak|makan|sedap|kat|ada|tak|boleh|macam|mana|bawak|bagi|lah|pun|dah|je|kan|lagi|memang|cari|jumpa|tempat|dalam|dekat|tahu|rasa|pasal|sebab|dengan|untuk|saya|kita|awak|bila|kalau|habis|sekarang|pagi|petang|malam|tengahari)\b/gi;
+  return (message.match(malay) ?? []).length >= 2 ? "ms" : "en";
+}
+
+/** System prompt suffix to inject when the user writes in Malay */
+export function langInstruction(message: string): string {
+  return detectLanguage(message) === "ms"
+    ? "\n\nIMPORTANT: The user wrote in Malay. You MUST reply entirely in Malay (Bahasa Malaysia). Do not switch to English."
+    : "";
+}
+
+/** End-of-user-prompt reminder written in Malay — recency reinforcement for multi-block responses */
+export function langUserNote(message: string): string {
+  return detectLanguage(message) === "ms"
+    ? "\n\nPENTING: Balas semua dalam Bahasa Malaysia sahaja. Jangan tukar ke English."
+    : "";
+}
+
 // --- Per-request token tracking ---
 interface UsageBucket {
   input_tokens: number;
@@ -81,14 +101,25 @@ export async function chat(
   return "";
 }
 
+/** Build the system prompt with city substitution and optional channel addendum */
+export function buildSystemPrompt(city: string, channel?: "whatsapp" | "web"): string {
+  let prompt = loadPrompt("system").replaceAll("{{CITY}}", city);
+  if (channel) {
+    try {
+      prompt += "\n\n" + loadPrompt(`system-${channel}`);
+    } catch { /* no addendum file for this channel — silently skip */ }
+  }
+  return prompt;
+}
+
 /** Chat with Sam's personality — the main conversation mode */
 export async function chatAsSam(
   history: ChatMessage[],
   userMessage: string,
-  options?: { city?: string }
+  options?: { city?: string; channel?: "whatsapp" | "web" }
 ): Promise<string> {
   const city = options?.city ?? getDefaultCity();
-  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city);
+  const systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },
@@ -132,10 +163,10 @@ export function chatStream(
 export function chatAsSamStream(
   history: ChatMessage[],
   userMessage: string,
-  options?: { city?: string }
+  options?: { city?: string; channel?: "whatsapp" | "web" }
 ) {
   const city = options?.city ?? getDefaultCity();
-  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city);
+  const systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },
@@ -212,9 +243,10 @@ export async function webSearchSpot(
 
 {
   "name": "official name",
-  "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
+  "categories": ["breakfast"],
   "area": "area/district name",
   "address": "street address",
+  "opening_hours": { "Monday": "9:00 AM - 10:00 PM", "Tuesday": "...", ... },
   "price_range": "$|$$|$$$",
   "payment_methods": ["cash", "card", etc],
   "what_to_order": ["popular dishes/items"],
@@ -245,8 +277,6 @@ Return ONLY the JSON object, no markdown fences or extra text.`;
     const bareMatch = textBlock.text.match(/\{[\s\S]*\}/);
     const jsonStr = fenceMatch ? fenceMatch[1].trim() : bareMatch ? bareMatch[0] : textBlock.text.trim();
     const parsed = JSON.parse(jsonStr);
-    // Belt-and-suspenders: never return opening_hours from web search
-    delete parsed.opening_hours;
     return parsed;
   } catch (error) {
     console.error("webSearchSpot failed:", error);
@@ -288,14 +318,15 @@ Classify the user's message into exactly one intent:
 - "weather": They're asking about weather or it's affecting their plans ("raining", "hot", "weather")
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
 - "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message.
-- "feedback": They're giving feedback about a spot they visited ("it was great", "didn't like it", rating)
+- "feedback": They're giving feedback about a SPECIFIC SPOT they visited ("it was great", "didn't like it", rating). ONLY use this when they reference a specific place they went to. General frustration with Sam ("this is useless", "you don't know KL", "this doesn't work") is "general", NOT feedback.
 - "general": General conversation, greetings, questions about Sam, off-topic
 
 PRIORITY RULES:
 1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
 2. CONTINUATION: If the recent conversation shows the user asked about food/dining and Sam responded with a clarifying question (e.g., "what area?", "where are you?", "where are you based?", "what part of KL?"), then the user's answer is a CONTINUATION of the food request — classify as "hungry". This applies even if the user's reply is just a location name like "PJ" or "Bangsar" or "maybe KL".
 3. ALTERNATIVES: If the user is asking for more options or alternatives to what Sam already recommended (e.g. "other choices?", "other options?", "anything else?", "what else?", "what else you got?", "not feeling that", "something different?", "any other spots?", "got more?", "how about something different?", "other recs?", "give me more"), classify as "hungry". Look at the most recent food query in the conversation history and copy its area, cuisine, and meal_type into details — do NOT return empty details if context is available.
-4. Only use "profile" for messages with ZERO actionable food/activity requests AND no recent food conversation context.
+4. REFINEMENTS: If the user is adding constraints to a prior food request — timing ("open after 9pm"), occasion ("first date"), vibe ("something light", "not heavy"), dietary, etc. — WITHOUT specifying a new area, classify as "hungry" and carry forward the area from the most recent food query in the conversation history into details.area.
+5. Only use "profile" for messages with ZERO actionable food/activity requests AND no recent food conversation context.
 5. "nearby" is ONLY for when the user says they are physically AT a location and want to see what's around them (e.g., "I'm near KLCC", "what's around Bukit Bintang"). Do NOT use "nearby" for follow-up answers to food questions.
 
 Examples:
@@ -305,6 +336,9 @@ Examples:
 - "tell me more about Nasi Kandar Pelita" → spot_info, spot_name: "Nasi Kandar Pelita"
 - "what should I order at Bijan?" → spot_info, spot_name: "Bijan"
 - "i need a place to go for my birthday, thinking some place chill, japanese food with my close friend" → hungry (birthday dinner + japanese food)
+- "this is useless" → general (frustration with the service, not feedback about a visited spot)
+- "you don't actually know KL" → general (challenge/frustration, not spot feedback)
+- "i went to one of your spots and it was terrible" → feedback (they visited a specific spot and had a bad experience)
 - "grab some ramen tonight" → hungry
 - "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
 - "planning a trip to KL next week" → profile (no food/activity request)

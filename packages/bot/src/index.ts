@@ -18,7 +18,7 @@ import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
 import { handleProfile, startProfileLearning } from "./handlers/profile.js";
 import { handleStrategic } from "./handlers/strategic.js";
-import { handleHungry, handleDayPlan, handleNearby, handleSpotInfo, isVagueQuery, getClarifyingQuestion, isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION } from "./handlers/ontrip.js";
+import { handleHungry, handleDayPlan, handleNearby, handleSpotInfo, isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION } from "./handlers/ontrip.js";
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
 import { maybeExtractProfile } from "./handlers/continuous-profile.js";
@@ -101,7 +101,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     const response = await handleNearby(from, `I'm at ${location.latitude}, ${location.longitude}`, {
       area: undefined,
       specific_place: `${location.latitude},${location.longitude}`,
-    });
+    }, undefined, { channel: "whatsapp" });
     await appendMessages(from, [
       { role: "user", content: `[shared location: ${location.latitude}, ${location.longitude}]` },
       { role: "assistant", content: response },
@@ -204,7 +204,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     }
 
     await insertSpot({ ...spotData, source: "text" });
-    const response = `Added *${extracted.name}* (${extracted.area}, ${extracted.category}) to the graph.`;
+    const response = `Added *${extracted.name}* (${extracted.area}, ${(extracted.categories ?? []).join("/")}) to the graph.`;
     await appendMessages(from, [
       { role: "user", content: text },
       { role: "assistant", content: response },
@@ -241,27 +241,24 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   switch (intent) {
     case "hungry": {
       const alreadyAsked = conversation.flow_state?.asked_clarifying;
-      if (!alreadyAsked && (isVagueQuery(details) || isUnclearQuery(details, recentContext))) {
-        const question = isVagueQuery(details)
-          ? getClarifyingQuestion(details)
-          : UNCLEAR_CLARIFYING_QUESTION;
+      if (!alreadyAsked && isUnclearQuery(details, recentContext, text)) {
         await updateConversation(from, {
           current_flow: "query_clarifying",
           flow_state: { pending_query: text, pending_details: details, asked_clarifying: true },
         });
-        response = question;
+        response = UNCLEAR_CLARIFYING_QUESTION;
       } else {
-        response = await handleHungry(from, text, details, recentContext);
+        response = await handleHungry(from, text, details, recentContext, { channel: "whatsapp" });
       }
       break;
     }
 
     case "day_plan":
-      response = await handleDayPlan(from, text, details, recentContext);
+      response = await handleDayPlan(from, text, details, recentContext, { channel: "whatsapp" });
       break;
 
     case "nearby":
-      response = await handleNearby(from, text, details, recentContext);
+      response = await handleNearby(from, text, details, recentContext, { channel: "whatsapp" });
       break;
 
     case "contribute":
@@ -281,7 +278,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       const { getCurrentWeather } = await import("./weather.js");
       const weather = await getCurrentWeather();
       const weatherSummary = weather
-        ? `Current weather in KL: ${weather.summary}${weather.is_raining ? " (raining)" : ""}`
+        ? `Current weather in ${getDefaultCity()}: ${weather.summary}${weather.is_raining ? " (raining)" : ""}`
         : "";
       const weatherContext = weatherSummary ? `Weather info: ${weatherSummary}` : undefined;
       response = await handleQuery(from, text, {
@@ -294,7 +291,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     case "spot_info": {
       const spotName = details.spot_name ?? text;
       const city = getDefaultCity();
-      response = await handleSpotInfo(from, text, spotName, city);
+      response = await handleSpotInfo(from, text, spotName, city, { channel: "whatsapp" });
       break;
     }
 
@@ -306,7 +303,8 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
           role: m.role as "user" | "assistant",
           content: m.content,
         })),
-        text
+        text,
+        { channel: "whatsapp" }
       );
       break;
   }
@@ -378,8 +376,10 @@ async function routeToCurrentFlow(
       const { pending_query, pending_details } = conversation.flow_state;
       const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
       await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
-      // Combine original query + clarifying answer and proceed regardless of vagueness
-      return handleHungry(phoneNumber, `${pending_query}. ${text}`, pending_details, recentCtx);
+      // Re-classify the clarifying answer to capture fresh signals (area, meal_type, etc.)
+      const { details: freshDetails } = await classifyIntent(text, recentCtx);
+      const mergedDetails = { ...pending_details, ...freshDetails };
+      return handleHungry(phoneNumber, `${pending_query}. ${text}`, mergedDetails, recentCtx, { channel: "whatsapp" });
     }
 
     default:

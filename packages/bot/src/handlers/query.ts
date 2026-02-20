@@ -1,16 +1,10 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
-import { chat, loadPrompt, HAIKU, langInstruction, langUserNote } from "../llm.js";
+import { chat, buildSystemPrompt, HAIKU, langInstruction, langUserNote } from "../llm.js";
 import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES } from "../utils/city-defaults.js";
-
-let _systemPrompt: string | null = null;
-function getSystemPrompt(): string {
-  if (!_systemPrompt) _systemPrompt = loadPrompt("system");
-  return _systemPrompt;
-}
 
 interface QueryDetails {
   area?: string;
@@ -88,7 +82,7 @@ export async function handleQuery(
   if (spots.length === 0) {
     console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
     return await chat(
-      getSystemPrompt() + langInstruction(message),
+      buildSystemPrompt(city, options?.channel) + langInstruction(message),
       [
         {
           role: "user",
@@ -153,7 +147,7 @@ CRITICAL: ONLY mention details that appear in the spot data below. If a spot onl
 ${areaNote}
 ${spotContext}${perspectivesContext}${langUserNote(message)}`;
 
-  return await chat(getSystemPrompt() + langInstruction(message), [{ role: "user", content: prompt }], {
+  return await chat(buildSystemPrompt(city, options?.channel) + langInstruction(message), [{ role: "user", content: prompt }], {
     maxTokens: 256,
   });
 }
@@ -194,7 +188,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
     .map((s, i) => {
       const lines = [`${i + 1}. ${s.name}`];
       if (s.area) lines.push(`   Neighborhood: ${s.area}`);
-      if (s.category) lines.push(`   Category: ${s.category}`);
+      if (s.categories?.length) lines.push(`   Category: ${s.categories.join(", ")}`);
       if (s.address) lines.push(`   Address: ${s.address}`);
       if (s.price_range) lines.push(`   Price: ${s.price_range}`);
       if (s.payment_methods?.length)

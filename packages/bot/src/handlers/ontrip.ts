@@ -1,6 +1,6 @@
 // On-trip guidance — real-time recommendations when the user is in KL
 
-import { chat, loadPrompt, HAIKU, webSearchSpot } from "../llm.js";
+import { chat, buildSystemPrompt, HAIKU, webSearchSpot, langInstruction, langUserNote } from "../llm.js";
 import {
   querySpots,
   semanticSearchSpots,
@@ -13,15 +13,9 @@ import {
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getCityDefaults, getDefaultCity, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
+import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
 import { formatSpotsForLLM } from "./query.js";
 import { parseCoordinates, filterByDistance, type SpotWithDistance } from "../utils/geo.js";
-
-let _systemPrompt: string | null = null;
-function getSystemPrompt(): string {
-  if (!_systemPrompt) _systemPrompt = loadPrompt("system");
-  return _systemPrompt;
-}
 
 interface IntentDetails {
   area?: string;
@@ -47,8 +41,11 @@ export function isVagueQuery(details: IntentDetails): boolean {
  * These should be intercepted before building a prompt and returned as
  * a direct clarifying question (same pattern as isVagueQuery).
  */
-export function isUnclearQuery(details: IntentDetails, conversationHistory?: string): boolean {
-  return !details.area && !details.cuisine && !details.meal_type && !conversationHistory;
+export function isUnclearQuery(details: IntentDetails, conversationHistory?: string, message?: string): boolean {
+  if (details.area || details.cuisine || details.meal_type || conversationHistory) return false;
+  // A message with more than 5 words has enough implicit context — don't deflect with a clarifying question
+  const wordCount = (message ?? "").trim().split(/\s+/).filter(Boolean).length;
+  return wordCount <= 5;
 }
 
 /** Clarifying question for a bare hungry message with no context */
@@ -102,16 +99,37 @@ export async function buildHungryPrompt(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<PromptPayload> {
+  const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
+
+  // Detect unsupported city — return honest "no coverage" before querying with wrong defaults
+  if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
+    const supported = getSupportedCities().join(", ");
+    return {
+      systemPrompt: buildSystemPrompt(getDefaultCity(), channel),
+      userPrompt: `The user says: "${message}" — they're asking about ${traveler.current_city}. Be honest and warm: you don't have coverage there yet, but you're great for ${supported}. One to two sentences, no spot recommendations.`,
+      spotIds: [],
+      maxTokens: 256,
+    };
+  }
 
   const cityDefaults = getCityDefaults(traveler.current_city);
   const hour = new Date().getUTCHours() + cityDefaults.utcOffset;
   const timeOfDay =
     details.time_of_day ??
     (hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 20 ? "evening" : "late-night");
+
+  // Infer meal type from time of day when the user gave no specific signal
+  if (!details.meal_type && !details.cuisine) {
+    if (hour >= 6 && hour < 11)       details.meal_type = "breakfast";
+    else if (hour >= 11 && hour < 15) details.meal_type = "lunch";
+    else if (hour >= 15 && hour < 18) details.meal_type = "cafe";
+    else                               details.meal_type = "dinner";
+  }
 
   // cuisine is a specific dish (e.g. "nasi lemak", "laksa") — treat as dish query so
   // semantic search is used instead of a time-of-day category fallback.
@@ -207,7 +225,7 @@ export async function buildHungryPrompt(
   // No spots in DB — be honest
   if (toRecommend.length === 0) {
     return {
-      systemPrompt: getSystemPrompt(),
+      systemPrompt: buildSystemPrompt(cityDefaults.name, channel) + langInstruction(message),
       userPrompt: `The user says: "${message}"
 
 You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
@@ -228,9 +246,11 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
 
   const prefContext = buildPrefContext(traveler);
   const alreadyAskedLocalOrVisiting = !!conversationHistory?.includes("local or just visiting");
-  const newUserNote = !alreadyAskedLocalOrVisiting && isNewUser(traveler)
-    ? `\nThis user is new — Sam doesn't know them yet. After giving the recommendation, add one casual line: "Quick one — local or just visiting? Helps me tune what I show you." Only add this if you haven't already asked.`
-    : "";
+  const newUserNote = alreadyAskedLocalOrVisiting
+    ? `\nDo NOT ask "local or just visiting?" — you have already asked this.`
+    : !alreadyAskedLocalOrVisiting && isNewUser(traveler)
+      ? `\nThis user is new — Sam doesn't know them yet. After giving the recommendation, add one casual line: "Quick one — local or just visiting? Helps me tune what I show you." Only add this if you haven't already asked.`
+      : "";
 
   // Detect area mismatch — user asked for a specific area but results are from elsewhere.
   // Skip mismatch check if the area resolved to a city-level alias (e.g. "PJ" → "Petaling Jaya"),
@@ -258,7 +278,7 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
     : "";
 
   return {
-    systemPrompt: getSystemPrompt(),
+    systemPrompt: buildSystemPrompt(cityDefaults.name, channel) + langInstruction(message),
     userPrompt: `The user says: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 Time: ${timeOfDay} (KL time)
@@ -289,7 +309,7 @@ Tasting menu only — book 2 weeks ahead.
 Bar.Kar (KLCC)
 Open-flame dishes, reserve in advance.
 
-Respect dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}`,
+Respect dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}${langUserNote(message)}`,
     spotIds: toRecommend.map(s => s.id),
     maxTokens: 512,
   };
@@ -300,9 +320,10 @@ export async function handleHungry(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
-  const payload = await buildHungryPrompt(phoneNumber, message, details, conversationHistory);
+  const payload = await buildHungryPrompt(phoneNumber, message, details, conversationHistory, options);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
     model: payload.spotIds.length === 0 ? HAIKU : undefined,
@@ -314,11 +335,24 @@ export async function buildDayPlanPrompt(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<PromptPayload> {
+  const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
+
+  // Detect unsupported city
+  if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
+    const supported = getSupportedCities().join(", ");
+    return {
+      systemPrompt: buildSystemPrompt(getDefaultCity(), channel),
+      userPrompt: `The user wants a day plan but they're in ${traveler.current_city}. Be honest and warm: you don't have coverage there yet, but you're great for ${supported}. One to two sentences.`,
+      spotIds: [],
+      maxTokens: 256,
+    };
+  }
 
   // Get a mix of spots for the day
   const breakfastSpots = await querySpots({ city, categories: ["breakfast", "cafe"], limit: 3 });
@@ -335,7 +369,7 @@ export async function buildDayPlanPrompt(
   const prefContext = buildPrefContext(traveler);
 
   return {
-    systemPrompt: getSystemPrompt(),
+    systemPrompt: buildSystemPrompt(city, channel) + langInstruction(message),
     userPrompt: `The user asks: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
@@ -349,7 +383,7 @@ ${spotsContext}
 
 If the user is specifically asking about non-food activities (things to do, sightseeing, etc.), be honest that your strength is food and dining. You can mention any activity spots you have, but flag that you don't have full activities coverage and they should check elsewhere for that.
 
-Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."`,
+Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."${langUserNote(message)}`,
     spotIds: allDaySpots.map(s => s.id),
     maxTokens: 1024,
   };
@@ -360,9 +394,10 @@ export async function handleDayPlan(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
-  const payload = await buildDayPlanPrompt(phoneNumber, message, details, conversationHistory);
+  const payload = await buildDayPlanPrompt(phoneNumber, message, details, conversationHistory, options);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
   });
@@ -373,11 +408,24 @@ export async function buildNearbyPrompt(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<PromptPayload> {
+  const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
+
+  // Detect unsupported city
+  if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
+    const supported = getSupportedCities().join(", ");
+    return {
+      systemPrompt: buildSystemPrompt(getDefaultCity(), channel),
+      userPrompt: `The user is asking what's nearby but they're in ${traveler.current_city}. Be honest and warm: you don't have coverage there yet, but you're great for ${supported}. One to two sentences.`,
+      spotIds: [],
+      maxTokens: 256,
+    };
+  }
 
   const area = details.area ?? details.specific_place;
 
@@ -424,7 +472,7 @@ export async function buildNearbyPrompt(
   const prefContext = buildPrefContext(traveler);
 
   return {
-    systemPrompt: getSystemPrompt(),
+    systemPrompt: buildSystemPrompt(city, channel) + langInstruction(message),
     userPrompt: `The user says: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
@@ -436,7 +484,7 @@ Nearby spots from knowledge graph:
 
 ${spotsContext}
 
-Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from area."} Keep it casual.`,
+Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from area."} Keep it casual.${langUserNote(message)}`,
     spotIds: spots.map(s => s.id),
     maxTokens: 512,
   };
@@ -447,9 +495,10 @@ export async function handleNearby(
   phoneNumber: string,
   message: string,
   details: IntentDetails,
-  conversationHistory?: string
+  conversationHistory?: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
-  const payload = await buildNearbyPrompt(phoneNumber, message, details, conversationHistory);
+  const payload = await buildNearbyPrompt(phoneNumber, message, details, conversationHistory, options);
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
   });
@@ -464,9 +513,10 @@ export async function handleSpotInfo(
   phoneNumber: string,
   userMessage: string,
   spotName: string,
-  city: string
+  city: string,
+  options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
-  const systemPrompt = getSystemPrompt().replaceAll("{{CITY}}", city);
+  const systemPrompt = buildSystemPrompt(city, options?.channel);
 
   // Fetch DB record and web data in parallel
   const [dbSpot, webData] = await Promise.all([
@@ -508,7 +558,7 @@ export async function handleSpotInfo(
     merged.name && `Name: ${merged.name}`,
     merged.area && `Area: ${merged.area}`,
     merged.address && `Address: ${merged.address}`,
-    merged.category && `Category: ${merged.category}`,
+    merged.categories?.length && `Category: ${merged.categories.join(", ")}`,
     merged.price_range && `Price: ${merged.price_range}`,
     merged.payment_methods?.length && `Payment: ${(merged.payment_methods as string[]).join(", ")}`,
     merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}${hoursFromWeb ? " (from web — may be outdated)" : ""}`,

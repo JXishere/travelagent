@@ -341,7 +341,7 @@ export async function buildDayPlanPrompt(
   const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather();
-  const city = traveler.current_city ?? getDefaultCity();
+  const defaultCity = traveler.current_city ?? getDefaultCity();
 
   // Detect unsupported city
   if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
@@ -354,11 +354,17 @@ export async function buildDayPlanPrompt(
     };
   }
 
+  // Resolve city from area if user specified one (e.g. "what to do in PJ" → city = "Petaling Jaya")
+  const areaCities = resolveCitiesFromArea(details.area);
+  const queryCities = areaCities.length > 0 ? areaCities : undefined;
+  const city = queryCities ? undefined : defaultCity;
+  const cities = queryCities;
+
   // Get a mix of spots for the day
-  const breakfastSpots = await querySpots({ city, categories: ["breakfast", "cafe"], limit: 3 });
-  const lunchSpots = await querySpots({ city, categories: ["lunch"], limit: 3 });
-  const activitySpots = await querySpots({ city, categories: ["activity", "market"], limit: 3 });
-  const dinnerSpots = await querySpots({ city, categories: ["dinner"], limit: 3 });
+  const breakfastSpots = await querySpots({ city, cities, categories: ["breakfast", "cafe"], limit: 3 });
+  const lunchSpots = await querySpots({ city, cities, categories: ["lunch"], limit: 3 });
+  const activitySpots = await querySpots({ city, cities, categories: ["activity", "market"], limit: 3 });
+  const dinnerSpots = await querySpots({ city, cities, categories: ["dinner"], limit: 3 });
 
   const allDaySpots = [...breakfastSpots, ...lunchSpots, ...activitySpots, ...dinnerSpots];
   const spotsContext = formatSpotsForLLM(allDaySpots);

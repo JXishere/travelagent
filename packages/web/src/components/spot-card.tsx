@@ -6,6 +6,7 @@ import type { Spot } from "../lib/supabase";
 interface SpotCardProps {
   spot: Spot;
   onApprove: (id: string) => void;
+  onMustGo: (id: string, current: boolean) => void;
   onDelete: (id: string) => void;
   onSave: (id: string, updates: Partial<Spot>) => void;
 }
@@ -21,14 +22,14 @@ const CATEGORIES = [
 ];
 const VIBES = ["casual", "upscale", "chaotic", "chill", "local", "touristy"];
 
-export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
+export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notes, setNotes] = useState("");
   const [parsing, setParsing] = useState(false);
   const [draft, setDraft] = useState({
-    tier: spot.tier,
+    must_go: spot.must_go,
     category: spot.category,
     vibe: spot.vibe ?? "",
     what_to_order: (spot.what_to_order ?? []).join("\n"),
@@ -39,14 +40,7 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
     payment_methods: (spot.payment_methods ?? []).join(", "),
   });
 
-  const approved = (spot.confidence_score ?? 0) >= 0.85;
-  const tierLabel = spot.tier === 1 ? "T1" : spot.tier === 2 ? "T2" : "T3";
-  const tierColor =
-    spot.tier === 1
-      ? "var(--green)"
-      : spot.tier === 2
-        ? "var(--blue)"
-        : "var(--muted)";
+  const approved = spot.verified;
 
   const handleParseAndSave = async () => {
     if (!notes.trim()) return;
@@ -91,7 +85,6 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
       if (parsed.best_time_of_day && !spot.best_time_of_day) updates.best_time_of_day = parsed.best_time_of_day;
       if (parsed.indoor_outdoor && !spot.indoor_outdoor) updates.indoor_outdoor = parsed.indoor_outdoor;
       if (parsed.category && parsed.category !== spot.category) updates.category = parsed.category;
-      if (parsed.tier && parsed.tier !== spot.tier) updates.tier = parsed.tier;
 
       if (Object.keys(updates).length > 0) {
         onSave(spot.id, updates);
@@ -106,7 +99,7 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
 
   const handleSave = () => {
     onSave(spot.id, {
-      tier: draft.tier,
+      must_go: draft.must_go,
       category: draft.category,
       vibe: draft.vibe || null,
       what_to_order: draft.what_to_order
@@ -166,12 +159,11 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
         >
           {spot.category}
         </span>
-        <span style={{ color: tierColor, fontWeight: "bold", fontSize: "0.8rem" }}>
-          {tierLabel}
-        </span>
-        <span style={{ color: "var(--muted)", fontSize: "0.75rem" }}>
-          {((spot.confidence_score ?? 0) * 100).toFixed(0)}%
-        </span>
+        {spot.must_go && (
+          <span style={{ color: "var(--green)", fontWeight: "bold", fontSize: "0.75rem" }}>
+            must-go
+          </span>
+        )}
         <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>
           {spot.contribution_count ? `${spot.contribution_count}c` : "—"}
         </span>
@@ -208,19 +200,13 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
                   ))}
                 </select>
               </label>
-              <label style={labelStyle}>
-                Tier
-                <select
-                  value={draft.tier}
-                  onChange={(e) =>
-                    setDraft({ ...draft, tier: Number(e.target.value) })
-                  }
-                  style={inputStyle}
-                >
-                  <option value={1}>1 — must-do</option>
-                  <option value={2}>2 — should-do</option>
-                  <option value={3}>3 — hidden gem</option>
-                </select>
+              <label style={{ ...labelStyle, flexDirection: "row", alignItems: "center", gap: "0.5rem" }}>
+                <input
+                  type="checkbox"
+                  checked={draft.must_go ?? false}
+                  onChange={(e) => setDraft({ ...draft, must_go: e.target.checked })}
+                />
+                Must-go spot
               </label>
               <label style={labelStyle}>
                 Vibe
@@ -393,9 +379,15 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
               >
                 {!approved && (
                   <button onClick={() => onApprove(spot.id)} style={btnGreen}>
-                    Approve
+                    Verify
                   </button>
                 )}
+                <button
+                  onClick={() => onMustGo(spot.id, spot.must_go)}
+                  style={spot.must_go ? btnGreen : btnMuted}
+                >
+                  {spot.must_go ? "★ must-go" : "☆ must-go?"}
+                </button>
                 <button onClick={() => setEditing(true)} style={btnMuted}>
                   Edit
                 </button>

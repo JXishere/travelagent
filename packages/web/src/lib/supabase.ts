@@ -4,9 +4,11 @@ export interface Spot {
   id: string;
   name: string;
   city: string;
+  country: string | null;
   area: string;
   category: string;
-  tier: number;
+  must_go: boolean;
+  verified: boolean;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -19,7 +21,6 @@ export interface Spot {
   best_time_of_day: string | null;
   indoor_outdoor: string | null;
   weather_dependent: boolean | null;
-  confidence_score: number | null;
   opening_hours: Record<string, string> | null;
   source: string | null;
   use_count: number | null;
@@ -241,37 +242,19 @@ export async function getRecentSpotTeasers(limit = 200): Promise<string[]> {
   return teasers;
 }
 
-/** Map cities to countries — extend as Sam expands globally */
-const CITY_TO_COUNTRY: Record<string, string> = {
-  // Malaysia
-  "Kuala Lumpur": "Malaysia",
-  "Petaling Jaya": "Malaysia",
-  "Penang": "Malaysia",
-  "Malacca": "Malaysia",
-  "Johor Bahru": "Malaysia",
-  "Ipoh": "Malaysia",
-  "Langkawi": "Malaysia",
-  // Asia
-  "Taipei": "Taiwan",
-  "Bangkok": "Thailand",
-  "Singapore": "Singapore",
-  "Tokyo": "Japan",
-  "Osaka": "Japan",
-  "Seoul": "South Korea",
-  "Hong Kong": "Hong Kong",
-  "Ho Chi Minh City": "Vietnam",
-  "Hanoi": "Vietnam",
-  "Jakarta": "Indonesia",
-  "Bali": "Indonesia",
-  "Manila": "Philippines",
-  "Phnom Penh": "Cambodia",
-};
-
 export async function getCountries(): Promise<string[]> {
-  const cities = await getDistinctCities();
-  if (cities.length === 1 && cities[0] === "every city") return [];
-  const countries = [...new Set(cities.map((c) => CITY_TO_COUNTRY[c] ?? c))];
-  return countries.sort();
+  const supabase = getClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("spots")
+    .select("country")
+    .not("country", "is", null);
+
+  if (error || !data || data.length === 0) return [];
+
+  const countries = [...new Set(data.map((r: { country: string }) => r.country))].sort();
+  return countries;
 }
 
 export async function getDistinctAreas(): Promise<string[]> {

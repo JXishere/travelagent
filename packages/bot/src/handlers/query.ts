@@ -1,6 +1,6 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
-import { chat, loadPrompt, HAIKU } from "../llm.js";
+import { chat, loadPrompt, HAIKU, langInstruction, langUserNote } from "../llm.js";
 import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
@@ -88,7 +88,7 @@ export async function handleQuery(
   if (spots.length === 0) {
     console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
     return await chat(
-      getSystemPrompt(),
+      getSystemPrompt() + langInstruction(message),
       [
         {
           role: "user",
@@ -147,13 +147,13 @@ ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
 ${weatherContext}
 
-Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros.
+Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros. Lead with your strongest pick.
 
 CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
 ${areaNote}
-${spotContext}${perspectivesContext}`;
+${spotContext}${perspectivesContext}${langUserNote(message)}`;
 
-  return await chat(getSystemPrompt(), [{ role: "user", content: prompt }], {
+  return await chat(getSystemPrompt() + langInstruction(message), [{ role: "user", content: prompt }], {
     maxTokens: 256,
   });
 }
@@ -162,13 +162,6 @@ export function formatOpeningHours(hours: Record<string, string>): string {
   return Object.entries(hours)
     .map(([day, time]) => `${day.charAt(0).toUpperCase() + day.slice(1)}: ${time}`)
     .join(", ");
-}
-
-export function confidenceLabel(score: number | undefined): string {
-  const s = score ?? 0.7;
-  if (s >= 0.85) return "personal favorite";
-  if (s >= 0.6) return "well-vouched";
-  return "fresh intel";
 }
 
 export function sourceLabel(source: string | undefined): string {
@@ -218,8 +211,12 @@ export function formatSpotsForLLM(spots: Spot[]): string {
       if (s.indoor_outdoor) lines.push(`   Setting: ${s.indoor_outdoor}`);
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
-      if (s.tier) lines.push(`   Tier: ${s.tier}`);
-      lines.push(`   Sam's take: ${confidenceLabel(s.confidence_score)} (from ${sourceLabel(s.source)})`);
+      const takeLabel = s.must_go
+        ? `must-go (${sourceLabel(s.source)})`
+        : s.verified
+          ? `verified (${sourceLabel(s.source)})`
+          : `unverified — treat as a lead, not a guarantee`;
+      lines.push(`   Sam's take: ${takeLabel}`);
       return lines.join("\n");
     })
     .join("\n\n");

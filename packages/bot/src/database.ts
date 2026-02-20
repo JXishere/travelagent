@@ -59,10 +59,13 @@ export async function appendMessages(
   phoneNumber: string,
   newMessages: Array<{ role: string; content: string }>
 ): Promise<void> {
-  const convo = await getOrCreateConversation(phoneNumber);
-  const allMessages = [...convo.messages, ...newMessages];
-  const trimmed = allMessages.slice(-MAX_CONVERSATION_MESSAGES);
-  await updateConversation(phoneNumber, { messages: trimmed });
+  // Atomic append via RPC — avoids read-modify-write race condition where
+  // two concurrent messages from the same user overwrite each other's history.
+  await supabase.rpc("append_conversation_messages", {
+    p_phone_number: phoneNumber,
+    p_new_messages: JSON.stringify(newMessages),
+    p_max_messages: MAX_CONVERSATION_MESSAGES,
+  });
 }
 
 // ============================================
@@ -76,7 +79,8 @@ export interface Spot {
   country?: string;
   area?: string;
   category?: string;
-  tier?: number;
+  must_go?: boolean;
+  verified?: boolean;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -92,7 +96,6 @@ export interface Spot {
   best_time_of_day?: string;
   indoor_outdoor?: string;
   contributor_id?: string;
-  confidence_score?: number;
   use_count?: number;
   contribution_count?: number;
   source?: string;
@@ -108,14 +111,14 @@ export async function querySpots(filters: {
   category?: string;
   categories?: string[];
   indoor_outdoor?: string;
-  tier?: number;
   limit?: number;
 }): Promise<Spot[]> {
   let query = supabase
     .from("spots")
     .select("*")
-    .order("tier", { ascending: true })
-    .order("confidence_score", { ascending: false });
+    .order("must_go", { ascending: false })
+    .order("verified", { ascending: false })
+    .order("use_count", { ascending: false });
 
   if (filters.cities && filters.cities.length > 0) {
     query = query.in("city", filters.cities);
@@ -129,7 +132,6 @@ export async function querySpots(filters: {
     query = query.in("category", filters.categories);
   if (filters.indoor_outdoor)
     query = query.in("indoor_outdoor", [filters.indoor_outdoor, "both"]);
-  if (filters.tier) query = query.lte("tier", filters.tier);
 
   query = query.limit(filters.limit ?? 5);
 
@@ -244,7 +246,7 @@ export async function findSpotByName(name: string, city?: string): Promise<Spot 
   {
     let q = supabase.from("spots").select("*").ilike("name", `%${name}%`);
     if (city) q = q.eq("city", city);
-    const { data } = await q.order("tier", { ascending: true }).limit(1).maybeSingle();
+    const { data } = await q.order("must_go", { ascending: false }).limit(1).maybeSingle();
     if (data) return data as Spot;
   }
 
@@ -290,33 +292,13 @@ export async function semanticSearchSpots(
 }
 
 export async function incrementSpotUseCount(spotId: string): Promise<void> {
-  const { data } = await supabase
-    .from("spots")
-    .select("use_count")
-    .eq("id", spotId)
-    .single();
-
-  if (data) {
-    await supabase
-      .from("spots")
-      .update({ use_count: ((data as Pick<Spot, 'use_count'>).use_count ?? 0) + 1 })
-      .eq("id", spotId);
-  }
+  // Atomic increment via RPC — avoids SELECT → UPDATE race condition under concurrent recommendations
+  await supabase.rpc("increment_spot_use_count", { p_spot_id: spotId });
 }
 
 export async function incrementSpotContributionCount(spotId: string): Promise<void> {
-  const { data } = await supabase
-    .from("spots")
-    .select("contribution_count")
-    .eq("id", spotId)
-    .single();
-
-  if (data) {
-    await supabase
-      .from("spots")
-      .update({ contribution_count: ((data as any).contribution_count ?? 0) + 1 })
-      .eq("id", spotId);
-  }
+  // Atomic increment via RPC
+  await supabase.rpc("increment_spot_contribution_count", { p_spot_id: spotId });
 }
 
 // ============================================
@@ -545,28 +527,6 @@ export async function insertFeedback(
 ): Promise<void> {
   await supabase.from("feedback").insert(feedback);
 
-  // Update spot confidence score based on rating
-  if (feedback.rating) {
-    const { data: spot } = await supabase
-      .from("spots")
-      .select("confidence_score")
-      .eq("id", feedback.spot_id)
-      .single();
-
-    if (spot) {
-      // Moving average: nudge confidence toward the rating (normalized 0-1)
-      const newConfidence =
-        (spot.confidence_score ?? 0.7) * 0.8 + (feedback.rating / 5) * 0.2;
-      await supabase
-        .from("spots")
-        .update({
-          confidence_score: Math.round(newConfidence * 100) / 100,
-          last_verified: new Date().toISOString(),
-        })
-        .eq("id", feedback.spot_id);
-    }
-  }
-
   // Append user tips to spot
   if (feedback.user_tips?.length) {
     const { data: spot } = await supabase
@@ -616,7 +576,7 @@ export interface SpotContribution {
   what_to_skip?: string[];
   pro_tips?: string[];
   vibe?: string;
-  tier?: number;
+  is_must_go?: boolean;
   created_at: string;
 }
 
@@ -627,7 +587,7 @@ export async function insertSpotContribution(contribution: {
   what_to_skip?: string[];
   pro_tips?: string[];
   vibe?: string;
-  tier?: number;
+  is_must_go?: boolean;
 }): Promise<void> {
   const { error } = await supabase.from("spot_contributions").insert(contribution);
   if (error) console.error("[attribution] Failed to insert spot contribution:", error);

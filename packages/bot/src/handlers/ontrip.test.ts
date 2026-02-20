@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock modules with side effects at import time
 vi.mock("../llm.js", () => ({
   loadPrompt: vi.fn().mockReturnValue("system prompt"),
+  langInstruction: vi.fn().mockReturnValue(""),
+  langUserNote: vi.fn().mockReturnValue(""),
 }));
 vi.mock("../database.js", () => ({
   querySpots: vi.fn().mockResolvedValue([]),

@@ -11,8 +11,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -20,8 +18,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Ara Damansara",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -29,8 +25,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Bandar Sunway",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -38,8 +32,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -47,8 +39,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -56,8 +46,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Utama",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -65,8 +53,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -74,8 +60,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -83,8 +67,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Mutiara Damansara",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -92,8 +74,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Puchong",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -101,8 +81,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Seri Kembangan",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -110,8 +88,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -119,8 +95,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -128,8 +102,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -137,8 +109,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Taman Megah",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -146,8 +116,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "USJ",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -159,8 +127,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -168,8 +134,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -177,8 +141,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -186,8 +148,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Bandar Sunway",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -195,8 +155,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Bandar Sunway",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -204,8 +162,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Jaya",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -213,8 +169,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -222,8 +176,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -231,8 +183,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Utama",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -240,8 +190,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -249,8 +197,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -258,8 +204,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 17",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -267,8 +211,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Seri Kembangan",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -276,8 +218,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Seri Kembangan",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -285,8 +225,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Seri Kembangan",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -294,8 +232,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -303,8 +239,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -312,8 +246,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -321,8 +253,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -330,8 +260,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -339,8 +267,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS15",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -348,8 +274,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS15",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -357,8 +281,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -366,8 +288,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -375,8 +295,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "USJ",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -384,8 +302,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "USJ",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -393,8 +309,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "USJ",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -406,8 +320,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -415,8 +327,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Aman Suria",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -424,8 +334,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Ara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -433,8 +341,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Ara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -442,8 +348,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Ara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -451,8 +355,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Ara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -460,8 +362,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -469,8 +369,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -478,8 +376,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -487,8 +383,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -496,8 +390,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -505,8 +397,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -514,8 +404,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -523,8 +411,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Kim",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -532,8 +418,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -541,8 +425,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -550,8 +432,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -559,8 +439,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -568,8 +446,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Mutiara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -577,8 +453,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Mutiara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -586,8 +460,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Mutiara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -595,8 +467,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Mutiara Damansara",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -604,8 +474,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -613,8 +481,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -622,8 +488,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -631,8 +495,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -640,8 +502,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -649,8 +509,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -658,8 +516,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -667,8 +523,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Setia Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -676,8 +530,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -685,8 +537,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -694,8 +544,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -703,8 +551,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -712,8 +558,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -721,8 +565,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -730,8 +572,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -739,8 +579,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -748,8 +586,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -757,8 +593,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -766,8 +600,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -775,8 +607,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -784,8 +614,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -793,8 +621,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -802,8 +628,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -811,8 +635,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -824,8 +646,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Bandar Sunway",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -833,8 +653,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Bandar Sunway",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -842,8 +660,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -851,8 +667,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Cyberjaya",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -860,8 +674,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Jaya",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -869,8 +681,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -878,8 +688,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Kota Damansara",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -887,8 +695,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 19",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -896,8 +702,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 19",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -905,8 +709,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -914,8 +716,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Shah Alam",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -923,8 +723,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS2",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -932,8 +730,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -941,8 +737,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Sunway Mas",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -950,8 +744,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Taman Megah",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -959,8 +751,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -968,8 +758,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Tropicana",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -981,8 +769,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Jaya",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -990,8 +776,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Utama",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -999,8 +783,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1008,8 +790,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1017,8 +797,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 17",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1026,8 +804,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS15",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1035,8 +811,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS2",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1044,8 +818,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -1057,8 +829,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Jaya",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1066,8 +836,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Utama",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1075,8 +843,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1084,8 +850,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS15",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1093,8 +857,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS2",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1102,8 +864,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1111,8 +871,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Taman Megah",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -1124,8 +882,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Jaya",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1133,8 +889,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Damansara Utama",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1142,8 +896,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Klang",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1151,8 +903,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Section 13",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1160,8 +910,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS15",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1169,8 +917,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "SS2",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -1178,8 +924,6 @@ export const spots = [
     city: "Petaling Jaya",
     area: "Subang Jaya",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 ];

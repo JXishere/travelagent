@@ -6,7 +6,6 @@ vi.mock("../database.js", () => ({}));
 vi.mock("../weather.js", () => ({}));
 
 import {
-  confidenceLabel,
   sourceLabel,
   formatOpeningHours,
   formatSpotsForLLM,
@@ -19,25 +18,6 @@ const baseSpot: Spot = {
   city: "Kuala Lumpur",
 };
 
-describe("confidenceLabel", () => {
-  it("returns 'personal favorite' for >= 0.85", () => {
-    expect(confidenceLabel(0.9)).toBe("personal favorite");
-    expect(confidenceLabel(0.85)).toBe("personal favorite");
-  });
-
-  it("returns 'well-vouched' for >= 0.6", () => {
-    expect(confidenceLabel(0.7)).toBe("well-vouched");
-    expect(confidenceLabel(0.6)).toBe("well-vouched");
-  });
-
-  it("returns 'fresh intel' for < 0.6", () => {
-    expect(confidenceLabel(0.3)).toBe("fresh intel");
-  });
-
-  it("defaults to 'well-vouched' when undefined", () => {
-    expect(confidenceLabel(undefined)).toBe("well-vouched");
-  });
-});
 
 describe("formatOpeningHours", () => {
   it("formats a single entry", () => {
@@ -79,8 +59,8 @@ describe("formatSpotsForLLM", () => {
       vibe: "chaotic",
       indoor_outdoor: "indoor",
       best_time_of_day: "evening",
-      tier: 1,
-      confidence_score: 0.9,
+      must_go: true,
+      verified: true,
     };
     const result = formatSpotsForLLM([spot]);
     expect(result).toContain("1. Fatty Crab");
@@ -96,14 +76,13 @@ describe("formatSpotsForLLM", () => {
     expect(result).toContain("Vibe: chaotic");
     expect(result).toContain("Setting: indoor");
     expect(result).toContain("Best time: evening");
-    expect(result).toContain("Tier: 1");
-    expect(result).toContain("personal favorite");
+    expect(result).toContain("must-go");
   });
 
   it("formats a minimal spot", () => {
     const result = formatSpotsForLLM([baseSpot]);
     expect(result).toContain("1. Fatty Crab");
-    expect(result).toContain("Sam's take: well-vouched");
+    expect(result).toContain("Sam's take: unverified");
     expect(result).not.toContain("Neighborhood:");
     expect(result).not.toContain("Category:");
   });
@@ -133,21 +112,21 @@ describe("formatSpotsForLLM", () => {
     expect(result).toContain("Hours: Monday: 9am-5pm, Tuesday: 10am-6pm");
   });
 
-  it("shows 'personal favorite' for high confidence", () => {
-    const spot: Spot = { ...baseSpot, confidence_score: 0.95 };
+  it("shows 'must-go' for must_go spots", () => {
+    const spot: Spot = { ...baseSpot, must_go: true, verified: true };
     const result = formatSpotsForLLM([spot]);
-    expect(result).toContain("personal favorite");
+    expect(result).toContain("must-go");
   });
 
-  it("includes source in Sam's take line", () => {
-    const spot: Spot = { ...baseSpot, source: "voice", confidence_score: 0.7 };
+  it("includes source in Sam's take line for verified spots", () => {
+    const spot: Spot = { ...baseSpot, source: "voice", verified: true };
     const result = formatSpotsForLLM([spot]);
-    expect(result).toContain("Sam's take: well-vouched (from local contributor (voice note))");
+    expect(result).toContain("Sam's take: verified (local contributor (voice note))");
   });
 
-  it("defaults source to 'curated by Sam' when missing", () => {
+  it("shows unverified for spots with no must_go/verified", () => {
     const result = formatSpotsForLLM([baseSpot]);
-    expect(result).toContain("Sam's take: well-vouched (from curated by Sam)");
+    expect(result).toContain("Sam's take: unverified — treat as a lead, not a guarantee");
   });
 });
 

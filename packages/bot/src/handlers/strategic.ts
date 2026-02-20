@@ -18,15 +18,17 @@ function getStrategicPrompt(): string {
 
 export async function handleStrategic(phoneNumber: string): Promise<string> {
   const traveler = await getOrCreateTraveler(phoneNumber);
+  const city = traveler.current_city ?? getDefaultCity();
+
   if (traveler.user_type === "local") {
     await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
-    return "You're all set! Just text me whenever you want to find something new in KL.";
+    return `You're all set! Just text me whenever you want to find something new in ${city}.`;
   }
   const prefs = traveler.preferences ?? {};
 
   // Query spots matching their profile
   const allSpots = await querySpots({
-    city: traveler.current_city ?? getDefaultCity(),
+    city,
     limit: 20,
   });
 
@@ -37,7 +39,7 @@ export async function handleStrategic(phoneNumber: string): Promise<string> {
   const activitySpots = allSpots.filter((s) =>
     ["activity", "market", "nightlife"].includes(s.category ?? "")
   );
-  const topSpots = allSpots.filter((s) => s.tier === 1);
+  const topSpots = allSpots.filter((s) => s.must_go);
 
   const spotsContext = formatSpotsForLLM(allSpots);
 
@@ -50,14 +52,13 @@ Profile:
 - Budget: ${prefs.budget ?? "moderate"}
 - Pace: ${prefs.pace ?? "moderate"}
 - Dietary: ${(traveler.dietary_restrictions ?? []).join(", ") || "None"}
-- First time in KL: ${traveler.first_time_visitor ? "Yes" : "No"}
+- First time in ${city}: ${traveler.first_time_visitor ? "Yes" : "No"}
 ${prefs.specific_requests?.length ? `- Specific requests: ${prefs.specific_requests.join(", ")}` : ""}
   `.trim();
 
-  const city = traveler.current_city ?? getDefaultCity();
   const prompt = `${profileSummary}
 
-Available spots in the knowledge graph (${allSpots.length} total, ${topSpots.length} tier-1 must-dos):
+Available spots in the knowledge graph (${allSpots.length} total, ${topSpots.length} must-go spots flagged by contributors):
 
 ${spotsContext}
 

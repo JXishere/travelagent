@@ -7,7 +7,8 @@ interface SpotFiltersProps {
   filters: {
     category: string;
     area: string;
-    tier: string;
+    must_go: boolean;
+    verified: boolean;
     source: string;
     search: string;
   };
@@ -25,7 +26,7 @@ export function SpotFilters({
   totalCount,
   filteredCount,
 }: SpotFiltersProps) {
-  const set = (key: keyof typeof filters, value: string) =>
+  const set = (key: keyof typeof filters, value: string | boolean) =>
     onChange({ ...filters, [key]: value });
 
   return (
@@ -84,16 +85,23 @@ export function SpotFilters({
         ))}
       </select>
 
-      <select
-        value={filters.tier}
-        onChange={(e) => set("tier", e.target.value)}
-        style={selectStyle}
-      >
-        <option value="">All tiers</option>
-        <option value="1">Tier 1 — must-do</option>
-        <option value="2">Tier 2 — should-do</option>
-        <option value="3">Tier 3 — hidden gem</option>
-      </select>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.85rem", cursor: "pointer", color: "var(--fg)" }}>
+        <input
+          type="checkbox"
+          checked={filters.must_go}
+          onChange={(e) => set("must_go", e.target.checked)}
+        />
+        Must-go only
+      </label>
+
+      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.85rem", cursor: "pointer", color: "var(--fg)" }}>
+        <input
+          type="checkbox"
+          checked={filters.verified}
+          onChange={(e) => set("verified", e.target.checked)}
+        />
+        Verified only
+      </label>
 
       <select
         value={filters.source}

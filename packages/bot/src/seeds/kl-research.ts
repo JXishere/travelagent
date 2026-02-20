@@ -11,8 +11,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bangsar",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -20,8 +18,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Brickfields",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -29,8 +25,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bukit Bintang",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -38,8 +32,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chinatown",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -47,8 +39,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chow Kit",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -56,8 +46,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Heights",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -65,8 +53,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Kampung Baru",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -74,8 +60,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Mont Kiara",
     category: "breakfast",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -87,8 +71,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bukit Bintang",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -96,8 +78,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Heights",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -105,8 +85,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Uptown",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -114,8 +92,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Hartamas",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -123,8 +99,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Kampung Baru",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -132,8 +106,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "KLCC",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -141,8 +113,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Mont Kiara",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -150,8 +120,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pavilion",
     category: "lunch",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -163,8 +131,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Brickfields",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -172,8 +138,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Cheras",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -181,8 +145,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chinatown",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -190,8 +152,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chow Kit",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -199,8 +159,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Uptown",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -208,8 +166,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pudu",
     category: "dinner",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -221,8 +177,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bukit Bintang",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -230,8 +184,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Cheras",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -239,8 +191,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chinatown",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -248,8 +198,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chow Kit",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -257,8 +205,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Uptown",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -266,8 +212,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Hartamas",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -275,8 +219,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "KLCC",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -284,8 +226,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pavilion",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -293,8 +233,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pudu",
     category: "cafe",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -306,8 +244,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bangsar",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -315,8 +251,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Brickfields",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -324,8 +258,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bukit Bintang",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -333,8 +265,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Cheras",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -342,8 +272,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Heights",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -351,8 +279,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Damansara Uptown",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -360,8 +286,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Mont Kiara",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -369,8 +293,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pavilion",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -378,8 +300,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Pudu",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -387,8 +307,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Taman Paramount",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -396,8 +314,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "TTDI",
     category: "activity",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -409,8 +325,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Bangsar",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -418,8 +332,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Cheras",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -427,8 +339,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chow Kit",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -436,8 +346,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Hartamas",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -445,8 +353,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Kampung Baru",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -454,8 +360,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Mont Kiara",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -463,8 +367,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Taman Paramount",
     category: "nightlife",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 
@@ -476,8 +378,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "Chinatown",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
   {
@@ -485,8 +385,6 @@ export const spots = [
     city: "Kuala Lumpur",
     area: "KLCC",
     category: "market",
-    tier: 2,
-    confidence_score: 0.5,
     source: "llm_research",
   },
 ];

@@ -408,7 +408,7 @@ describe("enrichFromWeb", () => {
     expect(result.enriched.what_to_skip).toBeUndefined();
     expect(result.enriched.pro_tips).toBeUndefined();
     expect(result.enriched.vibe).toBeUndefined();
-    expect(result.enriched.tier).toBeUndefined();
+    expect(result.enriched.is_must_go).toBeUndefined();
     expect(result.enriched.best_time_of_day).toBeUndefined();
     expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "address", "price_range"]));
     expect(result.webSourcedFields).toHaveLength(3);
@@ -503,6 +503,7 @@ const readySpot = {
   category: "dinner",
   area: "Taman Megah",
   what_to_order: ["chilli crab"],
+  is_must_go: false,
 };
 
 beforeEach(() => {

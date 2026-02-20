@@ -40,12 +40,12 @@ interface ExtractedSpot {
   best_time_of_day?: string;
   indoor_outdoor?: string;
   weather_dependent?: boolean;
-  tier?: number;
+  is_must_go?: boolean;
   missing_fields?: string[];
 }
 
 interface ContributionState {
-  stage: "collecting" | "confirming";
+  stage: "collecting" | "confirming" | "asking_must_go";
   extracted: Partial<ExtractedSpot>;
   source: "voice" | "text";
   messagesReceived: number;
@@ -82,7 +82,10 @@ export async function handleContribution(
     // Try to extract info from the triggering message
     const input = await resolveInput(phoneNumber, message, audioId);
     if (input && input.trim()) {
-      return await collectInfo(phoneNumber, input, initialState);
+      // Pass recent conversation so pronouns ("it", "that place") can be resolved
+      const recentContext = conversation.messages.slice(-2)
+        .map(m => `${m.role}: ${m.content}`).join("\n");
+      return await collectInfo(phoneNumber, input, initialState, recentContext || undefined);
     }
 
     return samSays("A contributor wants to add a spot to your knowledge graph. Ask them about it warmly. One sentence.");
@@ -97,7 +100,9 @@ export async function handleContribution(
       source: audioId ? "voice" : (state.source ?? "text"),
       messagesReceived: state.messagesReceived ?? 0,
     };
-    return await collectInfo(phoneNumber, input, currentState);
+    const recentContext = conversation.messages.slice(-2)
+      .map(m => `${m.role}: ${m.content}`).join("\n");
+    return await collectInfo(phoneNumber, input, currentState, recentContext || undefined);
   }
 
   // Confirming stage — classify response with LLM instead of regex
@@ -126,7 +131,12 @@ export async function handleContribution(
         return `${answer}\n\nBy the way — still want to save that spot? Or any tweaks?`;
       }
 
-      // Truly unrelated — save and move on
+      // Truly unrelated — only save if we have the minimum required fields
+      if (!hasMinimumFields(state.extracted ?? {})) {
+        const extracted = state.extracted ?? {};
+        const missingField = !extracted.name ? "the spot's name" : !extracted.area ? "what area it's in" : "what category it is";
+        return samSays(`A contributor changed the subject before finishing their spot submission. Tell them you haven't saved it yet — still need ${missingField}. Invite them to come back to it whenever they're ready. One sentence.`);
+      }
       const webFields = state.webSourcedFields ?? [];
       const saveResponse = await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
       return `${saveResponse}\n\nNow — what's up?`;
@@ -134,7 +144,22 @@ export async function handleContribution(
 
     if (intent === "confirm") {
       const webFields = state.webSourcedFields ?? [];
-      return await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
+      // Skip must-go question if contributor already signalled it during collection
+      if ((state.extracted as any)?.is_must_go !== undefined) {
+        return await saveSpot(phoneNumber, state.extracted ?? {}, state.source ?? "text", channel, webFields);
+      }
+      // Ask the must-go question
+      await updateConversation(phoneNumber, {
+        flow_state: {
+          stage: "asking_must_go",
+          extracted: state.extracted,
+          source: state.source,
+          messagesReceived: state.messagesReceived,
+          webSourcedFields: webFields,
+          areaConflict: state.areaConflict,
+        },
+      });
+      return samSays(`A contributor just confirmed their spot "${(state.extracted as any)?.name ?? "spot"}". Ask them one final question in Sam's voice: is this a must-go or more of a 'worth it if you're in the area' place? Casual, one sentence.`);
     }
 
     // "correct" — replace-merge corrections and re-show summary
@@ -163,6 +188,17 @@ export async function handleContribution(
     });
 
     return formatSummary(merged, updatedWebFields, updatedAreaConflict);
+  }
+
+  // Asking must-go stage
+  if (state.stage === "asking_must_go") {
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const mustGoContext = `Is "${(state.extracted as any)?.name ?? "this spot"}" a must-go spot?`;
+    const intent = await classifyConfirmation(input, mustGoContext);
+    const isMustGo = intent === "confirm";
+    const webFields = state.webSourcedFields ?? [];
+    const enrichedData = { ...(state.extracted ?? {}), is_must_go: isMustGo };
+    return await saveSpot(phoneNumber, enrichedData, state.source ?? "text", channel, webFields);
   }
 
   // Fallback
@@ -199,14 +235,21 @@ async function resolveInput(
 async function extractWithContext(
   input: string,
   existing: Partial<ExtractedSpot>,
-  isCorrection = false
+  isCorrection = false,
+  conversationContext?: string
 ): Promise<Partial<ExtractedSpot>> {
   const hasExisting = Object.keys(existing).length > 0;
-  const context = hasExisting
+  let context = hasExisting
     ? isCorrection
       ? `We already know about this spot: ${JSON.stringify(existing)}. The user is CORRECTING or adding to this data. For any field they mention, return the COMPLETE corrected value (not just the new part). For example, if they say "actually it's nasi lemak not nasi campur", return what_to_order: ["nasi lemak"]. Only include fields the user mentioned.`
       : `We already know about this spot: ${JSON.stringify(existing)}. The user is providing more details. Extract ONLY the new information from their message.`
     : undefined;
+
+  // Add conversation context to resolve pronouns ("it", "there", "that place")
+  if (conversationContext) {
+    const pronContext = `Recent conversation (use this to resolve pronouns like "it", "there", "that place" — the spot being discussed may be named here):\n${conversationContext}`;
+    context = context ? `${context}\n\n${pronContext}` : pronContext;
+  }
 
   try {
     return await extractJSON<ExtractedSpot>("extraction", input, context, {
@@ -269,10 +312,11 @@ export async function enrichFromWeb(
 async function collectInfo(
   phoneNumber: string,
   input: string,
-  state: ContributionState
+  state: ContributionState,
+  conversationContext?: string
 ): Promise<string> {
   const previous = state.extracted;
-  const newData = await extractWithContext(input, previous);
+  const newData = await extractWithContext(input, previous, false, conversationContext);
   // Belt-and-suspenders: strip opening_hours from extraction
   delete (newData as any).opening_hours;
 
@@ -292,11 +336,14 @@ async function collectInfo(
       return answer + nudge;
     }
 
-    // General question — answer briefly with Sam's personality
-    const known = Object.keys(previous).length > 0
-      ? `You're currently collecting info about a spot. So far you know: ${JSON.stringify(previous)}.`
-      : "You're in the middle of collecting a new spot from a contributor.";
-    return samSays(`${known} The contributor said: "${input}". Answer their question briefly (one sentence), then nudge them back to adding their spot.`);
+    // If we already have spot data, the message probably has context that didn't
+    // extract cleanly — don't ask for fields we already have.
+    if (Object.keys(previous).length > 0) {
+      return generateFollowUp(previous, {});
+    }
+
+    // Nothing extracted, no prior context — general prompt
+    return samSays("A contributor wants to add a spot to your knowledge graph. Ask them warmly what spot they have in mind. One sentence.");
   }
 
   let merged = smartMerge(previous, newData);
@@ -307,6 +354,13 @@ async function collectInfo(
   let webSourcedFields = state.webSourcedFields ?? [];
   let areaConflict = state.areaConflict;
   if (nameChanged) {
+    // Early duplicate check — exit before collecting more details if already in DB
+    const earlyDuplicate = await findDuplicateSpot(merged.name!, merged.area);
+    if (earlyDuplicate) {
+      await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+      return samSays(`A contributor mentioned "${earlyDuplicate.name}" in ${earlyDuplicate.area ?? "your city"}, which is already in your knowledge graph. Tell them warmly you already have it — invite them to add new intel or ask what you know about it. One sentence.`);
+    }
+
     if (previous.name) {
       // Name changed mid-flow — reset to just current extraction to avoid stale data
       merged = { ...newData };
@@ -388,6 +442,11 @@ export function smartMerge(
   }
 
   return merged;
+}
+
+/** Check if extracted data has the minimum required fields to insert into DB */
+function hasMinimumFields(data: Partial<ExtractedSpot>): boolean {
+  return Boolean(data.name && data.category && data.area);
 }
 
 /** Check if we have enough data to show a confirmation summary */
@@ -510,7 +569,7 @@ export function smartMergeForUpdate(incoming: Partial<ExtractedSpot>): Partial<S
   const { missing_fields, ...data } = incoming as any;
 
   // Scalar fields — overwrite if present
-  const scalarFields = ["vibe", "price_range", "address", "best_time_of_day", "indoor_outdoor", "weather_dependent", "tier"] as const;
+  const scalarFields = ["vibe", "price_range", "address", "best_time_of_day", "indoor_outdoor", "weather_dependent"] as const;
   for (const field of scalarFields) {
     if (data[field] != null) {
       (updates as any)[field] = data[field];
@@ -527,6 +586,18 @@ async function saveSpot(
   channel: "whatsapp" | "web" = "whatsapp",
   webSourcedFields: string[] = []
 ): Promise<string> {
+  // Last-line-of-defense validation — never insert a spot missing critical fields
+  if (!data.name || !data.category || !data.area) {
+    const missing = [!data.name && "name", !data.area && "area", !data.category && "category"]
+      .filter(Boolean).join(", ");
+    console.error("[saveSpot] Blocked: missing required fields", { name: data.name, category: data.category, area: data.area });
+    await updateConversation(phoneNumber, {
+      current_flow: "contribution",
+      flow_state: { stage: "collecting", extracted: data, source, messagesReceived: 0 },
+    });
+    return samSays(`You're trying to save a spot to the knowledge graph but it's missing: ${missing}. Ask the contributor to provide what's missing before you can add it. One sentence.`);
+  }
+
   const contributor = await getOrCreateContributor(phoneNumber);
 
   const { missing_fields, ...spotData } = data as any;
@@ -560,6 +631,10 @@ async function saveSpot(
         (updates as any)[field] = [...existingArr, ...incomingArr.filter(s => !existingLower.has(s.toLowerCase()))];
       }
     }
+    // Propagate must-go flag to existing spot
+    if (spotData.is_must_go) {
+      (updates as any).must_go = true;
+    }
     await updateSpot(duplicate.id, updates);
 
     // Record contributor attribution
@@ -570,7 +645,7 @@ async function saveSpot(
       what_to_skip: spotData.what_to_skip?.length ? spotData.what_to_skip : undefined,
       pro_tips: spotData.pro_tips?.length ? spotData.pro_tips : undefined,
       vibe: spotData.vibe,
-      tier: spotData.tier,
+      is_must_go: spotData.is_must_go,
     }).catch(err => console.error("[attribution] Failed to save contribution:", err));
     incrementSpotContributionCount(duplicate.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
@@ -590,6 +665,8 @@ async function saveSpot(
     ...spotData,
     contributor_id: contributor.id,
     source,
+    verified: true,
+    must_go: spotData.is_must_go ?? false,
   });
 
   // Record this contributor's specific notes for attribution
@@ -600,7 +677,7 @@ async function saveSpot(
     what_to_skip: spotData.what_to_skip,
     pro_tips: spotData.pro_tips,
     vibe: spotData.vibe,
-    tier: spotData.tier,
+    is_must_go: spotData.is_must_go,
   }).catch(err => console.error("[attribution] Failed to save contribution:", err));
   incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 

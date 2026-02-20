@@ -35,11 +35,11 @@ const mockFormatSpotsForLLM = formatSpotsForLLM as ReturnType<typeof vi.fn>;
 const mockLoadPrompt = loadPrompt as ReturnType<typeof vi.fn>;
 
 const sampleSpots = [
-  { id: "s1", name: "Nasi Kandar Pelita", category: "dinner", tier: 1 },
-  { id: "s2", name: "VCR", category: "cafe", tier: 2 },
-  { id: "s3", name: "Batu Caves", category: "activity", tier: 1 },
-  { id: "s4", name: "Jalan Alor", category: "dinner", tier: 1 },
-  { id: "s5", name: "Petaling Street", category: "market", tier: 2 },
+  { id: "s1", name: "Nasi Kandar Pelita", category: "dinner", must_go: true, verified: true },
+  { id: "s2", name: "VCR", category: "cafe", must_go: false, verified: true },
+  { id: "s3", name: "Batu Caves", category: "activity", must_go: true, verified: true },
+  { id: "s4", name: "Jalan Alor", category: "dinner", must_go: true, verified: true },
+  { id: "s5", name: "Petaling Street", category: "market", must_go: false, verified: true },
 ];
 
 beforeEach(() => {
@@ -178,8 +178,8 @@ describe("handleStrategic", () => {
     await handleStrategic("+1234");
 
     const userPrompt = mockChat.mock.calls[0][1][0].content;
-    // sampleSpots has 3 tier-1 spots
-    expect(userPrompt).toContain("5 total, 3 tier-1 must-dos");
+    // sampleSpots has 3 must_go spots
+    expect(userPrompt).toContain("5 total, 3 must-go spots flagged by contributors");
   });
 
   it("handles missing preferences gracefully", async () => {

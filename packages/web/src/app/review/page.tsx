@@ -11,7 +11,8 @@ export default function ReviewPage() {
   const [filters, setFilters] = useState({
     category: "",
     area: "",
-    tier: "",
+    must_go: false,
+    verified: false,
     source: "",
     search: "",
   });
@@ -39,9 +40,9 @@ export default function ReviewPage() {
   const filtered = useMemo(() => {
     return spots.filter((s) => {
       if (filters.category && s.category !== filters.category) return false;
-      if (filters.area && s.area !== filters.area)
-        return false;
-      if (filters.tier && s.tier !== Number(filters.tier)) return false;
+      if (filters.area && s.area !== filters.area) return false;
+      if (filters.must_go && !s.must_go) return false;
+      if (filters.verified && !s.verified) return false;
       if (filters.source && s.source !== filters.source) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
@@ -57,7 +58,7 @@ export default function ReviewPage() {
 
   const stats = useMemo(() => {
     const byCat: Record<string, number> = {};
-    const approved = spots.filter((s) => (s.confidence_score ?? 0) >= 0.85).length;
+    const approved = spots.filter((s) => s.verified).length;
     for (const s of spots) {
       byCat[s.category] = (byCat[s.category] ?? 0) + 1;
     }
@@ -65,12 +66,19 @@ export default function ReviewPage() {
   }, [spots]);
 
   const handleApprove = useCallback(async (id: string) => {
-    const ok = await updateSpot(id, { confidence_score: 0.85 });
+    const ok = await updateSpot(id, { verified: true });
     if (ok) {
       setSpots((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, confidence_score: 0.85 } : s
-        )
+        prev.map((s) => (s.id === id ? { ...s, verified: true } : s))
+      );
+    }
+  }, []);
+
+  const handleMustGo = useCallback(async (id: string, current: boolean) => {
+    const ok = await updateSpot(id, { must_go: !current });
+    if (ok) {
+      setSpots((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, must_go: !current } : s))
       );
     }
   }, []);
@@ -128,6 +136,7 @@ export default function ReviewPage() {
             key={spot.id}
             spot={spot}
             onApprove={handleApprove}
+            onMustGo={handleMustGo}
             onDelete={handleDelete}
             onSave={handleSave}
           />

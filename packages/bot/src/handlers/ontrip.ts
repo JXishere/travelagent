@@ -274,7 +274,22 @@ Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-Lead with your #1 pick and commit to it — be the friend who just says "go here." Mention 1-2 alternatives briefly. One must-order and one tip per spot, max. Respect their dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}`,
+RESPONSE FORMAT — follow exactly:
+- Start your response with the spot name. No intro sentence. No "If you want..." opener.
+- Line 1: Name (Area)
+- Line 2: what to order + one tip
+- Blank line between spots
+- Max 3 spots
+- Lead with your #1 pick
+
+Example of correct format:
+Dewakan (KLCC)
+Tasting menu only — book 2 weeks ahead.
+
+Bar.Kar (KLCC)
+Open-flame dishes, reserve in advance.
+
+Respect dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}`,
     spotIds: toRecommend.map(s => s.id),
     maxTokens: 512,
   };

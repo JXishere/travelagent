@@ -42,7 +42,7 @@ console.log(JSON.stringify(data, null, 2));
 
 ## Schema Reference
 
-**spots**: id, name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source (seed|voice|text|llm_verified|manual), last_verified
+**spots**: id, name, city, country, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source (seed|voice|text|llm_verified|manual), last_verified
 
 **spot_contributions**: id, spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier, created_at
 

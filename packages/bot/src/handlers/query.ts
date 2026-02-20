@@ -147,7 +147,7 @@ ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
 ${weatherContext}
 
-Here are the matching spots from your knowledge graph. Give one short sentence per spot — name, what to order, done. No intros, no walls of text. Max 3 spots.
+Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros.
 
 CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
 ${areaNote}

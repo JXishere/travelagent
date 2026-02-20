@@ -116,7 +116,7 @@ export async function startFeedbackCollection(
       current_flow: "general",
       flow_state: {},
     });
-    return "I don't have any spots to check on yet! Once you've visited some recommendations, I'll ask how they went.";
+    return "I don't have any spots to check on for you yet — once you've visited a few I recommend, I'll follow up to see how they were.";
   }
 
   const firstSpot = spots[0];

@@ -56,10 +56,10 @@ packages/
 │   │   │   ├── generate.txt           — Spot content generation prompt
 │   │   │   └── coach.txt              — Coaching evaluation prompt
 │   │   ├── seeds/
-│   │   │   ├── kl.ts                  — 49 Kuala Lumpur spots
+│   │   │   ├── kl.ts                  — Kuala Lumpur spots
 │   │   │   ├── kl-research.ts         — Research-phase KL spot candidates
-│   │   │   ├── penang.ts             — 87 Penang spots (island + mainland)
-│   │   │   ├── pj.ts                  — 4 Petaling Jaya spots
+│   │   │   ├── penang.ts             — Penang spots (island + mainland)
+│   │   │   ├── pj.ts                  — Petaling Jaya spots
 │   │   │   └── pj-research.ts         — Research-phase PJ spot candidates
 │   │   └── utils/
 │   │       ├── categories.ts          — Category mappings + synonyms
@@ -149,7 +149,7 @@ npm run research   # Batch spot research across cities (scripts/batch-research.t
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `spots` | Knowledge graph | name, city, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
+| `spots` | Knowledge graph | name, city, country, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
 | `spot_contributions` | Per-contributor attribution | spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier |
 | `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], spots_contributed |
 | `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_areas[], trips_taken |
@@ -160,6 +160,15 @@ npm run research   # Batch spot research across cities (scripts/batch-research.t
 **Spot categories**: breakfast, lunch, dinner, cafe, activity, nightlife, market
 **Spot tiers**: 1 = must-do, 2 = should-do, 3 = nice-to-have/hidden gem
 **Vibes**: casual, upscale, chaotic, chill, local, touristy
+
+## Live Knowledge Graph (as of 2026-02-20)
+
+| Country | City | Spots |
+|---------|------|-------|
+| Malaysia | Kuala Lumpur | 504 |
+| Malaysia | Petaling Jaya | 169 |
+| Malaysia | Penang | 65 |
+| Taiwan | Taipei | 1 |
 
 ## Prompt Loading
 
@@ -178,6 +187,9 @@ function loadPrompt(name: string): string {
 - `classifyIntent()` uses an inline prompt (not from file)
 - `classifyConfirmation()` classifies user response during contribution save confirmation
 - `setPromptsDir()` — lets the web package override the prompts directory path (needed because Next.js resolves from a different root)
+- `samSays()` — quick 100-token Sam-voiced one-liner (convenience wrapper around `chatAsSam()`)
+- `webSearchSpot()` — fetches real-world spot details (hours, payment, address) via Claude's web search tool; used by the contribution flow's `enrichFromWeb()` stage
+- `chat()` — low-level Claude API wrapper (underlies all the above)
 
 ## Flow Architecture
 
@@ -187,7 +199,7 @@ function loadPrompt(name: string): string {
 
 Both flows share the same handlers. The web route imports them directly from `@sam/bot` via the workspace dependency — no HTTP indirection.
 
-Intents: hungry, day_plan, nearby, weather, contribute, profile, feedback, general
+Intents: hungry, day_plan, nearby, spot_info, weather, contribute, profile, feedback, general
 
 ### Contribution Flow (two-stage)
 

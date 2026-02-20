@@ -246,7 +246,7 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
     );
   const areaNote =
     hasAreaMismatch || areaWidened
-      ? `\n\nNote: The user asked for spots near "${requestedArea}" but you don't have picks in that exact area for this. These are the best options from the broader city. Be upfront about it — acknowledge the gap, then recommend these nearby alternatives naturally. Don't say "ask locals" — you ARE the local.`
+      ? `\n\nIMPORTANT: The user asked for spots in "${requestedArea}" but you have no specific picks for that area yet. Your FIRST sentence must acknowledge you don't have ${requestedArea} coverage. Then offer these as nearby alternatives — do NOT present them as ${requestedArea} recommendations. Be honest about the gap.`
       : "";
 
   const cuisineNote = details.cuisine
@@ -332,7 +332,9 @@ Available spots for building a day plan:
 
 ${spotsContext}
 
-Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."`,
+If the user is specifically asking about non-food activities (things to do, sightseeing, etc.), be honest that your strength is food and dining. You can mention any activity spots you have, but flag that you don't have full activities coverage and they should check elsewhere for that.
+
+Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."`,
     spotIds: allDaySpots.map(s => s.id),
     maxTokens: 1024,
   };
@@ -457,25 +459,35 @@ export async function handleSpotInfo(
     webSearchSpot(spotName, city),
   ]);
 
-  // Merge: DB fields win, web fills gaps
+  // No DB record — don't answer from web data alone (hallucination risk).
+  // Web search may find real info but we can't verify it matches Sam's knowledge graph.
+  if (!dbSpot) {
+    return chat(
+      systemPrompt,
+      [{ role: "user", content: `User asked: "${userMessage}". You have no record of "${spotName}" in your knowledge graph. Respond in one sentence — be honest that you don't have intel on it yet.` }],
+      { maxTokens: 100 }
+    );
+  }
+
+  // Merge: DB fields win, web fills gaps for fields the DB is missing
   const merged: Record<string, any> = { ...webData };
-  if (dbSpot) {
-    for (const [k, v] of Object.entries(dbSpot)) {
-      if (v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
-        merged[k] = v;
-      }
+  for (const [k, v] of Object.entries(dbSpot)) {
+    if (v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
+      merged[k] = v;
     }
   }
 
-  const hasData = dbSpot || Object.keys(webData).length > 0;
-
-  if (!hasData) {
-    return chat(
-      systemPrompt,
-      [{ role: "user", content: userMessage }],
-      { maxTokens: 150 }
-    );
+  // Volatile fields: always use live web data, never stale DB values
+  for (const field of ["opening_hours", "payment_methods"] as const) {
+    if ((webData as any)[field]) {
+      merged[field] = (webData as any)[field];
+    } else {
+      delete merged[field];
+    }
   }
+
+  // Flag hours as web-sourced if the DB record doesn't have them
+  const hoursFromWeb = !dbSpot.opening_hours && !!merged.opening_hours;
 
   const dataBlock = [
     merged.name && `Name: ${merged.name}`,
@@ -484,7 +496,7 @@ export async function handleSpotInfo(
     merged.category && `Category: ${merged.category}`,
     merged.price_range && `Price: ${merged.price_range}`,
     merged.payment_methods?.length && `Payment: ${(merged.payment_methods as string[]).join(", ")}`,
-    merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}`,
+    merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}${hoursFromWeb ? " (from web — may be outdated)" : ""}`,
     merged.what_to_order?.length && `Order: ${(merged.what_to_order as string[]).join(", ")}`,
     merged.what_to_skip?.length && `Skip: ${(merged.what_to_skip as string[]).join(", ")}`,
     merged.pro_tips?.length && `Tips: ${(merged.pro_tips as string[]).join(" | ")}`,
@@ -497,7 +509,7 @@ export async function handleSpotInfo(
     systemPrompt,
     [{
       role: "user",
-      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.`,
+      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.${hoursFromWeb ? " Hours are from the web — tell them to confirm before visiting." : ""}`,
     }],
     { maxTokens: 200 }
   );

@@ -32,9 +32,11 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
     category: spot.category,
     vibe: spot.vibe ?? "",
     what_to_order: (spot.what_to_order ?? []).join("\n"),
+    what_to_skip: (spot.what_to_skip ?? []).join("\n"),
     pro_tips: (spot.pro_tips ?? []).join("\n"),
     address: spot.address ?? "",
     price_range: spot.price_range ?? "",
+    payment_methods: (spot.payment_methods ?? []).join(", "),
   });
 
   const approved = (spot.confidence_score ?? 0) >= 0.85;
@@ -75,6 +77,13 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
           ...new Set([...(spot.what_to_skip ?? []), ...parsed.what_to_skip]),
         ];
       }
+      if (parsed.payment_methods?.length) {
+        const existing = new Set(spot.payment_methods ?? []);
+        updates.payment_methods = [
+          ...(spot.payment_methods ?? []),
+          ...parsed.payment_methods.filter((v: string) => !existing.has(v)),
+        ];
+      }
       // Scalars: only fill if currently empty
       if (parsed.vibe && !spot.vibe) updates.vibe = parsed.vibe;
       if (parsed.price_range && !spot.price_range) updates.price_range = parsed.price_range;
@@ -104,12 +113,20 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
+      what_to_skip: draft.what_to_skip
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
       pro_tips: draft.pro_tips
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean),
       address: draft.address || null,
       price_range: draft.price_range || null,
+      payment_methods: draft.payment_methods
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     });
     setEditing(false);
   };
@@ -250,6 +267,17 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
                 />
               </label>
               <label style={labelStyle}>
+                What to skip (one per line)
+                <textarea
+                  value={draft.what_to_skip}
+                  onChange={(e) =>
+                    setDraft({ ...draft, what_to_skip: e.target.value })
+                  }
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </label>
+              <label style={labelStyle}>
                 Pro tips (one per line)
                 <textarea
                   value={draft.pro_tips}
@@ -258,6 +286,16 @@ export function SpotCard({ spot, onApprove, onDelete, onSave }: SpotCardProps) {
                   }
                   rows={4}
                   style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </label>
+              <label style={labelStyle}>
+                Payment methods (comma-separated, e.g. cash, card, QR)
+                <input
+                  value={draft.payment_methods}
+                  onChange={(e) =>
+                    setDraft({ ...draft, payment_methods: e.target.value })
+                  }
+                  style={inputStyle}
                 />
               </label>
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>

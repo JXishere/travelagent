@@ -35,3 +35,5 @@ npm run migrate
 | `20260219_020000_enable_rls_spot_contributions.sql` | Enable RLS on spot_contributions; add public read policy — closes security gap where anon key had unrestricted write access | applied via MCP |
 | `20260219_030000_fix_security_and_perf_advisors.sql` | Fix function search paths (daily_stats, match_spots); scope RLS policies to service_role only; add missing FK indexes (feedback.traveler_id, spots.contributor_id) | applied via MCP |
 | `20260219_040000_add_contribution_count.sql` | Add contribution_count integer column to spots; backfill from spot_contributions | applied via MCP |
+| `20260219_050000_add_country_to_spots.sql` | Add country text column to spots; backfill from city mappings — removes hardcoded CITY_TO_COUNTRY map in web package | applied via MCP |
+| `20260220_000000_clear_stale_operational_data.sql` | Clear opening_hours and payment_methods from all spots — both fields are now fetched live from web search, seeded values are stale noise | pending |

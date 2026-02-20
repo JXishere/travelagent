@@ -9,6 +9,7 @@ Return ONLY valid JSON in this exact format:
   "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
   "area": "Area, neighborhood, mall, or building (e.g. Bangsar, TTDI, Pavilion KL, Mid Valley)",
   "city": "City name (e.g. Kuala Lumpur, Penang, Malacca)",
+  "country": "Country name — infer from city using world knowledge (e.g. Malaysia, Thailand, Japan)",
   "address": "Street address if mentioned",
   "price_range": "$|$$|$$$",
   "payment_methods": ["cash", "card"],
@@ -30,6 +31,7 @@ Rules:
 - "missing_fields" should list critical fields that were NOT mentioned: name, category, area are critical.
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
 - Always extract the city if mentioned. If not mentioned, infer from the area using the mapping below. Only default to "{{CITY}}" if the area doesn't match any known city.
+- Always infer country from city using world knowledge. Never leave it blank.
 - Area-to-city mapping (these areas are in Petaling Jaya, NOT Kuala Lumpur):
   Damansara Jaya, Damansara Utama, Damansara Kim, Mutiara Damansara, Ara Damansara, Kota Damansara, Taman Tun Dr Ismail (TTDI — the PJ side), SS2, SS13, SS14, SS15, Section 13, Section 14, Section 17, Section 19, PJ Old Town, Taman Megah, Aman Suria, Sunway Mas, Subang Jaya, Bandar Sunway, USJ, Kelana Jaya, Taman SEA, Tropicana, Bandar Utama, Klang, Shah Alam, Setia Alam
 - For area, capture the location as the contributor describes it — an area, neighborhood, mall, building, or complex name. Do NOT discard a location just because it's not a traditional neighborhood name. "X in Y" means Y is the area.

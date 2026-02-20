@@ -1,0 +1,420 @@
+[1mSam Adaptability Stress Test — 2026-02-20T07:59:20.020Z[0m
+API: http://localhost:3001/api/chat
+Output: /Users/jx/personal-travel-agent/scripts/stress-test-adapt-output.txt
+
+Sam is AI. The knowledge is not. This test stress tests the AI layer.
+Read the multi-turn arcs carefully — adaptability is visible across turns.
+
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  1. MID-CONVERSATION CONSTRAINT REVELATION[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does the constraint revealed in turn 2 filter turn 3's recommendations?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#1  Session A — vegan reveal after initial recs[0m
+[32m[YOU][0m where should i eat for dinner near klcc
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — book 2-3 weeks ahead, Level 48 has city views that hit different at night.
+
+Bar.Kar (KLCC)
+Everything's cooked over open flame — get the chef's specials and book ahead, intimate space fills fast.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set is the move — use the side entrance next to Ferria, reservation essential.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m actually im vegan, sorry should have mentioned
+[36m[SAM][0m No worries — that changes things. I recommended three spots that are all seafood-heavy, so let me reset.
+
+Honestly, I don't have solid vegan dinner intel near KLCC right now. The spots I know best there skew meat and fish. Rather than steer you wrong, I'd rather be straight with you — what's your vibe for tonight? Casual or proper sit-down?
+[32m[YOU][0m ok so given that, where would you send me?
+[36m[SAM][0m I don't have solid vegan dinner spots near KLCC in my knowledge right now — the three I just mentioned are all seafood and meat-focused. Rather than guess, I'd rather be straight: are you looking casual or proper sit-down? That helps me point you somewhere real.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#2  Session B — halal constraint added mid-conversation[0m
+[32m[YOU][0m what's a good dinner spot in kl?
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — book 2-3 weeks ahead, it's the only restaurant in Malaysia on Asia's 50 Best and worth the splurge if you're serious about food.
+
+Bar.Kar (KLCC)
+Open-flame grilled dishes cooked over fire, reserve in advance — Michelin-listed and intimate.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set, reservation essential — premium artistry at The Westin, use the side entrance next to Ferria.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m my friend is joining, she only eats halal
+[36m[SAM][0m Good news — Takeen Omakase is halal-certified and does kappo omakase with more cooked dishes than raw, so it's a solid fit for your friend. Book ahead though, they're strict on reservations.
+
+CHU by Chef Nick (Taman Tun) is also halal — lamb chop is the move, mash potato's creamy and hits different.
+
+Both are upscale dinner spots, so if you want to stick with one of the three I mentioned earlier, Sushi Mew won't work for her since it's omakase-only (raw fish heavy), but Dewakan and Bar.Kar — check with them on halal certification when you book, they might have options.
+[32m[YOU][0m where should the two of us go?
+[36m[SAM][0m Takeen Omakase (KLCC)
+Kappo omakase with cooked dishes — halal-certified and book ahead, they're strict on reservations.
+
+CHU by Chef Nick (Taman Tun)
+Lamb chop with creamy mash — halal, upscale dinner vibe, reserve in advance.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#3  Session C — budget constraint after upscale recs[0m
+[32m[YOU][0m recommend somewhere for a nice dinner tonight
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — book 2-3 weeks ahead, but if you can get in, it's the only Malaysia restaurant on Asia's 50 Best. Worth the splurge.
+
+Bar.Kar (KLCC)
+Open-flame grilled everything with cocktails — Michelin-listed, intimate space, reserve now.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set, side entrance next to Ferria KL — premium artistry, book ahead.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m wait i only have rm25 for dinner
+[36m[SAM][0m Ah mate, RM25 changes the game — those spots I mentioned are all way out of budget. Let me reset.
+
+Honestly, at that price point in KL, you're looking at hawker stalls and casual spots, not the fine dining I threw at you. I don't have solid intel on proper RM25 dinner options in my current knowledge — that's a gap I need to fill.
+
+What area are you in? That'll help me point you toward the right stall or kopitiam.
+[32m[YOU][0m ok what works with that budget?
+[36m[SAM][0m Yeah, I've got nothing solid for you at RM25 in my current knowledge — those three I mentioned are all RM400+ per person. That's on me.
+
+What area are you in right now? Once I know that, I can point you toward the hawker stalls and kopitiams where RM25 actually works for a proper dinner.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  2. TONE & LANGUAGE MIRRORING[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam's register match the user's formality, energy, and language?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#4  Formal business register[0m
+[32m[YOU][0m I would appreciate a recommendation for a refined dining establishment suitable for a business dinner this evening
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — it's the only option, and it's world-class. Book 2-3 weeks ahead if you can, but call today to see if there's a last-minute slot. Level 48 of Naza Tower, views included.
+
+Bar.Kar (KLCC)
+Open-flame grilled dishes and cocktails — everything cooked over fire. Michelin-listed, intimate space, book ahead.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set (RM488) — premium artistry. Reserve essential, enter via the side next to Ferria KL.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#5  Very casual/slang[0m
+[32m[YOU][0m yo bro what's good for lunch rn
+[36m[SAM][0m Wong Mei Kei (Pudu)
+Siu yuk on rice — skin cracks like glass. Arrive before noon, it sells out fast and they close at 3pm.
+
+ICC Pudu (Pudu)
+Hit 3-4 stalls — hokkien mee (dark soy version) is the move, but grab curry mee and roast duck too. Massive hawker complex, this is where KL actually eats.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#6  Terse / urgent[0m
+[32m[YOU][0m hungry. klcc area. now.
+[36m[SAM][0m You're at KLCC now — that's a tricky spot for real food. Honestly, the area's mostly chains and hotel restaurants. Your best move is to grab something quick nearby or head out slightly.
+
+If you want to stay close: hit any of the food courts in the malls for a fast bite. But if you've got 15 minutes to move, I'd say head to Taman Paramount — it's not far.
+
+Awesome Canteen (Taman Paramount)
+Grilled chicken breast with black sesame sauce is the move — crispy skin, sauce hits different. Go now before lunch rush peaks.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#7  Malay — standard[0m
+[32m[YOU][0m nak makan apa best kat kl ni?
+[36m[SAM][0m Awesome Canteen (Taman Paramount)
+Grilled chicken breast with black sesame sauce — it's their signature. Go early evening before the crowd hits.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#8  Malay — family framing[0m
+[32m[YOU][0m ada tempat makan sedap tak, nak bawak family
+[36m[SAM][0m Sushi Mew Omakase (Bukit Bintang)
+YU omakase set — fresh, precise, proper artistry. Book ahead and use the side entrance next to Ferria.
+
+Bar.Kar (KLCC)
+Everything's cooked over open flame, including the cocktails energy. Michelin-listed and intimate, so reserve early.
+
+Dewakan (KLCC)
+Only tasting menu, one option, world-class — Asia's 50 Best. Book 2-3 weeks ahead if you're keen, RM550 per person.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#9  Exhausted / brain-fried[0m
+[32m[YOU][0m long day, brain's fried, just tell me where to eat, somewhere near the city centre
+[36m[SAM][0m I don't have solid intel on city centre spots yet, but I've got a couple of solid nearby options that fit the vibe.
+
+Contour (PJ Old Town)
+Get their coffee and something light — pastry, toast, whatever. It's the kind of place where you can just exist without pressure, which is exactly what a fried brain needs.
+
+Pulp by Papa Palheta (Bangsar)
+Specialty coffee done right, minimal fuss. Close enough and chill enough for tonight.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  3. COLLABORATIVE REFINEMENT (5-turn session)[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam accumulate constraints across turns and narrow recommendations each time?
+Key check on turn 4: Sam should still respect the Bangsar proximity from turn 2.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#10  Session — progressive constraint accumulation[0m
+[32m[YOU][0m dinner for two in kl tonight
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — book 2-3 weeks ahead, but if you can get in, it's the only Michelin-tier restaurant in Malaysia. Worth splurging for.
+
+Bar.Kar (KLCC)
+Open-flame grilled everything with cocktails — reserve now, intimate space, feels special for two.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set (RM488) — premium sushi artistry at The Westin, side entrance next to Ferria, book ahead.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m that's too far from where we are, anything closer to bangsar?
+[36m[SAM][0m Takeen Omakase (Old Klang Road)
+Kappo dinner course from RM488 — award-winning Japanese kappo with more cooked dishes than straight omakase, private rooms if you want intimacy. Book ahead.
+
+CHU by Chef Nick (Taman Tun)
+Lamp chop is the move, mash potato's creamy and perfect. Upscale but feels less formal than the KLCC spots.
+
+Both are closer to Bangsar than what I threw at you before.
+[32m[YOU][0m not in the mood for heavy food tonight
+[36m[SAM][0m Takeen Omakase (Old Klang Road)
+Kappo dinner course from RM488 — cooked dishes mixed with raw, lighter than straight omakase, private rooms available. Book ahead.
+
+CHU by Chef Nick (Taman Tun)
+Lamp chop with creamy mash — upscale but relaxed vibe, not heavy at all. Reserve if you can.
+
+Both keep it refined without the richness you're dodging.
+[32m[YOU][0m something that's open after 9pm?
+[36m[SAM][0m Takeen Omakase and CHU are both solid but might still be a bit heavy late at night. Real talk — most fine dining spots close by 10pm in KL, and what's open after 9 tends to be casual.
+
+I don't have solid intel on lighter spots that stay open late near Bangsar right now. You might be better grabbing something casual nearby — hawker stall, roti canai, that kind of thing — or if you want to stick with the upscale vibe, confirm with Takeen or CHU if they're still seating after 9.
+[32m[YOU][0m last question — which of these would you pick for a first date?
+[36m[SAM][0m Bar.Kar (KLCC)
+Open-flame grilled dishes, intimate space — feels special without being stuffy. Book ahead.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set, premium but the artistry's worth it. Reserve early.
+
+Both hit that upscale-but-not-heavy vibe for a first date. Bar.Kar edges it for me — the open-flame concept gives you something to talk about, and it's less formal than straight omakase.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  4. MID-SESSION FLOW PIVOT[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam switch between recommendation and contribution flows without losing character?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#11  Session A — recommendation → contribution[0m
+[32m[YOU][0m what's good to eat in ttdi?
+[36m[SAM][0m Awesome Canteen (Taman Paramount)
+Grilled chicken breast with black sesame sauce — it's ridiculously good for the price. Go early evening, it gets packed.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m actually, i know a spot there better than those — Crave Burger in TTDI
+[36m[SAM][0m "Quick thing — a contributor pinned this as TTDI, but the address pulls up in Ara Damansara, so worth confirming which one's right before you head over."
+
+Here's what I've got:
+
+*Crave Burger* — TTDI ⚠️ _(web says: Ara Damansara — which is right?)_, Petaling Jaya, Malaysia
+📍 BG-03 Oasis Square, Ara Damansara, Petaling Jaya 47301 _(from web)_
+Lunch | $$
+✨ Vibe: casual
+
+Fields marked _(from web)_ are unverified — double-check before saving.
+Looks solid — I'll add this unless you want to tweak anything.
+[32m[YOU][0m great little western spot, beef burger is the move, tier 1, cash only
+[36m[SAM][0m Here's what I've got:
+
+*Crave Burger* — TTDI ⚠️ _(web says: Ara Damansara — which is right?)_, Petaling Jaya, Malaysia
+📍 BG-03 Oasis Square, Ara Damansara, Petaling Jaya 47301 _(from web)_
+Lunch | $$ | cash
+🍽 Order: beef burger
+✨ Vibe: casual
+
+Fields marked _(from web)_ are unverified — double-check before saving.
+Looks solid — I'll add this unless you want to tweak anything.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#12  Session B — contribution discovers duplicate → recommendation pivot[0m
+[32m[YOU][0m i want to add a place — Village Park Restaurant in Damansara Utama
+[36m[SAM][0m Hey, that's already in my back pocket — Village Park in Damansara Utama. What else have you got, or you want to know what I know about it?
+[32m[YOU][0m oh ok, cool. so it's already in your list?
+[36m[SAM][0m Yep, it's there. Got it from my core knowledge, so I can point people toward it when it fits. What made you think of it — you been there recently?
+[32m[YOU][0m alright then what else is good near village park?
+[36m[SAM][0m Honestly, I'm light on intel for that specific pocket of Damansara Utama right now. Village Park's solid, but I don't want to throw names at you that I'm not confident about. What kind of vibe are you after — more food, coffee, something else? That'll help me figure out what to actually recommend versus guess.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  5. IMPLICIT PREFERENCE INFERENCE[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam read between the lines and adjust without being told explicitly?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#13  Tourist-fatigue signal[0m
+[32m[YOU][0m i've been eating at tourist spots all week, need something real
+[36m[SAM][0m Awesome Canteen (Taman Paramount)
+Get the grilled chicken breast with black sesame sauce — it's simple, properly done, nothing fancy but exactly what it should be. Go early evening before the crowd hits.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#14  Post-heavy-meal lighter option[0m
+[32m[YOU][0m we've been eating heavy all day, lunch was a massive nasi lemak, need something lighter
+[36m[SAM][0m Sushi Mew Omakase (Bukit Bintang)
+YU omakase set — precision and lightness, perfect after heavy food. Book ahead and use the side entrance next to Ferria.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#15  Anniversary — occasion signalling[0m
+[32m[YOU][0m it's my anniversary dinner tonight, want somewhere special
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — Asia's 50 Best restaurant, so book 2-3 weeks ahead if you can swing it. Level 48 views are stunning for an anniversary.
+
+Bar.Kar (KLCC)
+Everything cooked over open flame, cocktails are sharp. Michelin-listed, intimate space — book ahead.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set is artistry on a plate. Use the side entrance next to Ferria, reserve in advance.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#16  First meal in KL — high stakes[0m
+[32m[YOU][0m just landed in kl, first meal here, make it count
+[36m[SAM][0m ICC Pudu (Pudu)
+Hit the hokkien mee stall first — dark soy version, legendary. Grab chee cheong fun and roast duck from other stalls, share everything. Cash only, arrive by 11:30am before things sell out.
+
+You just landed evening time, so heads up — these lunch spots close by 3pm. If you're hungry now, let me know and I'll point you somewhere that's actually open tonight. Otherwise, bookmark ICC Pudu for tomorrow morning.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#17  Local tired of tourist circuit[0m
+[32m[YOU][0m i'm local, i'm tired of taking visitors to the same five places — what are you actually good for?
+[36m[SAM][0m Fair question. I know the spots locals actually eat at — the ones that don't make Instagram but make you want to go back. Not the tourist circuit. When you're tired of repeating yourself, you tell me what you're craving or what mood you're in, and I point you somewhere real that'll either remind you why you love this city or show you a corner you somehow missed.
+
+Also helps when you need to actually impress someone without doing the Pavilion-Petronas-KLCC thing for the hundredth time.
+
+What's the move — you looking for something specific right now, or just want to know what I've got in the back pocket?
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  6. CONTRADICTION NAVIGATION[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam handle conflicting signals gracefully without getting confused or refusing?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#18  Authentic local + comfortable for overseas guests[0m
+[32m[YOU][0m i want authentic local food but somewhere comfortable for my overseas guests
+[36m[SAM][0m Guan's (TTDI)
+Order the roasted meats and leafy greens — the setting's comfortable for guests but the food's proper local. Dinner crowd's relaxed, not touristy.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#19  Special + cheap (rm30 pp)[0m
+[32m[YOU][0m i want something special but i can't spend more than rm30 per person
+[36m[SAM][0m Awesome Canteen (Taman Paramount)
+Get the grilled chicken breast with black sesame sauce — it's comfort food done right and sits well under your budget. Go before 9pm, kitchen winds down after that.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#20  Not hungry + nice to sit[0m
+[32m[YOU][0m i'm not that hungry but want somewhere nice to sit for a while
+[36m[SAM][0m Pulp by Papa Palheta (Bangsar)
+Their coffee's solid and the space is designed for lingering — grab a pour-over and settle in. Evening crowd's usually mellow.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#21  Doesn't eat rice + craving nasi lemak[0m
+[32m[YOU][0m i don't usually eat rice but i'm craving nasi lemak today
+[36m[SAM][0m Nasi Lemak Tanglin (Tanglin)
+Nasi lemak biasa with extra sambal and fried chicken — it's a roadside stall that's been doing this forever. Cash only, opens early but you're hitting it in the evening so heads up it closes by 10am most days.
+
+Village Park Nasi Lemak (Damansara Uptown)
+Same craving, indoor spot that runs later into the day. Worth it if Tanglin's closed by the time you get there.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  7. CONTEXT CONTINUITY (4-turn session)[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam reference earlier stated facts when answering follow-up questions?
+Key check on turn 4: user lifted budget constraint — Sam should recommend differently than turn 1.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#22  Session — budget set, lifted, then premium recs requested[0m
+[32m[YOU][0m suggest dinner for 2 in bangsar, budget is rm100 for both
+[36m[SAM][0m Honestly, RM100 for two in Bangsar is tight for dinner — most spots there run higher. The recs I've got that fit are all in KLCC/Bukit Bintang, not Bangsar itself.
+
+Your best bet: hit a casual spot in Bangsar proper (nasi lemak, roti canai, something local) and I can point you there once you're on the ground. Or if you're willing to travel 10-15 min to KLCC, I've got solid options in that range.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m which of those takes reservations?
+[36m[SAM][0m I don't have reservation intel on those spots yet, but I can check when you tell me which ones you're eyeing.
+[32m[YOU][0m actually drop the budget, we're celebrating something big
+[36m[SAM][0m Takeen Omakase (Old Klang Road)
+Kappo dinner course from RM488 — award-winning Japanese omakase with more cooked dishes than the usual style. Reservations required, and they've got 5 private rooms if you want to keep it intimate for the celebration.
+
+CHU by Chef Nick (Taman Tun)
+Lamp chop is the move here, with creamy mash potato on the side. Upscale spot that'll feel special for the occasion.
+[32m[YOU][0m ok now give me the best you've got regardless of price
+[36m[SAM][0m Dewakan (KLCC)
+Tasting menu only — Asia's 50 Best restaurant, book 2-3 weeks ahead. Level 48 views while you eat, RM550 per person.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set (RM488) — premium artistry, reserve essential. Side entrance next to Ferria KL.
+
+Bar.Kar (KLCC)
+Open-flame grilled everything, Michelin-listed, book ahead for the intimate space.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  8. GRACEFUL PREFERENCE CORRECTION (3-turn session)[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+Watch: does Sam recover cleanly when the user corrects his interpretation?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#23  Session — pivot away from stated preference mid-conversation[0m
+[32m[YOU][0m dinner for 4, semi-formal, thinking chinese food
+[36m[SAM][0m You want Chinese semi-formal for 4, but I'm looking at my KL knowledge and honestly — the spots I know cold right now are sushi, open-flame grilling, and tasting menu territory. None of them are Chinese.
+
+I don't have solid intel on semi-formal Chinese spots yet. Rather than guess, I'd rather not steer you wrong on a dinner like that.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+[32m[YOU][0m actually my colleague doesn't eat chinese, can we do something else?
+[36m[SAM][0m Takeen Omakase (Old Klang Road)
+Kappo dinner course from RM488 — cooked and raw dishes, more refined than straight omakase. Private rooms work perfectly for 4 and it's semi-formal without being stuffy.
+
+CHU by Chef Nick (Taman Tun)
+Lamp chop is the move, mash potato is creamy and buttery. Upscale vibe, intimate setting for your group.
+[32m[YOU][0m yeah, something more neutral but still upscale
+[36m[SAM][0m Bar.Kar (KLCC)
+Open-flame grilled dishes — everything cooked over fire, which keeps it refined without feeling heavy. Book ahead, intimate space for 4.
+
+Sushi Mew Omakase (Bukit Bintang)
+YU omakase set (RM488) — premium but not fussy, seasonal nigiri and specials. Side entrance next to Ferria KL, reservation essential.
+
+════════════════════════════════════════════════════════════
+Done. 23 scenarios in 283.1s.
+Full output saved to: /Users/jx/personal-travel-agent/scripts/stress-test-adapt-output.txt
+
+Evaluation checklist:
+  □ Constraint propagation: vegan/halal/budget respected in NEXT turn?
+  □ Tone mirroring: does formal query get formal reply? casual get casual?
+  □ Context memory: does Sam reference what was said earlier?
+  □ Flow pivots: recommendation ↔ contribution without losing character?
+  □ Implicit inference: 'tourist spots all week' → off-the-beaten-path recs?
+  □ Contradiction grace: 'fancy but cheap' handled without getting stuck?
+  □ Budget lift: turn 4 of context test recommends differently than turn 1?
+  □ Preference correction: Sam pivots cleanly off stated Chinese preference?

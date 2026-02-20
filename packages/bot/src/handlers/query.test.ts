@@ -48,7 +48,7 @@ describe("formatSpotsForLLM", () => {
     const spot: Spot = {
       ...baseSpot,
       area: "Taman Megah",
-      category: "dinner",
+      categories: ["dinner"],
       address: "123 Main St",
       price_range: "$$",
       payment_methods: ["cash", "card"],

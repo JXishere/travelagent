@@ -6,7 +6,7 @@ Return ONLY valid JSON in this exact format:
 ```json
 {
   "name": "Name of the spot",
-  "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
+  "categories": ["breakfast"],  // valid values: breakfast, lunch, dinner, cafe, activity, nightlife, market — use multiple if spot spans meal periods e.g. ["breakfast", "lunch"] or ["dinner", "nightlife"]
   "area": "Area, neighborhood, mall, or building (e.g. Bangsar, TTDI, Pavilion KL, Mid Valley)",
   "city": "City name (e.g. Kuala Lumpur, Penang, Malacca)",
   "country": "Country name — infer from city using world knowledge (e.g. Malaysia, Thailand, Japan)",
@@ -28,7 +28,7 @@ Return ONLY valid JSON in this exact format:
 Rules:
 - Extract everything explicitly mentioned. Do NOT guess or fabricate data.
 - Set "is_must_go" to true only if the contributor conveys genuine urgency or superlative enthusiasm — not just "it's good" or "I like it", but signals like "you absolutely have to go", "best I've had", "it's a must", "don't leave without trying it". Leave it out or set false for regular recommendations.
-- "missing_fields" should list critical fields that were NOT mentioned: name, category, area are critical.
+- "missing_fields" should list critical fields that were NOT mentioned: name, categories, area are critical.
 - If a field wasn't mentioned at all, omit it from the JSON (except missing_fields).
 - Always extract the city if mentioned. If not mentioned, infer from the area using the mapping below. Only default to "{{CITY}}" if the area doesn't match any known city.
 - Always infer country from city using world knowledge. Never leave it blank.

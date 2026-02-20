@@ -35,11 +35,11 @@ const mockFormatSpotsForLLM = formatSpotsForLLM as ReturnType<typeof vi.fn>;
 const mockLoadPrompt = loadPrompt as ReturnType<typeof vi.fn>;
 
 const sampleSpots = [
-  { id: "s1", name: "Nasi Kandar Pelita", category: "dinner", must_go: true, verified: true },
-  { id: "s2", name: "VCR", category: "cafe", must_go: false, verified: true },
-  { id: "s3", name: "Batu Caves", category: "activity", must_go: true, verified: true },
-  { id: "s4", name: "Jalan Alor", category: "dinner", must_go: true, verified: true },
-  { id: "s5", name: "Petaling Street", category: "market", must_go: false, verified: true },
+  { id: "s1", name: "Nasi Kandar Pelita", categories: ["dinner"], must_go: true, verified: true },
+  { id: "s2", name: "VCR", categories: ["cafe"], must_go: false, verified: true },
+  { id: "s3", name: "Batu Caves", categories: ["activity"], must_go: true, verified: true },
+  { id: "s4", name: "Jalan Alor", categories: ["dinner"], must_go: true, verified: true },
+  { id: "s5", name: "Petaling Street", categories: ["market"], must_go: false, verified: true },
 ];
 
 beforeEach(() => {

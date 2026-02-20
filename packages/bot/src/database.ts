@@ -78,7 +78,7 @@ export interface Spot {
   city: string;
   country?: string;
   area?: string;
-  category?: string;
+  categories?: string[];
   must_go?: boolean;
   verified?: boolean;
   address?: string;
@@ -108,7 +108,6 @@ export async function querySpots(filters: {
   city?: string;
   cities?: string[];
   area?: string;
-  category?: string;
   categories?: string[];
   indoor_outdoor?: string;
   limit?: number;
@@ -127,9 +126,9 @@ export async function querySpots(filters: {
   }
   if (filters.area)
     query = query.ilike("area", `%${filters.area}%`);
-  if (filters.category) query = query.eq("category", filters.category);
+  if (filters.category) query = query.contains("categories", [filters.category]);
   if (filters.categories)
-    query = query.in("category", filters.categories);
+    query = query.overlaps("categories", filters.categories);
   if (filters.indoor_outdoor)
     query = query.in("indoor_outdoor", [filters.indoor_outdoor, "both"]);
 

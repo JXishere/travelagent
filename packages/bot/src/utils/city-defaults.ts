@@ -2,6 +2,7 @@
 
 export interface CityDefaults {
   name: string;
+  country: string;
   timezone: string;
   utcOffset: number;
   latitude: number;
@@ -13,6 +14,7 @@ export interface CityDefaults {
 const CITY_DEFAULTS: Record<string, CityDefaults> = {
   "Kuala Lumpur": {
     name: "Kuala Lumpur",
+    country: "Malaysia",
     timezone: "Asia/Kuala_Lumpur",
     utcOffset: 8,
     latitude: 3.139,
@@ -22,10 +24,21 @@ const CITY_DEFAULTS: Record<string, CityDefaults> = {
   },
   Penang: {
     name: "Penang",
+    country: "Malaysia",
     timezone: "Asia/Kuala_Lumpur",
     utcOffset: 8,
     latitude: 5.4141,
     longitude: 100.3288,
+    language: "en",
+    currency: "MYR",
+  },
+  "Petaling Jaya": {
+    name: "Petaling Jaya",
+    country: "Malaysia",
+    timezone: "Asia/Kuala_Lumpur",
+    utcOffset: 8,
+    latitude: 3.1073,
+    longitude: 101.6067,
     language: "en",
     currency: "MYR",
   },

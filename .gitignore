@@ -7,3 +7,4 @@ dist/
 supabase/.temp/
 coach-report.md
 scripts/research-progress.json
+.vercel

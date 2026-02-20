@@ -13,6 +13,9 @@
     "test": "npm run test -w @sam/bot",
     "coach": "npm run coach -w @sam/bot",
     "coach:auto": "npm run coach:auto -w @sam/bot",
-    "research": "npx tsx --env-file .env.local scripts/batch-research.ts"
+    "research": "npx tsx --env-file .env.local scripts/batch-research.ts",
+    "stress-test": "npx tsx scripts/stress-test.ts",
+    "stress-test:adapt": "npx tsx scripts/stress-test-adapt.ts",
+    "verify": "npx tsx --env-file .env.local scripts/verify-fixes.ts"
   }
 }

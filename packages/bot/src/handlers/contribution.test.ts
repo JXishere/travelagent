@@ -37,9 +37,9 @@ import type { Spot, Conversation } from "../database.js";
 
 describe("smartMerge", () => {
   it("merges new fields into empty object", () => {
-    const result = smartMerge({}, { name: "Fatty Crab", category: "dinner" });
+    const result = smartMerge({}, { name: "Fatty Crab", categories: ["dinner"] });
     expect(result.name).toBe("Fatty Crab");
-    expect(result.category).toBe("dinner");
+    expect(result.categories).toEqual(["dinner"]);
   });
 
   it("preserves existing fields when incoming is empty", () => {
@@ -49,10 +49,11 @@ describe("smartMerge", () => {
 
   it("overwrites scalar fields", () => {
     const result = smartMerge(
-      { name: "Fatty Crab", category: "lunch" },
-      { category: "dinner" }
+      { name: "Fatty Crab", categories: ["lunch"] },
+      { categories: ["dinner"] },
+      true
     );
-    expect(result.category).toBe("dinner");
+    expect(result.categories).toEqual(["dinner"]);
   });
 
   it("appends to arrays without duplicates by default", () => {
@@ -95,18 +96,18 @@ describe("isReady", () => {
   it("returns false when missing critical fields", () => {
     expect(isReady({})).toBe(false);
     expect(isReady({ name: "Test" })).toBe(false);
-    expect(isReady({ name: "Test", category: "dinner" })).toBe(false);
+    expect(isReady({ name: "Test", categories: ["dinner"] })).toBe(false);
   });
 
   it("returns false when has critical but no operational data", () => {
-    expect(isReady({ name: "Test", category: "dinner", area: "Bangsar" })).toBe(false);
+    expect(isReady({ name: "Test", categories: ["dinner"], area: "Bangsar" })).toBe(false);
   });
 
   it("returns true when has critical + what_to_order", () => {
     expect(
       isReady({
         name: "Test",
-        category: "dinner",
+        categories: ["dinner"],
         area: "Bangsar",
         what_to_order: ["nasi lemak"],
       })
@@ -117,7 +118,7 @@ describe("isReady", () => {
     expect(
       isReady({
         name: "Test",
-        category: "dinner",
+        categories: ["dinner"],
         area: "Bangsar",
         pro_tips: ["go early"],
       })
@@ -128,7 +129,7 @@ describe("isReady", () => {
     expect(
       isReady({
         name: "Test",
-        category: "dinner",
+        categories: ["dinner"],
         area: "Bangsar",
         vibe: "casual",
       })
@@ -139,7 +140,7 @@ describe("isReady", () => {
     expect(
       isReady({
         name: "Test",
-        category: "dinner",
+        categories: ["dinner"],
         area: "Bangsar",
         payment_methods: ["cash"],
       })
@@ -176,7 +177,7 @@ describe("formatSummary", () => {
     const result = formatSummary({
       name: "Fatty Crab",
       area: "Taman Megah",
-      category: "dinner",
+      categories: ["dinner"],
       price_range: "$$",
       payment_methods: ["cash"],
       what_to_order: ["chilli crab"],
@@ -340,7 +341,7 @@ describe("enrichFromWeb", () => {
   });
 
   it("returns data unchanged when name is missing", async () => {
-    const data = { category: "dinner" };
+    const data = { categories: ["dinner"] };
     const result = await enrichFromWeb(data);
     expect(result.enriched).toEqual(data);
     expect(result.webSourcedFields).toEqual([]);
@@ -351,7 +352,7 @@ describe("enrichFromWeb", () => {
     mockedWebSearch.mockResolvedValue({});
     const data = {
       name: "Fatty Crab",
-      category: "dinner",
+      categories: ["dinner"],
       area: "Taman Megah",
       what_to_order: ["chilli crab"],
     };
@@ -363,22 +364,22 @@ describe("enrichFromWeb", () => {
 
   it("merges web data and contributor data wins on conflicts", async () => {
     mockedWebSearch.mockResolvedValue({
-      category: "cafe",
+      categories: ["cafe"],
       price_range: "$$",
     });
 
     const data = {
       name: "Ka'ia",
-      category: "dinner", // contributor says dinner, web says cafe — contributor wins
+      categories: ["dinner"], // contributor says dinner, web says cafe — contributor wins
     };
 
     const result = await enrichFromWeb(data);
     expect(result.enriched.name).toBe("Ka'ia");
-    expect(result.enriched.category).toBe("dinner"); // contributor wins
+    expect(result.enriched.categories).toEqual(["dinner"]); // contributor wins
     expect(result.enriched.price_range).toBe("$$"); // filled from web
     // Only fields that were genuinely new (not already in contributor data) are web-sourced
     expect(result.webSourcedFields).toContain("price_range");
-    expect(result.webSourcedFields).not.toContain("category"); // contributor already had this
+    expect(result.webSourcedFields).not.toContain("categories"); // contributor already had this
   });
 
   it("strips non-allowed fields from web data via allowlist", async () => {
@@ -421,7 +422,7 @@ describe("enrichFromWeb", () => {
       latitude: 3.157,
       longitude: 101.712,
       random_field: "unexpected",
-      category: "cafe",
+      categories: ["cafe"],
     });
 
     const data = { name: "Petronas Cafe" };
@@ -434,9 +435,9 @@ describe("enrichFromWeb", () => {
     expect((result.enriched as any).latitude).toBeUndefined();
     expect((result.enriched as any).longitude).toBeUndefined();
     expect((result.enriched as any).random_field).toBeUndefined();
-    // category IS in allowlist
-    expect(result.enriched.category).toBe("cafe");
-    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "address", "category"]));
+    // categories IS in allowlist
+    expect(result.enriched.categories).toEqual(["cafe"]);
+    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "address", "categories"]));
   });
 
   it("returns empty webSourcedFields when web returns only non-allowed fields", async () => {
@@ -500,7 +501,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
 
 const readySpot = {
   name: "Fatty Crab",
-  category: "dinner",
+  categories: ["dinner"],
   area: "Taman Megah",
   what_to_order: ["chilli crab"],
   is_must_go: false,
@@ -564,7 +565,7 @@ describe("handleContribution — first message (no stage)", () => {
 
 describe("handleContribution — collecting stage", () => {
   it("accumulates data across messages and transitions to confirming when ready", async () => {
-    mockedExtract.mockResolvedValue({ category: "dinner", what_to_order: ["chilli crab"] });
+    mockedExtract.mockResolvedValue({ categories: ["dinner"], what_to_order: ["chilli crab"] });
 
     const conv = makeConversation({
       flow_state: {
@@ -605,7 +606,7 @@ describe("handleContribution — collecting stage", () => {
 
   it("triggers web enrichment when name is first provided", async () => {
     mockedExtract.mockResolvedValue({ name: "Ka'ia" });
-    mockedWebSearch.mockResolvedValue({ area: "Bangsar South", price_range: "$$", category: "cafe" });
+    mockedWebSearch.mockResolvedValue({ area: "Bangsar South", price_range: "$$", categories: ["cafe"] });
 
     const conv = makeConversation({
       flow_state: {
@@ -623,8 +624,8 @@ describe("handleContribution — collecting stage", () => {
     // area is in allowlist — filled from web when contributor didn't provide it
     expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
       flow_state: expect.objectContaining({
-        extracted: expect.objectContaining({ name: "Ka'ia", category: "cafe" }),
-        webSourcedFields: expect.arrayContaining(["price_range", "category", "area"]),
+        extracted: expect.objectContaining({ name: "Ka'ia", categories: ["cafe"] }),
+        webSourcedFields: expect.arrayContaining(["price_range", "categories", "area"]),
       }),
     }));
     // area should be filled from web
@@ -639,7 +640,7 @@ describe("handleContribution — collecting stage", () => {
     mockedExtract.mockResolvedValue({ name: "Ka'ia", area: "Bangsar", what_to_order: ["flat white"] });
     // Web search fills in the missing category — making it ready
     // (area from web would be stripped by allowlist, but contributor already provided it)
-    mockedWebSearch.mockResolvedValue({ category: "cafe", price_range: "$$" });
+    mockedWebSearch.mockResolvedValue({ categories: ["cafe"], price_range: "$$" });
 
     const conv = makeConversation({
       flow_state: { stage: "collecting", extracted: {}, source: "text", messagesReceived: 0 },
@@ -801,7 +802,7 @@ describe("handleContribution — confirming stage", () => {
     expect(mockedInsertSpot).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "Fatty Crab",
-        category: "dinner",
+        categories: ["dinner"],
       })
     );
   });

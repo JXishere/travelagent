@@ -34,10 +34,10 @@ export async function handleStrategic(phoneNumber: string): Promise<string> {
 
   // Split by category for strategic organization
   const foodSpots = allSpots.filter((s) =>
-    ["breakfast", "lunch", "dinner", "cafe"].includes(s.category ?? "")
+    (s.categories ?? []).some((c) => ["breakfast", "lunch", "dinner", "cafe"].includes(c))
   );
   const activitySpots = allSpots.filter((s) =>
-    ["activity", "market", "nightlife"].includes(s.category ?? "")
+    (s.categories ?? []).some((c) => ["activity", "market", "nightlife"].includes(c))
   );
   const topSpots = allSpots.filter((s) => s.must_go);
 

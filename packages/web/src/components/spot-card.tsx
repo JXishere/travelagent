@@ -30,7 +30,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
   const [parsing, setParsing] = useState(false);
   const [draft, setDraft] = useState({
     must_go: spot.must_go,
-    category: spot.category,
+    categories: spot.categories ?? [],
     vibe: spot.vibe ?? "",
     what_to_order: (spot.what_to_order ?? []).join("\n"),
     what_to_skip: (spot.what_to_skip ?? []).join("\n"),
@@ -84,7 +84,10 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
       if (parsed.address && !spot.address) updates.address = parsed.address;
       if (parsed.best_time_of_day && !spot.best_time_of_day) updates.best_time_of_day = parsed.best_time_of_day;
       if (parsed.indoor_outdoor && !spot.indoor_outdoor) updates.indoor_outdoor = parsed.indoor_outdoor;
-      if (parsed.category && parsed.category !== spot.category) updates.category = parsed.category;
+      if (parsed.categories?.length) {
+        const merged = [...new Set([...(spot.categories ?? []), ...parsed.categories])];
+        if (merged.join() !== (spot.categories ?? []).join()) updates.categories = merged;
+      }
 
       if (Object.keys(updates).length > 0) {
         onSave(spot.id, updates);
@@ -100,7 +103,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
   const handleSave = () => {
     onSave(spot.id, {
       must_go: draft.must_go,
-      category: draft.category,
+      categories: draft.categories,
       vibe: draft.vibe || null,
       what_to_order: draft.what_to_order
         .split("\n")
@@ -157,7 +160,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
             backgroundColor: "var(--bg)",
           }}
         >
-          {spot.category}
+          {(spot.categories ?? []).join(" · ")}
         </span>
         {spot.must_go && (
           <span style={{ color: "var(--green)", fontWeight: "bold", fontSize: "0.75rem" }}>
@@ -187,18 +190,24 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
           {editing ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
               <label style={labelStyle}>
-                Category
-                <select
-                  value={draft.category}
-                  onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                  style={inputStyle}
-                >
+                Categories
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
+                    <label key={c} style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.8rem", cursor: "pointer", color: "var(--fg)" }}>
+                      <input
+                        type="checkbox"
+                        checked={draft.categories.includes(c)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...draft.categories, c]
+                            : draft.categories.filter((x) => x !== c);
+                          setDraft({ ...draft, categories: next });
+                        }}
+                      />
                       {c}
-                    </option>
+                    </label>
                   ))}
-                </select>
+                </div>
               </label>
               <label style={{ ...labelStyle, flexDirection: "row", alignItems: "center", gap: "0.5rem" }}>
                 <input

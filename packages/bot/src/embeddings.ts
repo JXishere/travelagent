@@ -24,7 +24,7 @@ export function buildSpotText(spot: Partial<Spot>): string {
 
   if (spot.name) parts.push(spot.name);
   if (spot.area) parts.push(spot.area);
-  if (spot.category) parts.push(spot.category);
+  if (spot.categories?.length) parts.push(spot.categories.join(", "));
   if (spot.vibe) parts.push(`vibe: ${spot.vibe}`);
   if (spot.what_to_order?.length) parts.push(`known for: ${spot.what_to_order.join(", ")}`);
   if (spot.pro_tips?.length) parts.push(`tips: ${spot.pro_tips.join(". ")}`);

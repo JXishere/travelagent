@@ -176,3 +176,24 @@ create index idx_events_created on events(created_at);
 
 alter table events enable row level security;
 create policy "Service role full access" on events for all using (true);
+
+-- ============================================
+-- SPOT CONTRIBUTIONS — Per-contributor attribution
+-- ============================================
+create table spot_contributions (
+  id uuid primary key default gen_random_uuid(),
+  spot_id uuid references spots(id) on delete cascade not null,
+  contributor_id uuid references contributors(id) not null,
+  what_to_order text[] default '{}',
+  what_to_skip text[] default '{}',
+  pro_tips text[] default '{}',
+  vibe text,
+  tier integer,
+  created_at timestamptz default now() not null
+);
+
+create index idx_spot_contributions_spot_id on spot_contributions(spot_id);
+create index idx_spot_contributions_contributor_id on spot_contributions(contributor_id);
+
+alter table spot_contributions enable row level security;
+create policy "Public can read spot contributions" on spot_contributions for select using (true);

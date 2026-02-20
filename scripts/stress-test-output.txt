@@ -1,0 +1,350 @@
+[1mSam Stress Test — 2026-02-20T07:25:14.903Z[0m
+API: http://localhost:3001/api/chat
+Output: /Users/jx/personal-travel-agent/scripts/stress-test-output.txt
+
+This is a human evaluation script. Read Sam's responses and judge quality.
+Watch for: fabricated spots, empty responses, off-character moments, broken flows.
+
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  1. KNOWLEDGE — does Sam know the city well enough?[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#1  Bangsar dinner baseline[0m
+[32m[YOU][0m where should i eat in bangsar tonight
+[36m[SAM][0m You're in Bangsar — closest real move tonight is Bar.Kar over in KLCC. Open-flame grilled everything, Michelin-listed, intimate space. Order the open-flame grilled dishes and book ahead because it fills up fast.
+
+If you want something even more special and haven't eaten there yet, Dewakan is the only Malaysian restaurant on Asia's 50 Best — tasting menu only, RM550, but you need to book way in advance. Sushi Mew Omakase at The Westin is another solid pick if you're after omakase — YU set is RM488, side entrance next to Ferria.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#2  Broad KL breakfast[0m
+[32m[YOU][0m whats good for breakfast in kl
+[36m[SAM][0m Nasi Lemak Tanglin is the move — get the nasi lemak biasa with extra sambal and add fried chicken. Cash only, opens at 5:30am, and it sells out fast on weekends, so go early. It's a roadside stall, which is exactly why it's good.
+
+If you want noodles instead, Imbi Pork Noodles does a killer pork ball noodles with extra sausage — 55-year-old stall, also cash only, opens 6am.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#3  Penang char kway teow[0m
+[32m[YOU][0m best char kway teow in penang
+[36m[SAM][0m I don't have intel on char kway teow spots yet — that's a gap in my Penang knowledge. I know KL cold, but Penang's a different beast and I don't want to steer you wrong on something that specific.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#4  Subang Jaya — limited data[0m
+[32m[YOU][0m anything good to eat in subang jaya
+[36m[SAM][0m You're close to some solid options. If you want the real deal, hit up SS2 Wai Sek Kai in Petaling Jaya — it's PJ's most famous hawker street, char kuey teow is the move, and go slightly before 7pm to beat the rush. Cash only though.
+
+If you want something more upscale and different, THB Bistronome does Thai food through a French lens — their omelet souffle is crispy magic, and it's in a commercial building in Section 19 so easy to miss but worth finding.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#5  Off-the-beaten-path framing[0m
+[32m[YOU][0m i want something i wouldnt find on google
+[36m[SAM][0m What are you feeling? Any particular vibe or cuisine in mind?
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  2. DIETARY & CONSTRAINT HANDLING[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#6  Vegan near Bukit Bintang[0m
+[32m[YOU][0m im vegan, where can i eat near bukit bintang
+[36m[SAM][0m Ah, vegan near Bukit Bintang is tricky — I don't have solid intel on dedicated vegan spots in that area yet. The hawker stalls I know best (Soong Kee, ICC Pudu, Wong Mei Kee) are all meat-heavy classics.
+
+Your best bet is probably hitting one of the malls around Bukit Bintang — Pavilion or Suria KLCC should have vegan-friendly cafes or Asian spots with veggie options. But I'll be honest, that's not my strong suit.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#7  Halal Chinese food[0m
+[32m[YOU][0m halal only please, want good chinese food in kl
+[36m[SAM][0m Lai Foong Beef Noodles is your move — beef noodle soup that hits, and they're halal. Get there early though, it's a morning spot and they run out. Evening's tight for them.
+
+If that doesn't work timing-wise, Old China Cafe in Chinatown does proper halal Chinese — chill vibe, good for sitting down. Order their signature dishes and ask what's fresh that day.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#8  Budget RM15 lunch[0m
+[32m[YOU][0m i have RM15 for lunch, where can i go
+[36m[SAM][0m RM15? You're golden — that's prime territory for the best lunch in KL.
+
+Hit up ICC Pudu. It's a massive hawker complex where locals actually eat, not tourists. Get the hokkien mee from the dark soy stall (legendary), grab curry mee from another, maybe chee cheong fun. Pick 3-4 stalls and share — you'll demolish RM15 and eat like a king. Cash only, arrive by 11:30am before things sell out.
+
+If you can't make it there, Soong Kee Beef Noodles in Chinatown is the move — dry beef noodles with tendon and tripe, RM10-15, but lunch only and sells out by 1pm. Or Wong Mei Kee in Pudu for siu yuk (roast pork belly) with skin that cracks like glass, also RM15 range, but only open 12-3pm.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#9  Solo dining comfort[0m
+[32m[YOU][0m im eating alone and dont want to feel awkward
+[36m[SAM][0m What are you feeling? Any particular vibe or cuisine in mind?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#10  Quiet work-call spot[0m
+[32m[YOU][0m need somewhere quiet, im taking a work call while eating
+[36m[SAM][0m Evening work call while eating? That's tricky timing — most of my best spots close by lunch. Honestly, this is the gap in my intel: I don't have solid evening quiet spots locked down yet.
+
+That said, if you can shift to lunch tomorrow, ICC Pudu in Pudu is a massive hawker complex but you can grab a corner table, order the hokkien mee from the dark soy stall, and it's calm enough for a call if you time it right after the 11:30am rush dies down. Arrive after 12:30pm. Cash only.
+
+For tonight though — I'm not confident enough to send you somewhere that might disappoint. Quick one: are you local or just visiting? Helps me tune what I actually know versus what I need to learn.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  3. HALLUCINATION TESTS — Sam must not fabricate[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#11  Made-up: Restoran Ah Kow[0m
+[32m[YOU][0m what do you think of Restoran Ah Kow in Chow Kit
+[36m[SAM][0m I don't have intel on that one yet, but if you've been there, what's the move?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#12  Made-up: The Secret Garden cafe[0m
+[32m[YOU][0m is The Secret Garden cafe in Mont Kiara good
+[36m[SAM][0m I don't have intel on that one yet, but if you've been there, what'd you think?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#13  City not in graph: Ipoh[0m
+[32m[YOU][0m tell me about food in Ipoh
+[36m[SAM][0m I don't have Ipoh coverage yet — that's a gap I need to fill.
+
+But if you're open to heading toward KL, I've got some serious moves. For dinner, Dewakan is the only Malaysian restaurant on Asia's 50 Best — tasting menu only, Level 48 views, book ahead. Or if you want something more relaxed but still fire, Bar.Kar does open-flame everything, Michelin-listed, same booking energy.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#14  Real place, may not have it: Nasi Lemak Wanjo[0m
+[32m[YOU][0m whats the signature dish at Nasi Lemak Wanjo in Kampung Baru
+[36m[SAM][0m The nasi lemak ayam goreng is the move — crispy fried chicken on fragrant coconut rice, that's what people come back for. Get there mid-afternoon to skip the lunch and supper crowds, and heads up that hours on the web might be outdated so worth confirming before you go.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#15  Hours/recency accuracy[0m
+[32m[YOU][0m is Jalan Alor open on sundays
+[36m[SAM][0m Yeah, it's open Sundays — technically 24 hours according to the web listing, but double-check before heading there since that info might be outdated. Best time to go is after 7pm when all the stalls are firing and it's actually buzzing.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  4. TRUST CHALLENGES[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#16  Why trust Sam over Google Maps[0m
+[32m[YOU][0m why should i trust you over google maps
+[36m[SAM][0m Fair question. Google Maps shows you what exists and what people rated. I show you what's actually worth your time — the difference between a 4.8-star tourist trap and a hole-in-the-wall that locals actually queue for. I know *why* something matters, not just that it does. And I'm honest about gaps instead of pretending to know everything.
+
+But real talk: I'm only as good as the people who've told me about their city. So if you've lived somewhere longer than I have intel on it, you probably know better. Use me as a shortcut for the stuff I do know cold.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#17  Paid recommendations accusation[0m
+[32m[YOU][0m are these paid recommendations
+[36m[SAM][0m Nope. I'm just sharing spots real people have told me about — locals, travelers, anyone who's found something worth knowing. No one's paying for a spot to be on my radar.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#18  Who decides what's in the DB[0m
+[32m[YOU][0m who decides whats in your database
+[36m[SAM][0m Real people do — locals, travelers, anyone who's found something worth sharing. I learn from them, not from guides or algorithms trying to rank everything.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#19  Bad experience[0m
+[32m[YOU][0m i went to one of your recommended places and it was terrible
+[36m[SAM][0m Oof, that sucks. Which spot are we talking about? What went wrong — food, service, vibe, all of it?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#20  ChatGPT comparison[0m
+[32m[YOU][0m chatgpt told me a different place is better
+[36m[SAM][0m Good catch — what'd they say? Sometimes there's overlap or it depends what you're actually after. Let me know the spot and I can tell you what I know about it, or why I'd lean different.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#21  Freshness / last updated[0m
+[32m[YOU][0m when was this last updated
+[36m[SAM][0m I don't have a timestamp for when my knowledge was last refreshed — that's not something I track. But I know spots real people have shared with me, so if something's changed, let me know and I'll update it.
+
+What are you looking for?
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  5. SCOPE CHALLENGES — what Sam doesn't do[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#22  Table booking request[0m
+[32m[YOU][0m can you book a table for me at Bijan
+[36m[SAM][0m I can't book tables — that's on you. But call them at Bijan Bar & Restaurant on Jalan Ceylon in Bukit Ceylon and they'll sort you out. They're open 4:30 PM to 11 PM daily, though I'd confirm those hours first since they can shift.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#23  Activities (non-food)[0m
+[32m[YOU][0m what activities can i do in kl this weekend
+[36m[SAM][0m Weekend in KL — nice. Here's a solid flow:
+
+Start early with breakfast. Nasi Lemak Tanglin opens at 5:30am and sells out by 10am on weekends — roadside stall, cash only, get the biasa with extra sambal and fried chicken. It's the real deal. If you want noodles instead, Imbi Pork Noodles is a 55-year-old stall that opens at 6am, also cash only.
+
+For late morning, hit Chow Kit Wet Market before 10am — it's chaotic and real, not touristy. Browse the fruit section, grab some snacks, maybe grab breakfast at one of the stalls inside if you're still hungry.
+
+Lunch is where it gets good. Wong Mei Kee in Pudu opens 12pm-3pm only and sells out fast — Michelin Bib Gourmand, charcoal-roasted pork belly with insane crispy skin. Arrive before noon, cash only. Or go bigger: ICC Pudu is a massive hawker complex where locals actually eat — hit 3-4 stalls, get the hokkien mee (dark soy version is legendary), arrive by 11:30am because some stalls sell out by 1pm.
+
+Evening: if you want to splurge, Dewakan is the only Malaysian restaurant on Asia's 50 Best — tasting menu only, RM550, book 2-3 weeks ahead. Or Takeen Omakase on Old Klang Road for Japanese kappo omakase (more cooked dishes, private rooms, reservations required).
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#24  Hotel recommendation[0m
+[32m[YOU][0m i need a hotel near klcc
+[36m[SAM][0m Hotels aren't my lane — I'm all about where to eat and drink. But for KLCC area intel, I'd say grab a map and search from there, then hit me up for food spots once you're settled. What kind of food are you after when you land?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#25  Transport directions[0m
+[32m[YOU][0m how do i get from bangsar to klcc by train
+[36m[SAM][0m That's not really my lane — transport and navigation aren't my thing. You'd want Google Maps or the Grab app for the actual route and timing.
+
+But once you're at KLCC, I can point you to something solid to eat or drink. What are you thinking?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#26  Weather query[0m
+[32m[YOU][0m whats the weather like in kl right now
+[36m[SAM][0m Weather's not my thing — that's on your phone. But since you're in KL, let me know what you're hungry for and I'll point you somewhere good.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  6. CONTRIBUTION FLOW — multi-turn[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#27a-c  Session A — vague start, no location[0m
+[32m[YOU][0m i know a good spot
+[36m[SAM][0m What spot are you thinking of?
+[32m[YOU][0m its a mamak near my place
+[36m[SAM][0m Cool, what's the spot called?
+[32m[YOU][0m its in pj somewhere
+[36m[SAM][0m Got it — what's the spot called?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#28a-b  Session B — minimal operational detail (does Sam extract what to order?)[0m
+[32m[YOU][0m want to tell you about a place — Fatty Crab in Taman Megah
+[36m[SAM][0m What spot are you thinking of?
+[32m[YOU][0m its good seafood
+[36m[SAM][0m I found something that might match, but the location details need a local check — could you confirm if it's actually in Taman Megah, Petaling Jaya?
+
+Here's what I've got:
+
+*Fatty Crab* — Taman Megah ⚠️ _(web says: Taman Megah, Petaling Jaya — which is right?)_, Petaling Jaya, Malaysia
+📍 2 Jalan SS 24/13, Taman Megah, 47301 Petaling Jaya, Selangor, Malaysia _(from web)_
+Lunch|dinner | $$ _(from web)_ | cash, card _(from web)_
+🍽 Order: seafood
+✨ Vibe: casual
+
+Fields marked _(from web)_ are unverified — double-check before saving.
+Looks solid — I'll add this unless you want to tweak anything.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#29a-b  Session C — potentially duplicate spot[0m
+[32m[YOU][0m have you heard of Jalan Alor? the whole street in bukit bintang
+[36m[SAM][0m Yeah, it's the classic hawker street in Bukit Bintang — chaotic, touristy, but genuinely worth the experience once. Hit it after 7pm when all the stalls are firing and the vibe's alive, grab grilled chicken wings and satay, and skip the aggressive touts trying to seat you. Pro tip: Wong Ah Wah stall at the end is the real deal, and bring cash since most spots don't take cards.
+[32m[YOU][0m yeah i want to add it, its a great hawker street for dinner, tier 1 definitely
+[36m[SAM][0m I don't actually do that — I only share spots people have told me about directly, so if something feels off, I'd flag it: "That address might've shifted, worth confirming before you head over."
+
+Here's what I've got:
+
+*Jalan Alor* — Bukit Bintang, Kuala Lumpur, Malaysia
+📍 Jalan Alor, Bukit Bintang, 50200 Kuala Lumpur _(from web)_
+Dinner | $ | cash, card
+🍽 Order: grilled chicken wings, satay
+💡 Hit after 7pm when all stalls are firing. Wong Ah Wah stall at the end is the real deal. Bring cash since most spots don't take cards
+✨ Vibe: chaotic|touristy
+
+Fields marked _(from web)_ are unverified — double-check before saving.
+Looks solid — I'll add this unless you want to tweak anything.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#30a-c  Session D — correction mid-flow[0m
+[32m[YOU][0m i want to add a place — Restoran Warisan in ss15 subang
+[36m[SAM][0m Got it — Restoran Warisan in SS15. What's the must-order there?
+[32m[YOU][0m actually i got the area wrong, its in ss2 not ss15
+[36m[SAM][0m Warisan in SS2 — got it. What's the must-order there?
+[32m[YOU][0m its a good nasi lemak spot, open from 7am, tier 2
+[36m[SAM][0m Here's what I've got:
+
+*Restoran Warisan* — SS2, Subang Jaya, Petaling Jaya, Malaysia
+📍 Jalan SS 25/23 20, 47301 Petaling Jaya
+Lunch|dinner | $$
+🍽 Order: nasi lemak
+💡 Open from 7am
+
+Looks solid — I'll add this unless you want to tweak anything.
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  7. EMOTIONAL / ADVERSARIAL[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#31  Dismissive: this is useless[0m
+[32m[YOU][0m this is useless
+[36m[SAM][0m Fair point — what would actually help? What are you looking for?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#32  Challenge: you dont know kl[0m
+[32m[YOU][0m you dont actually know kl
+[36m[SAM][0m Fair point — I know spots real people have shared with me, but that's way different from living there. I've got pockets of solid intel (food stalls, cafes, that kind of thing) but I'm definitely not the person to ask about navigating the city or catching everything worth seeing. What are you looking for? Might be useful, might not.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#33  Impatient: stop asking questions[0m
+[32m[YOU][0m just tell me where to eat, stop asking questions
+[36m[SAM][0m Alright — go to Bar.Kar in KLCC tonight. Open-flame grilled dishes, everything cooked over fire, and it's Michelin-listed. Book ahead if you can, it's intimate and worth it.
+
+If you want to go bigger, Dewakan is the only Malaysian restaurant on Asia's 50 Best — tasting menu only, book way in advance. Bar.Kar's your move for tonight though.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#34  Frustrated with flow[0m
+[32m[YOU][0m why do you keep asking me things, just give me a recommendation
+[36m[SAM][0m You're right, my bad. Here's the move: head to Restoran Yut Kee in Kampung Baru for their nasi kuning — it's the real deal, been running since the 1920s. Get there early, cash only, and go hungry.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#35  No opinion wanted[0m
+[32m[YOU][0m i dont want your opinion, just list options
+[36m[SAM][0m Got it. What are you looking for — food, drinks, coffee, activity? And where?
+
+[1m[33m════════════════════════════════════════════════════════════[0m
+[1m[33m  8. EDGE CASES[0m
+[1m[33m════════════════════════════════════════════════════════════[0m
+
+[90m──────────────────────────────────────────────────[0m
+[1m#36  Single word: food[0m
+[32m[YOU][0m food
+[36m[SAM][0m What are you feeling? Any particular vibe or cuisine in mind?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#37  200+ word rambling message[0m
+[32m[YOU][0m okay so i've been walking around kl all day and i'm absolutely starving but i can't decide what i want to eat because there are so many options and i kind of want something local but also i'm a bit tired of rice and i had noodles for lunch so i don't want noodles again and i'm near klcc i think or maybe bangsar i took the wrong train actually and now i'm somewhere near masjid india i think and i have about rm30 to spend but ideally less because i need to save some money for tomorrow and my flight is at 6am so i need to be back at the hotel by 11pm latest and i just want somewhere good that won't disappoint me because yesterday i went somewhere that was just average and i really want to end my trip on a high note so what would you recommend
+[36m[SAM][0m Okay, you need Mansion Tea Stall right now — you're basically there. Nasi campur with ayam percik, grab a teh tarik, done. RM10-15 max, fills you up proper, and it's the real deal local experience. Cash only, but that's part of the charm.
+
+Pro tip: go after you eat and walk through Kampung Baru at night — it's a whole vibe, especially after a long day. You'll be back at your hotel with time to spare and money left over.
+
+Quick one — local or just visiting? Helps me tune what I show you next time.
+
+[90m──────────────────────────────────────────────────[0m
+[1m#38  Emoji only: 🍜🍜🍜[0m
+[32m[YOU][0m 🍜🍜🍜
+[36m[SAM][0m What are you feeling? Any particular vibe or cuisine in mind?
+
+[90m──────────────────────────────────────────────────[0m
+[1m#39  Off-topic: meaning of life[0m
+[32m[YOU][0m what is the meaning of life
+[36m[SAM][0m Ha, that's a big one. I'm more of a "what's worth eating in your city" kind of friend than a philosophy guy.
+
+What city are you in? I can probably help you find something that tastes like meaning, at least for an afternoon.
+
+════════════════════════════════════════════════════════════
+Done. 39 scenarios in 289.8s.
+Full output saved to: /Users/jx/personal-travel-agent/scripts/stress-test-output.txt
+
+Review checklist:
+  □ Did Sam fabricate any spots?
+  □ Did Sam say 'I don't know' when appropriate?
+  □ Did the contribution flow capture usable intel?
+  □ Did Sam handle adversarial messages without breaking character?
+  □ Were responses appropriately concise?

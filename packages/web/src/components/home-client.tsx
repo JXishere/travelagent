@@ -90,8 +90,12 @@ export function HomeClient({
 
           {/* Headline */}
           <h1 className="-mt-6 text-left text-2xl font-medium tracking-tight">
-            Know a spot? Tell Sam.
+            Ask Sam. He'll sort you out.
           </h1>
+
+          <p className="-mt-4 text-left text-sm" style={{ color: "var(--muted)" }}>
+            Where to eat, what to do, how to plan it — for wherever you're going.
+          </p>
 
           {/* Live feed */}
           <p

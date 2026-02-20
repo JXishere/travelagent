@@ -41,6 +41,22 @@ export async function handleProfile(
   options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
   const channel = options?.channel ?? "whatsapp";
+
+  // Escape hatch: food/dining request should bypass the profile interview
+  // (same guard as in startProfileLearning, but catches mid-interview food signals)
+  if (FOOD_SIGNALS.test(message)) {
+    const { classifyIntent } = await import("../llm.js");
+    const { handleHungry } = await import("./ontrip.js");
+    const { details } = await classifyIntent(message);
+    // Pass conversation history so the "local or just visiting?" new-user note is suppressed
+    // (we're already mid-conversation — no need to ask again). Use actual history if present,
+    // otherwise a sentinel that marks the profile question as already asked.
+    const recentHistory = conversation.messages.length > 0
+      ? conversation.messages.slice(-4).map(m => `${m.role}: ${m.content}`).join("\n")
+      : "assistant: local or just visiting?";
+    return handleHungry(phoneNumber, message, details, recentHistory);
+  }
+
   // Build the conversation history for Claude
   const history = conversation.messages.map((m) => ({
     role: m.role as "user" | "assistant",

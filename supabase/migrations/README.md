@@ -37,3 +37,5 @@ npm run migrate
 | `20260219_040000_add_contribution_count.sql` | Add contribution_count integer column to spots; backfill from spot_contributions | applied via MCP |
 | `20260219_050000_add_country_to_spots.sql` | Add country text column to spots; backfill from city mappings — removes hardcoded CITY_TO_COUNTRY map in web package | applied via MCP |
 | `20260220_000000_clear_stale_operational_data.sql` | Clear opening_hours and payment_methods from all spots — both fields are now fetched live from web search, seeded values are stale noise | pending |
+| `20260220_010000_atomic_helpers.sql` | Atomic RPC helpers: append_conversation_messages (row-locked append), increment_spot_use_count, increment_spot_contribution_count — eliminates read-modify-write race conditions | applied via MCP |
+| `20260220_200000_category_text_to_categories_array.sql` | Migrate spots.category (text) → categories (text[]); split 4 pipe-hacked rows on \|; update match_spots RPC to filter with array overlap (&&) | applied via MCP |

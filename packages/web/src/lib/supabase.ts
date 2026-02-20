@@ -6,7 +6,7 @@ export interface Spot {
   city: string;
   country: string | null;
   area: string;
-  category: string;
+  categories: string[];
   must_go: boolean;
   verified: boolean;
   address: string | null;
@@ -117,7 +117,7 @@ export async function getDistinctCities(): Promise<string[]> {
 interface RecentSpot {
   name: string;
   area: string | null;
-  category: string;
+  categories: string[];
   what_to_order: string[] | null;
   what_to_skip: string[] | null;
   pro_tips: string[] | null;
@@ -137,7 +137,7 @@ function generateTeasers(spot: RecentSpot): string[] {
   if (!area) return [];
 
   const candidates: string[] = [];
-  const cat = spot.category;
+  const cat = spot.categories?.[0] ?? "spot";
 
   // Dish — pick a random dish, not always the first
   const dishes = spot.what_to_order?.filter(Boolean) ?? [];
@@ -216,7 +216,7 @@ export async function getRecentSpotTeasers(limit = 200): Promise<string[]> {
   // Only pull spots with real intel — at least one of what_to_order or pro_tips
   const { data, error } = await supabase
     .from("spots")
-    .select("name, area, category, what_to_order, what_to_skip, pro_tips, vibe, best_time_of_day, price_range, payment_methods, indoor_outdoor")
+    .select("name, area, categories, what_to_order, what_to_skip, pro_tips, vibe, best_time_of_day, price_range, payment_methods, indoor_outdoor")
     .not("area", "is", null)
     .or("what_to_order.not.is.null,pro_tips.not.is.null")
     .order("created_at", { ascending: false })

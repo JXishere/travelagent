@@ -12,7 +12,7 @@ import { getDefaultCity } from "../utils/city-defaults.js";
 
 interface Candidate {
   name: string;
-  category?: string;
+  categories?: string[];
   area?: string;
   address?: string;
   price_range?: string;
@@ -140,7 +140,7 @@ export function formatCandidate(
 ): string {
   const lines = [`*Candidate ${num}/${total}: ${c.name}*`];
   if (c.area) lines.push(`Neighborhood: ${c.area}`);
-  if (c.category) lines.push(`Category: ${c.category}`);
+  if (c.categories?.length) lines.push(`Category: ${c.categories.join(", ")}`);
   if (c.address) lines.push(`Address: ${c.address}`);
   if (c.price_range) lines.push(`Price: ${c.price_range}`);
   if (c.what_to_order?.length) lines.push(`Known for: ${c.what_to_order.join(", ")}`);

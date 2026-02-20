@@ -25,7 +25,7 @@ export default function ReviewPage() {
   }, []);
 
   const categories = useMemo(
-    () => [...new Set(spots.map((s) => s.category))].sort(),
+    () => [...new Set(spots.flatMap((s) => s.categories ?? []))].sort(),
     [spots]
   );
   const areas = useMemo(
@@ -39,7 +39,7 @@ export default function ReviewPage() {
 
   const filtered = useMemo(() => {
     return spots.filter((s) => {
-      if (filters.category && s.category !== filters.category) return false;
+      if (filters.category && !(s.categories ?? []).includes(filters.category)) return false;
       if (filters.area && s.area !== filters.area) return false;
       if (filters.must_go && !s.must_go) return false;
       if (filters.verified && !s.verified) return false;
@@ -60,7 +60,9 @@ export default function ReviewPage() {
     const byCat: Record<string, number> = {};
     const approved = spots.filter((s) => s.verified).length;
     for (const s of spots) {
-      byCat[s.category] = (byCat[s.category] ?? 0) + 1;
+      for (const cat of s.categories ?? []) {
+        byCat[cat] = (byCat[cat] ?? 0) + 1;
+      }
     }
     return { byCat, approved, total: spots.length };
   }, [spots]);

@@ -44,7 +44,7 @@ beforeEach(() => {
 describe("startGenerate", () => {
   it("parses 'bangsar dinner' into area + category", async () => {
     mockExtractJSON.mockResolvedValue({
-      candidates: [{ name: "Test Spot", area: "Bangsar", category: "dinner" }],
+      candidates: [{ name: "Test Spot", area: "Bangsar", categories: ["dinner"] }],
     });
 
     await startGenerate("+1234", "bangsar dinner");
@@ -121,9 +121,9 @@ describe("startGenerate", () => {
 
 describe("handleGenerate", () => {
   const candidates = [
-    { name: "Spot A", area: "Bangsar", category: "dinner" },
-    { name: "Spot B", area: "TTDI", category: "cafe" },
-    { name: "Spot C", area: "KLCC", category: "lunch" },
+    { name: "Spot A", area: "Bangsar", categories: ["dinner"] },
+    { name: "Spot B", area: "TTDI", categories: ["cafe"] },
+    { name: "Spot C", area: "KLCC", categories: ["lunch"] },
   ];
 
   const makeConvo = (idx: number): Conversation => ({
@@ -180,7 +180,7 @@ describe("handleGenerate", () => {
       expect.objectContaining({
         name: "Spot A",
         area: "Bangsar",
-        category: "dinner",
+        categories: ["dinner"],
         price_range: "$$",
         vibe: "casual",
         source: "llm_verified",
@@ -223,7 +223,7 @@ describe("formatCandidate", () => {
       {
         name: "Fatty Crab",
         area: "Taman Megah",
-        category: "dinner",
+        categories: ["dinner"],
         address: "123 Main St",
         price_range: "$$",
         what_to_order: ["chilli crab", "butter prawns"],

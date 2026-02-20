@@ -20,13 +20,13 @@ import { handleQuery } from "./query.js";
 
 /** Only these fields may be filled from web search — everything else must come from the contributor */
 const WEB_ALLOWED_FIELDS = new Set([
-  "name", "area", "address", "category", "city",
+  "name", "area", "address", "categories", "city",
   "price_range", "payment_methods",
 ]);
 
 interface ExtractedSpot {
   name?: string;
-  category?: string;
+  categories?: string[];
   area?: string;
   city?: string;
   country?: string;
@@ -134,7 +134,7 @@ export async function handleContribution(
       // Truly unrelated — only save if we have the minimum required fields
       if (!hasMinimumFields(state.extracted ?? {})) {
         const extracted = state.extracted ?? {};
-        const missingField = !extracted.name ? "the spot's name" : !extracted.area ? "what area it's in" : "what category it is";
+        const missingField = !extracted.name ? "the spot's name" : !extracted.area ? "what area it's in" : "what category it is (breakfast, lunch, dinner, cafe, activity, nightlife, market)";
         return samSays(`A contributor changed the subject before finishing their spot submission. Tell them you haven't saved it yet — still need ${missingField}. Invite them to come back to it whenever they're ready. One sentence.`);
       }
       const webFields = state.webSourcedFields ?? [];
@@ -270,7 +270,7 @@ export async function enrichFromWeb(
   }
 
   const city = data.city || getDefaultCity();
-  const webData = await webSearchSpot(data.name, city, data.category);
+  const webData = await webSearchSpot(data.name, city, data.categories?.[0]);
 
   // Belt-and-suspenders: never let opening_hours through from web
   delete (webData as any).opening_hours;
@@ -430,6 +430,11 @@ export function smartMerge(
     if (Array.isArray(value) && value.length === 0) continue;
     if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) continue;
 
+    // categories always replaces — contributor's explicit choice wins (don't accumulate)
+    if (key === "categories") {
+      (merged as any)[key] = value;
+      continue;
+    }
     // For corrections, replace arrays outright (LLM returns the complete corrected value)
     // For collecting, merge unique items to accumulate across messages
     if (Array.isArray(value) && Array.isArray((merged as any)[key]) && !replaceArrays) {
@@ -446,12 +451,12 @@ export function smartMerge(
 
 /** Check if extracted data has the minimum required fields to insert into DB */
 function hasMinimumFields(data: Partial<ExtractedSpot>): boolean {
-  return Boolean(data.name && data.category && data.area);
+  return Boolean(data.name && data.categories?.length && data.area);
 }
 
 /** Check if we have enough data to show a confirmation summary */
 export function isReady(data: Partial<ExtractedSpot>): boolean {
-  const hasCritical = Boolean(data.name && data.category && data.area);
+  const hasCritical = Boolean(data.name && data.categories?.length && data.area);
   const hasContributorOpinion = Boolean(
     (data.what_to_order && data.what_to_order.length > 0) ||
     (data.pro_tips && data.pro_tips.length > 0) ||
@@ -471,7 +476,7 @@ async function generateFollowUp(merged: Partial<ExtractedSpot>, previous: Partia
     ? "the name of the spot"
     : !merged.area
     ? "what area/area it's in"
-    : !merged.category
+    : !merged.categories?.length
     ? "what kind of spot it is (breakfast, lunch, dinner, cafe, activity, nightlife, market)"
     : !merged.what_to_order?.length
     ? "what people should order there"
@@ -506,7 +511,7 @@ export function formatSummary(data: Partial<ExtractedSpot>, webSourcedFields: st
   }
 
   const meta: string[] = [];
-  if (data.category) meta.push(capitalize(data.category));
+  if (data.categories?.length) meta.push(data.categories.map(capitalize).join(" · "));
   if (data.price_range) meta.push(tag("price_range", data.price_range));
   if (data.payment_methods?.length) meta.push(tag("payment_methods", data.payment_methods.join(", ")));
   if (meta.length) lines.push(meta.join(" | "));
@@ -587,10 +592,10 @@ async function saveSpot(
   webSourcedFields: string[] = []
 ): Promise<string> {
   // Last-line-of-defense validation — never insert a spot missing critical fields
-  if (!data.name || !data.category || !data.area) {
-    const missing = [!data.name && "name", !data.area && "area", !data.category && "category"]
+  if (!data.name || !data.categories?.length || !data.area) {
+    const missing = [!data.name && "name", !data.area && "area", !data.categories?.length && "categories"]
       .filter(Boolean).join(", ");
-    console.error("[saveSpot] Blocked: missing required fields", { name: data.name, category: data.category, area: data.area });
+    console.error("[saveSpot] Blocked: missing required fields", { name: data.name, categories: data.categories, area: data.area });
     await updateConversation(phoneNumber, {
       current_flow: "contribution",
       flow_state: { stage: "collecting", extracted: data, source, messagesReceived: 0 },

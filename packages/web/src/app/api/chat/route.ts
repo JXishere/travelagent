@@ -10,6 +10,7 @@ import { checkRateLimit, DAILY_LIMIT } from "@/lib/rate-limit";
 import {
   getOrCreateConversation,
   getOrCreateTraveler,
+  updateTraveler,
   appendMessages,
   updateConversation,
   trackEvent,
@@ -145,6 +146,18 @@ export async function POST(req: NextRequest) {
 
     const { intent, details } = await classifyIntent(message, recentContext);
     console.log("[web-chat] intent:", intent, "details:", details);
+
+    // Persist city resolved from area so follow-up queries without an explicit area stay in context.
+    // Must await getOrCreateTraveler first — updateTraveler uses UPDATE (not upsert) and is a
+    // no-op if the row doesn't exist yet. On fresh sessions the row is created here.
+    if (details.area) {
+      const { resolveCityFromArea } = await import("@sam/bot/utils/city-defaults");
+      const resolvedCity = resolveCityFromArea(details.area as string);
+      if (resolvedCity) {
+        await getOrCreateTraveler(sessionId);
+        updateTraveler(sessionId, { current_city: resolvedCity }).catch(() => {});
+      }
+    }
 
     trackEvent(sessionId, "web", "message", { intent });
 
@@ -433,13 +446,14 @@ function streamSSE(
         // Flush token usage tracking after stream completes
         flushAndTrackUsage(sessionId, intent);
 
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        controller.close();
-
+        // Save history BEFORE sending [DONE] so the next request sees it immediately
         await appendMessages(sessionId, [
           { role: "user", content: message },
           { role: "assistant", content: fullResponse },
         ]);
+
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
 
         maybeExtractProfile(
           sessionId,

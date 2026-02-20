@@ -16,6 +16,9 @@
     "research": "npx tsx --env-file .env.local scripts/batch-research.ts",
     "stress-test": "npx tsx scripts/stress-test.ts",
     "stress-test:adapt": "npx tsx scripts/stress-test-adapt.ts",
-    "verify": "npx tsx --env-file .env.local scripts/verify-fixes.ts"
+    "verify": "npx tsx --env-file .env.local scripts/verify-fixes.ts",
+    "chat-test": "npx tsx --env-file .env.local scripts/chat-test.ts",
+    "db-gap": "npx tsx --env-file .env.local scripts/db-gap-analysis.ts",
+    "eval": "npx tsx --env-file .env.local scripts/scenario-eval.ts"
   }
 }

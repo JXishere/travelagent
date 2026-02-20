@@ -25,8 +25,10 @@ import { handleQuery } from "@sam/bot/handlers/query";
 import { handleProfile, startProfileLearning } from "@sam/bot/handlers/profile";
 import { handleStrategic } from "@sam/bot/handlers/strategic";
 import {
-  handleHungry, handleDayPlan, handleNearby,
+  handleHungry, handleDayPlan, handleNearby, handleSpotInfo,
   buildHungryPrompt, buildDayPlanPrompt, buildNearbyPrompt,
+  isVagueQuery, getClarifyingQuestion,
+  isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION,
 } from "@sam/bot/handlers/ontrip";
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
@@ -125,7 +127,7 @@ export async function POST(req: NextRequest) {
       ).catch(() => {});
 
       flushAndTrackUsage(sessionId, currentFlow);
-      return sseTextResponse(response, remaining);
+      return sseTextResponse(response || "Got it — something went sideways on my end, but try sending that again?", remaining);
     }
 
     // --- Fresh intent classification ---
@@ -146,6 +148,7 @@ export async function POST(req: NextRequest) {
       "nearby",
       "weather",
       "general",
+      "spot_info",
     ]);
 
     if (streamableIntents.has(intent)) {
@@ -188,7 +191,7 @@ export async function POST(req: NextRequest) {
     ).catch(() => {});
 
     flushAndTrackUsage(sessionId, intent);
-    return sseTextResponse(response, remaining);
+    return sseTextResponse(response || "Got it — something went sideways on my end, but try sending that again?", remaining);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[web-chat] Error:", msg, error);
@@ -231,6 +234,13 @@ async function routeToFlow(
     case "feedback":
       return handleFeedback(sessionId, message, conversation, { channel: "web" });
 
+    case "query_clarifying": {
+      const { pending_query, pending_details } = conversation.flow_state;
+      const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
+      return handleHungry(sessionId, `${pending_query}. ${message}`, pending_details, recentCtx);
+    }
+
     default:
       await updateConversation(sessionId, {
         current_flow: "general",
@@ -258,6 +268,23 @@ async function streamHandlerResponse(
   // Use prompt builders for structured handlers, then stream the LLM call
   switch (intent) {
     case "hungry": {
+      const alreadyAsked = conversation.flow_state?.asked_clarifying;
+      if (!alreadyAsked && (isVagueQuery(details) || isUnclearQuery(details, recentHistory))) {
+        const question = isVagueQuery(details)
+          ? getClarifyingQuestion(details)
+          : UNCLEAR_CLARIFYING_QUESTION;
+        await updateConversation(sessionId, {
+          current_flow: "query_clarifying",
+          flow_state: { pending_query: message, pending_details: details, asked_clarifying: true },
+        });
+        await appendMessages(sessionId, [
+          { role: "user", content: message },
+          { role: "assistant", content: question },
+        ]);
+        maybeExtractProfile(sessionId, [{ role: "user", content: message }, { role: "assistant", content: question }], "hungry").catch(() => {});
+        flushAndTrackUsage(sessionId, "hungry");
+        return sseTextResponse(question, rateLimitRemaining);
+      }
       const payload = await buildHungryPrompt(sessionId, message, details, recentHistory);
       const stream = chatStream(
         payload.systemPrompt,
@@ -296,6 +323,19 @@ async function streamHandlerResponse(
         { role: "assistant", content: response },
       ], intent).catch(() => {});
       flushAndTrackUsage(sessionId, "weather");
+      return sseTextResponse(response, rateLimitRemaining);
+    }
+    case "spot_info": {
+      const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
+      const spotName = details.spot_name ?? message;
+      const city = getDefaultCity();
+      const response = await handleSpotInfo(sessionId, message, spotName, city);
+      await appendMessages(sessionId, [
+        { role: "user", content: message },
+        { role: "assistant", content: response },
+      ]);
+      maybeExtractProfile(sessionId, [{ role: "user", content: message }, { role: "assistant", content: response }], intent).catch(() => {});
+      flushAndTrackUsage(sessionId, intent);
       return sseTextResponse(response, rateLimitRemaining);
     }
     case "general":

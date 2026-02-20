@@ -1,13 +1,15 @@
 // On-trip guidance — real-time recommendations when the user is in KL
 
-import { chat, loadPrompt, HAIKU } from "../llm.js";
+import { chat, loadPrompt, HAIKU, webSearchSpot } from "../llm.js";
 import {
   querySpots,
   semanticSearchSpots,
+  findSpotByName,
   getOrCreateTraveler,
   incrementSpotUseCount,
   markSpotsVisited,
   type Spot,
+  type Traveler,
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
@@ -24,9 +26,51 @@ function getSystemPrompt(): string {
 interface IntentDetails {
   area?: string;
   meal_type?: string;
+  cuisine?: string;
   time_of_day?: string;
   mood?: string;
   specific_place?: string;
+}
+
+// Categories where intent is clear but vibe/use-case is ambiguous
+const VAGUE_MEAL_TYPES = new Set(["cafe", "coffee", "drinks", "dessert", "bar", "nightlife", "activity"]);
+
+/** True when the query has no mood/vibe signal to differentiate use-case */
+export function isVagueQuery(details: IntentDetails): boolean {
+  const meal = (details.meal_type || "").toLowerCase();
+  return VAGUE_MEAL_TYPES.has(meal) && !details.mood;
+}
+
+/**
+ * True when the message is genuinely too vague to recommend anything —
+ * no area, cuisine, meal type, or conversation history.
+ * These should be intercepted before building a prompt and returned as
+ * a direct clarifying question (same pattern as isVagueQuery).
+ */
+export function isUnclearQuery(details: IntentDetails, conversationHistory?: string): boolean {
+  return !details.area && !details.cuisine && !details.meal_type && !conversationHistory;
+}
+
+/** Clarifying question for a bare hungry message with no context */
+export const UNCLEAR_CLARIFYING_QUESTION = "What are you feeling? Any particular vibe or cuisine in mind?";
+
+/** True when Sam has no meaningful profile data on this user */
+export function isNewUser(traveler: Traveler): boolean {
+  return traveler.user_type === "unknown"
+    && !traveler.preferences?.budget
+    && !(traveler.preferences?.interests?.length)
+    && !traveler.dietary_restrictions?.length;
+}
+
+/** Targeted clarifying question by category — never generic "what are you in the mood for?" */
+export function getClarifyingQuestion(details: IntentDetails): string {
+  const meal = (details.meal_type || "").toLowerCase();
+  const area = details.area ? ` around ${details.area}` : "";
+  if (["cafe", "coffee"].includes(meal)) return `Working session or catching up with someone${area}?`;
+  if (["drinks", "bar", "nightlife"].includes(meal)) return "Low-key vibe or looking to go out properly?";
+  if (meal === "dessert") return "Sit-down somewhere or grab and go?";
+  if (meal === "activity") return "Solo or with people?";
+  return "Any particular vibe in mind?";
 }
 
 /** Return value from prompt builders — everything needed to call the LLM */
@@ -38,8 +82,10 @@ export interface PromptPayload {
 }
 
 /** Build a preference context string for LLM prompts */
-export function buildPrefContext(traveler: { dietary_restrictions?: string[]; preferences?: Record<string, any> }): string {
+export function buildPrefContext(traveler: { dietary_restrictions?: string[]; preferences?: Record<string, any>; user_type?: string; home_areas?: string[] }): string {
   const lines: string[] = [];
+  if (traveler.user_type && traveler.user_type !== "unknown")
+    lines.push(`User type: ${traveler.user_type}${traveler.home_areas?.length ? ` (from ${traveler.home_areas.join(", ")})` : ""}`);
   if (traveler.dietary_restrictions?.length)
     lines.push(`Dietary restrictions: ${traveler.dietary_restrictions.join(", ")}`);
   const prefs = traveler.preferences ?? {};
@@ -67,7 +113,9 @@ export async function buildHungryPrompt(
     details.time_of_day ??
     (hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 20 ? "evening" : "late-night");
 
-  const categories = resolveCategories(details.meal_type, timeOfDay);
+  // cuisine is a specific dish (e.g. "nasi lemak", "laksa") — treat as dish query so
+  // semantic search is used instead of a time-of-day category fallback.
+  const categories = resolveCategories(details.meal_type ?? details.cuisine, timeOfDay);
   const isDishQuery = categories === null;
 
   // Resolve city from area — "PJ" maps to "Petaling Jaya", etc.
@@ -84,7 +132,10 @@ export async function buildHungryPrompt(
 
   if (isDishQuery) {
     // Dish query ("roti", "laksa") — semantic search first, no category filter
-    spots = await trySemanticSearch(message, resolvedCity ?? cityDefaults.name);
+    // Use the specific dish/cuisine from details as the search query, not the raw message
+    // (raw message might be "other choices?" which has no semantic signal for the dish)
+    const searchQuery = details.cuisine ?? message;
+    spots = await trySemanticSearch(searchQuery, resolvedCity ?? cityDefaults.name);
     if (spots.length === 0) {
       // Fallback: broad food categories
       spots = await querySpots({
@@ -139,7 +190,7 @@ export async function buildHungryPrompt(
     const unvisited = spots.filter(
       (s) => !traveler.spots_visited?.includes(s.id)
     );
-    toRecommend = unvisited.length >= 3 ? unvisited.slice(0, 3) : spots.slice(0, 3);
+    toRecommend = unvisited.length > 0 ? unvisited.slice(0, 3) : spots.slice(0, 3);
   } else {
     // For locals, filter out disliked spots instead
     const notDisliked = spots.filter(
@@ -176,10 +227,18 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
       : "";
 
   const prefContext = buildPrefContext(traveler);
+  const alreadyAskedLocalOrVisiting = !!conversationHistory?.includes("local or just visiting");
+  const newUserNote = !alreadyAskedLocalOrVisiting && isNewUser(traveler)
+    ? `\nThis user is new — Sam doesn't know them yet. After giving the recommendation, add one casual line: "Quick one — local or just visiting? Helps me tune what I show you." Only add this if you haven't already asked.`
+    : "";
 
-  // Detect area mismatch — user asked for a specific area but results are from elsewhere
+  // Detect area mismatch — user asked for a specific area but results are from elsewhere.
+  // Skip mismatch check if the area resolved to a city-level alias (e.g. "PJ" → "Petaling Jaya"),
+  // because spots in that city won't have "PJ" in their area field.
   const requestedArea = details.area;
+  const isCityAlias = areaCities.length > 0;
   const hasAreaMismatch =
+    !isCityAlias &&
     requestedArea &&
     toRecommend.length > 0 &&
     !toRecommend.some((s) =>
@@ -190,6 +249,14 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
       ? `\n\nNote: The user asked for spots near "${requestedArea}" but you don't have picks in that exact area for this. These are the best options from the broader city. Be upfront about it — acknowledge the gap, then recommend these nearby alternatives naturally. Don't say "ask locals" — you ARE the local.`
       : "";
 
+  const cuisineNote = details.cuisine
+    ? `They want: ${details.cuisine} — look for spots where this appears in what_to_order or fits the vibe.`
+    : "";
+
+  const noRepeatNote = conversationHistory
+    ? `\nIf a spot was already recommended in the conversation above, do NOT recommend it again. If you genuinely have no new options, say so — "Village Park is honestly the best I've got for nasi lemak in PJ" is a fine answer.`
+    : "";
+
   return {
     systemPrompt: getSystemPrompt(),
     userPrompt: `The user says: "${message}"
@@ -198,14 +265,16 @@ Time: ${timeOfDay} (KL time)
 ${details.area ? `They're near: ${details.area}` : ""}
 ${weatherNote}
 ${tiredNote}
+${cuisineNote}
 ${prefContext}
 ${areaNote}
+${newUserNote}
 
 Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-Lead with your #1 pick and commit to it — be the friend who just says "go here." Mention 1-2 alternatives briefly. One must-order and one tip per spot, max. Respect their dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.`,
+Lead with your #1 pick and commit to it — be the friend who just says "go here." Mention 1-2 alternatives briefly. One must-order and one tip per spot, max. Respect their dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}`,
     spotIds: toRecommend.map(s => s.id),
     maxTokens: 512,
   };
@@ -367,6 +436,71 @@ export async function handleNearby(
   return await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], {
     maxTokens: payload.maxTokens,
   });
+}
+
+/**
+ * Spot info handler — answers specific questions about a named place.
+ * DB record + web search run in parallel; DB wins where data exists,
+ * web fills the blanks. Always has something to say.
+ */
+export async function handleSpotInfo(
+  phoneNumber: string,
+  userMessage: string,
+  spotName: string,
+  city: string
+): Promise<string> {
+  const systemPrompt = getSystemPrompt().replaceAll("{{CITY}}", city);
+
+  // Fetch DB record and web data in parallel
+  const [dbSpot, webData] = await Promise.all([
+    findSpotByName(spotName, city),
+    webSearchSpot(spotName, city),
+  ]);
+
+  // Merge: DB fields win, web fills gaps
+  const merged: Record<string, any> = { ...webData };
+  if (dbSpot) {
+    for (const [k, v] of Object.entries(dbSpot)) {
+      if (v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
+        merged[k] = v;
+      }
+    }
+  }
+
+  const hasData = dbSpot || Object.keys(webData).length > 0;
+
+  if (!hasData) {
+    return chat(
+      systemPrompt,
+      [{ role: "user", content: userMessage }],
+      { maxTokens: 150 }
+    );
+  }
+
+  const dataBlock = [
+    merged.name && `Name: ${merged.name}`,
+    merged.area && `Area: ${merged.area}`,
+    merged.address && `Address: ${merged.address}`,
+    merged.category && `Category: ${merged.category}`,
+    merged.price_range && `Price: ${merged.price_range}`,
+    merged.payment_methods?.length && `Payment: ${(merged.payment_methods as string[]).join(", ")}`,
+    merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}`,
+    merged.what_to_order?.length && `Order: ${(merged.what_to_order as string[]).join(", ")}`,
+    merged.what_to_skip?.length && `Skip: ${(merged.what_to_skip as string[]).join(", ")}`,
+    merged.pro_tips?.length && `Tips: ${(merged.pro_tips as string[]).join(" | ")}`,
+    merged.vibe && `Vibe: ${merged.vibe}`,
+    merged.indoor_outdoor && `Setting: ${merged.indoor_outdoor}`,
+    merged.best_time_of_day && `Best time: ${merged.best_time_of_day}`,
+  ].filter(Boolean).join("\n");
+
+  return chat(
+    systemPrompt,
+    [{
+      role: "user",
+      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.`,
+    }],
+    { maxTokens: 200 }
+  );
 }
 
 /** Try semantic search when structured query returns no results */

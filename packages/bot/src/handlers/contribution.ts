@@ -20,7 +20,7 @@ import { handleQuery } from "./query.js";
 
 /** Only these fields may be filled from web search — everything else must come from the contributor */
 const WEB_ALLOWED_FIELDS = new Set([
-  "name", "category", "city",
+  "name", "area", "address", "category", "city",
   "price_range", "payment_methods",
 ]);
 
@@ -29,6 +29,7 @@ interface ExtractedSpot {
   category?: string;
   area?: string;
   city?: string;
+  country?: string;
   address?: string;
   price_range?: string;
   payment_methods?: string[];
@@ -49,6 +50,7 @@ interface ContributionState {
   source: "voice" | "text";
   messagesReceived: number;
   webSourcedFields?: string[];
+  areaConflict?: { contributor: string; web: string };
 }
 
 
@@ -146,6 +148,9 @@ export async function handleContribution(
     const prevWebFields = state.webSourcedFields ?? ((state as any).webEnriched ? [] : []);
     const updatedWebFields = prevWebFields.filter((f: string) => !correctedKeys.includes(f));
 
+    // If contributor corrected the area, clear the conflict flag
+    const updatedAreaConflict = correctedKeys.includes("area") ? undefined : state.areaConflict;
+
     await updateConversation(phoneNumber, {
       flow_state: {
         stage: "confirming",
@@ -153,10 +158,11 @@ export async function handleContribution(
         source: audioId ? "voice" : (state.source ?? "text"),
         messagesReceived: (state.messagesReceived ?? 0) + 1,
         webSourcedFields: updatedWebFields,
+        areaConflict: updatedAreaConflict,
       },
     });
 
-    return formatSummary(merged, updatedWebFields);
+    return formatSummary(merged, updatedWebFields, updatedAreaConflict);
   }
 
   // Fallback
@@ -215,8 +221,8 @@ async function extractWithContext(
 /** Enrich extracted spot data with web search results */
 export async function enrichFromWeb(
   data: Partial<ExtractedSpot>
-): Promise<{ enriched: Partial<ExtractedSpot>; webSourcedFields: string[] }> {
-  if (!data.name || isReady(data)) {
+): Promise<{ enriched: Partial<ExtractedSpot>; webSourcedFields: string[]; areaConflict?: { contributor: string; web: string } }> {
+  if (!data.name) {
     return { enriched: data, webSourcedFields: [] };
   }
 
@@ -237,6 +243,15 @@ export async function enrichFromWeb(
     return { enriched: data, webSourcedFields: [] };
   }
 
+  // Detect area conflict — contributor gave an area but web disagrees
+  let areaConflict: { contributor: string; web: string } | undefined;
+  if (
+    data.area && webData.area &&
+    data.area.toLowerCase().trim() !== webData.area.toLowerCase().trim()
+  ) {
+    areaConflict = { contributor: data.area, web: webData.area };
+  }
+
   // Track which fields are genuinely new from web (not already in contributor data)
   const webSourcedFields: string[] = [];
   for (const key of Object.keys(webData)) {
@@ -247,7 +262,7 @@ export async function enrichFromWeb(
 
   // Contributor data wins — pass it as "incoming" so it overwrites web data
   const merged = smartMerge(webData, data);
-  return { enriched: merged, webSourcedFields };
+  return { enriched: merged, webSourcedFields, areaConflict };
 }
 
 /** Process a message during the collecting stage */
@@ -290,15 +305,18 @@ async function collectInfo(
   // When the spot name changed (or was first provided), enrich from web
   const nameChanged = merged.name && merged.name !== previous.name;
   let webSourcedFields = state.webSourcedFields ?? [];
+  let areaConflict = state.areaConflict;
   if (nameChanged) {
     if (previous.name) {
       // Name changed mid-flow — reset to just current extraction to avoid stale data
       merged = { ...newData };
     }
     webSourcedFields = [];
+    areaConflict = undefined;
     const result = await enrichFromWeb(merged);
     merged = result.enriched;
     webSourcedFields = result.webSourcedFields;
+    areaConflict = result.areaConflict;
   }
 
   // Check if we have enough to show a summary
@@ -310,12 +328,20 @@ async function collectInfo(
         source: state.source,
         messagesReceived,
         webSourcedFields,
+        areaConflict,
       },
     });
-    const summary = formatSummary(merged, webSourcedFields);
-    if (webSourcedFields.length > 0) {
-      const fieldNames = webSourcedFields.join(", ").replace(/_/g, " ");
-      const intro = await samSays(`You looked up a spot online and filled in some operational details (${fieldNames}) for a contributor. Write a one-sentence intro before showing them the data. Mention the specific fields you filled from the web and they should double-check.`);
+    const summary = formatSummary(merged, webSourcedFields, areaConflict);
+    if (webSourcedFields.length > 0 || areaConflict) {
+      const parts: string[] = [];
+      if (webSourcedFields.length > 0) {
+        const fieldNames = webSourcedFields.join(", ").replace(/_/g, " ");
+        parts.push(`filled in some operational details (${fieldNames}) from the web`);
+      }
+      if (areaConflict) {
+        parts.push(`noticed the area might be "${areaConflict.web}" — not "${areaConflict.contributor}" as they said`);
+      }
+      const intro = await samSays(`You looked up a spot online and ${parts.join(" and ")} for a contributor. Write a one-sentence intro flagging what needs double-checking.`);
       return `${intro}\n\n${summary}`;
     }
     return summary;
@@ -329,6 +355,7 @@ async function collectInfo(
       source: state.source,
       messagesReceived,
       webSourcedFields,
+      areaConflict,
     },
   });
 
@@ -402,14 +429,18 @@ async function generateFollowUp(merged: Partial<ExtractedSpot>, previous: Partia
 }
 
 /** Format a summary of the accumulated spot data */
-export function formatSummary(data: Partial<ExtractedSpot>, webSourcedFields: string[] = []): string {
+export function formatSummary(data: Partial<ExtractedSpot>, webSourcedFields: string[] = [], areaConflict?: { contributor: string; web: string }): string {
   const webSet = new Set(webSourcedFields);
   const tag = (field: string, value: string) =>
     webSet.has(field) ? `${value} _(from web)_` : value;
 
   const lines: string[] = ["Here's what I've got:", ""];
 
-  lines.push(`*${data.name}* — ${data.area}, ${data.city || getDefaultCity()}`);
+  const areaDisplay = areaConflict
+    ? `${data.area} ⚠️ _(web says: ${areaConflict.web} — which is right?)_`
+    : data.area;
+  const cityCountry = [data.city || getDefaultCity(), data.country].filter(Boolean).join(", ");
+  lines.push(`*${data.name}* — ${areaDisplay}, ${cityCountry}`);
 
   if (data.address) {
     lines.push(`📍 ${tag("address", data.address)}`);

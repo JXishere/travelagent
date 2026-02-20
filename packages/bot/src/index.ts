@@ -18,7 +18,7 @@ import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
 import { handleProfile, startProfileLearning } from "./handlers/profile.js";
 import { handleStrategic } from "./handlers/strategic.js";
-import { handleHungry, handleDayPlan, handleNearby } from "./handlers/ontrip.js";
+import { handleHungry, handleDayPlan, handleNearby, handleSpotInfo, isVagueQuery, getClarifyingQuestion, isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION } from "./handlers/ontrip.js";
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
 import { maybeExtractProfile } from "./handlers/continuous-profile.js";
@@ -239,9 +239,22 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
   let response: string;
 
   switch (intent) {
-    case "hungry":
-      response = await handleHungry(from, text, details, recentContext);
+    case "hungry": {
+      const alreadyAsked = conversation.flow_state?.asked_clarifying;
+      if (!alreadyAsked && (isVagueQuery(details) || isUnclearQuery(details, recentContext))) {
+        const question = isVagueQuery(details)
+          ? getClarifyingQuestion(details)
+          : UNCLEAR_CLARIFYING_QUESTION;
+        await updateConversation(from, {
+          current_flow: "query_clarifying",
+          flow_state: { pending_query: text, pending_details: details, asked_clarifying: true },
+        });
+        response = question;
+      } else {
+        response = await handleHungry(from, text, details, recentContext);
+      }
       break;
+    }
 
     case "day_plan":
       response = await handleDayPlan(from, text, details, recentContext);
@@ -275,6 +288,13 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
         ...details,
         ...(weather?.is_raining ? { mood: "indoor" } : {}),
       }, weatherContext);
+      break;
+    }
+
+    case "spot_info": {
+      const spotName = details.spot_name ?? text;
+      const city = getDefaultCity();
+      response = await handleSpotInfo(from, text, spotName, city);
       break;
     }
 
@@ -353,6 +373,14 @@ async function routeToCurrentFlow(
 
     case "generate":
       return handleGenerate(phoneNumber, text, conversation);
+
+    case "query_clarifying": {
+      const { pending_query, pending_details } = conversation.flow_state;
+      const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+      // Combine original query + clarifying answer and proceed regardless of vagueness
+      return handleHungry(phoneNumber, `${pending_query}. ${text}`, pending_details, recentCtx);
+    }
 
     default:
       // Unknown flow — reset to general

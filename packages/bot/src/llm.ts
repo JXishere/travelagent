@@ -268,6 +268,7 @@ export async function classifyIntent(
     | "contribute"
     | "profile"
     | "feedback"
+    | "spot_info"
     | "general";
   details: Record<string, string>;
 }> {
@@ -276,6 +277,7 @@ export async function classifyIntent(
 
 Classify the user's message into exactly one intent:
 
+- "spot_info": They are asking about a specific, named place — hours, address, payment, what to order, or want more detail about a place. Triggers: "is [place] open", "address for [place]", "cash only at [place]", "tell me more about [place]", "what's [place] like", "does [place] take card". Extract the place name into spot_name. PRIORITY: Use this when a specific venue name is present in the question.
 - "hungry": They want food, drink, or dining recommendations. Triggers include:
   - Direct: hungry, eat, eating, food, restaurant, cafe, bar, breakfast, lunch, dinner, supper, brunch
   - Cuisine types: japanese, korean, chinese, thai, indian, malay, italian, western, mexican, vietnamese, sushi, ramen, noodles, curry, pizza, burger, seafood, bbq, steak, dessert, pastry, coffee, cocktail
@@ -292,10 +294,16 @@ Classify the user's message into exactly one intent:
 PRIORITY RULES:
 1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
 2. CONTINUATION: If the recent conversation shows the user asked about food/dining and Sam responded with a clarifying question (e.g., "what area?", "where are you?", "where are you based?", "what part of KL?"), then the user's answer is a CONTINUATION of the food request — classify as "hungry". This applies even if the user's reply is just a location name like "PJ" or "Bangsar" or "maybe KL".
-3. Only use "profile" for messages with ZERO actionable food/activity requests AND no recent food conversation context.
-4. "nearby" is ONLY for when the user says they are physically AT a location and want to see what's around them (e.g., "I'm near KLCC", "what's around Bukit Bintang"). Do NOT use "nearby" for follow-up answers to food questions.
+3. ALTERNATIVES: If the user is asking for more options or alternatives to what Sam already recommended (e.g. "other choices?", "other options?", "anything else?", "what else?", "what else you got?", "not feeling that", "something different?", "any other spots?", "got more?", "how about something different?", "other recs?", "give me more"), classify as "hungry". Look at the most recent food query in the conversation history and copy its area, cuisine, and meal_type into details — do NOT return empty details if context is available.
+4. Only use "profile" for messages with ZERO actionable food/activity requests AND no recent food conversation context.
+5. "nearby" is ONLY for when the user says they are physically AT a location and want to see what's around them (e.g., "I'm near KLCC", "what's around Bukit Bintang"). Do NOT use "nearby" for follow-up answers to food questions.
 
 Examples:
+- "is Village Park open for lunch?" → spot_info, spot_name: "Village Park"
+- "what's the address for Fatty Crab?" → spot_info, spot_name: "Fatty Crab"
+- "does Ilham take cash?" → spot_info, spot_name: "Ilham"
+- "tell me more about Nasi Kandar Pelita" → spot_info, spot_name: "Nasi Kandar Pelita"
+- "what should I order at Bijan?" → spot_info, spot_name: "Bijan"
 - "i need a place to go for my birthday, thinking some place chill, japanese food with my close friend" → hungry (birthday dinner + japanese food)
 - "grab some ramen tonight" → hungry
 - "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
@@ -304,6 +312,9 @@ Examples:
 - "maybe around PJ or KL" (after Sam asked "where are you?" about food) → hungry (continuation — extract area)
 - "Bangsar" (after Sam asked "where are you heading?") → hungry (continuation)
 - "I like spicy food and street markets" → profile (preferences, no specific request)
+- "other choices?" (after nasi lemak recs in PJ) → hungry, area: "PJ", cuisine: "nasi lemak"
+- "anything else nearby?" (after dinner recs in Bangsar) → hungry, area: "Bangsar", meal_type: "dinner"
+- "what else you got?" (after cafe recs) → hungry, meal_type: "cafe"
 
 Extract relevant details with these exact field names:
 - area: neighbourhood or district they want (e.g. "Bangsar", "SS2", "KLCC")

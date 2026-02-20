@@ -1,7 +1,7 @@
 // Supabase client — all database operations
 
 import { createClient } from "@supabase/supabase-js";
-import { getDefaultCity } from "./utils/city-defaults.js";
+import { getDefaultCity, getCityDefaults } from "./utils/city-defaults.js";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -73,6 +73,7 @@ export interface Spot {
   id: string;
   name: string;
   city: string;
+  country?: string;
   area?: string;
   category?: string;
   tier?: number;
@@ -138,9 +139,11 @@ export async function querySpots(filters: {
 }
 
 export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
+  const city = spot.city ?? getDefaultCity();
+  const country = spot.country ?? getCityDefaults(city).country;
   const { data, error } = await supabase
     .from("spots")
-    .insert({ city: getDefaultCity(), ...spot })
+    .insert({ city, country, ...spot })
     .select()
     .single();
   if (error) throw error;
@@ -225,6 +228,27 @@ async function llmVerifyDuplicate(
     console.error("[dedup] LLM verification failed:", err);
     return null; // Safe default — avoids false positives
   }
+}
+
+/** Find a spot by name — fuzzy match, returns best candidate or null */
+export async function findSpotByName(name: string, city?: string): Promise<Spot | null> {
+  // Pass 1: exact case-insensitive match
+  {
+    let q = supabase.from("spots").select("*").ilike("name", name);
+    if (city) q = q.eq("city", city);
+    const { data } = await q.limit(1).maybeSingle();
+    if (data) return data as Spot;
+  }
+
+  // Pass 2: substring match (e.g. "Village Park" → "Village Park Restaurant")
+  {
+    let q = supabase.from("spots").select("*").ilike("name", `%${name}%`);
+    if (city) q = q.eq("city", city);
+    const { data } = await q.order("tier", { ascending: true }).limit(1).maybeSingle();
+    if (data) return data as Spot;
+  }
+
+  return null;
 }
 
 export async function getSpotById(spotId: string): Promise<Spot | null> {

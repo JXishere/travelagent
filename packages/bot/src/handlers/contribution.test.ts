@@ -399,7 +399,7 @@ describe("enrichFromWeb", () => {
     const data = { name: "Ka'ia" };
     const result = await enrichFromWeb(data);
 
-    // Allowed fields filled (area, price_range) — address is NOT in allowlist
+    // area passes validation (Bangsar South → known KL neighbourhood)
     expect(result.enriched.price_range).toBe("$$");
     expect(result.enriched.area).toBe("Bangsar South");
     expect(result.enriched.address).toBeUndefined();
@@ -428,8 +428,9 @@ describe("enrichFromWeb", () => {
     const data = { name: "Petronas Cafe" };
     const result = await enrichFromWeb(data);
 
-    // area IS in allowlist — allowed through; address is NOT
+    // area passes validation (KLCC → known KL neighbourhood)
     expect(result.enriched.area).toBe("KLCC");
+    // address is NOT in allowlist — stripped
     expect((result.enriched as any).address).toBeUndefined();
     // latitude, longitude, random_field still blocked
     expect((result.enriched as any).latitude).toBeUndefined();
@@ -459,6 +460,19 @@ describe("enrichFromWeb", () => {
     const result = await enrichFromWeb(data);
     expect(result.enriched).toEqual(data);
     expect(result.webSourcedFields).toEqual([]);
+  });
+
+  it("strips area from web when it doesn't match a known neighbourhood", async () => {
+    mockedWebSearch.mockResolvedValue({
+      area: "Multiple locations in KL",
+      price_range: "$$",
+    });
+
+    const result = await enrichFromWeb({ name: "Generic Chain" });
+
+    expect(result.enriched.area).toBeUndefined(); // garbage area stripped
+    expect(result.enriched.price_range).toBe("$$"); // other allowed fields still pass
+    expect(result.webSourcedFields).not.toContain("area");
   });
 });
 
@@ -621,14 +635,14 @@ describe("handleContribution — collecting stage", () => {
 
     expect(mockedWebSearch).toHaveBeenCalledWith("Ka'ia", "Kuala Lumpur", undefined);
     // Enriched data should be saved in flow state with field-level provenance
-    // area is in allowlist — filled from web when contributor didn't provide it
+    // area passes validation (Bangsar South → known KL neighbourhood); price_range and categories also pass
     expect(mockedUpdateConv).toHaveBeenCalledWith("+60123", expect.objectContaining({
       flow_state: expect.objectContaining({
-        extracted: expect.objectContaining({ name: "Ka'ia", categories: ["cafe"] }),
+        extracted: expect.objectContaining({ name: "Ka'ia", categories: ["cafe"], area: "Bangsar South" }),
         webSourcedFields: expect.arrayContaining(["price_range", "categories", "area"]),
       }),
     }));
-    // area should be filled from web
+    // area should be filled from web (validated against known neighbourhoods)
     const flowState = mockedUpdateConv.mock.calls.find(
       (c) => (c[1] as any).flow_state?.extracted
     )?.[1] as any;

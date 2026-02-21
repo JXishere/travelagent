@@ -131,6 +131,24 @@ export function resolveCityFromArea(area: string | string[] | undefined): string
 }
 
 /**
+ * Check if a web-returned area string matches a known neighbourhood for the given city.
+ * Used to validate web enrichment data before injecting into the contribution flow.
+ * Reuses AREA_CITY_MAP as the validation vocabulary.
+ */
+export function isKnownArea(webArea: string, city: string): boolean {
+  if (!webArea || !city) return false;
+  const normalized = webArea.toLowerCase().trim();
+  for (const [key, mappedCity] of Object.entries(AREA_CITY_MAP)) {
+    if (mappedCity !== city) continue;
+    if (CITY_LEVEL_ALIASES.has(key)) continue; // skip "kl", "pj" — whole-city aliases, not neighbourhoods
+    if (normalized === key || normalized.includes(key) || key.includes(normalized)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Given an area string that might mention multiple areas (e.g. "PJ or KL"),
  * return the unique set of cities those areas belong to.
  */

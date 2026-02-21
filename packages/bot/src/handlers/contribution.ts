@@ -15,7 +15,7 @@ import {
   type Conversation,
   type Spot,
 } from "../database.js";
-import { getDefaultCity } from "../utils/city-defaults.js";
+import { getDefaultCity, isKnownArea } from "../utils/city-defaults.js";
 import { geocodeAddress } from "../utils/geocoding.js";
 import { handleQuery } from "./query.js";
 
@@ -282,11 +282,19 @@ export async function enrichFromWeb(
   // Belt-and-suspenders: never let opening_hours through from web
   delete (webData as any).opening_hours;
 
+  // Capture raw area before allowlist strips it — we validate it separately
+  const rawWebArea = (webData as any).area as string | undefined;
+
   // Allowlist: only keep fields we trust from web search
   for (const key of Object.keys(webData)) {
     if (!WEB_ALLOWED_FIELDS.has(key)) {
       delete webData[key];
     }
+  }
+
+  // Reinject area if it matches a known neighbourhood for this city
+  if (rawWebArea && isKnownArea(rawWebArea, city)) {
+    webData.area = rawWebArea;
   }
 
   if (Object.keys(webData).length === 0) {

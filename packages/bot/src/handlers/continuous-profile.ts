@@ -5,9 +5,10 @@ import { extractJSON } from "../llm.js";
 import {
   getOrCreateTraveler,
   updateTraveler,
+  trackEvent,
   type Traveler,
 } from "../database.js";
-import { getDefaultCity } from "../utils/city-defaults.js";
+import { getDefaultCity, isSupportedCity } from "../utils/city-defaults.js";
 
 interface ProfileDelta {
   _no_changes?: boolean;
@@ -23,6 +24,7 @@ interface ProfileDelta {
   cuisine_preferences?: string[];
   specific_requests?: string[];
   first_time_visitor?: boolean;
+  current_city?: string;
 }
 
 /** Flows/intents where extraction adds no value (they handle profiles themselves or aren't about the traveler) */
@@ -44,7 +46,8 @@ const SKIP_FLOWS = new Set([
 export async function maybeExtractProfile(
   phoneNumber: string,
   recentMessages: Array<{ role: string; content: string }>,
-  currentFlow: string
+  currentFlow: string,
+  channel: "web" | "whatsapp" = "whatsapp"
 ): Promise<void> {
   try {
     if (shouldSkipExtraction(currentFlow)) return;
@@ -53,6 +56,12 @@ export async function maybeExtractProfile(
     const delta = await extractProfileDelta(traveler, recentMessages);
 
     if (!delta || delta._no_changes) return;
+
+    // Track unsupported city requests for product signal on where to expand next
+    if (delta.current_city && !isSupportedCity(delta.current_city)) {
+      trackEvent(phoneNumber, channel, "unsupported_city_request", { city: delta.current_city });
+      console.log(`[continuous-profile] Unsupported city requested: ${delta.current_city}`);
+    }
 
     // Build the update object by merging delta into existing traveler
     const updates = mergeProfileDelta(traveler, delta);
@@ -109,6 +118,7 @@ const SCALAR_FIELDS = new Set([
   "budget",
   "pace",
   "first_time_visitor",
+  "current_city",
 ]);
 
 /** Array fields that append + deduplicate, with ! removal support */
@@ -129,6 +139,7 @@ const TOP_LEVEL_FIELDS = new Set([
   "travel_party",
   "dietary_restrictions",
   "first_time_visitor",
+  "current_city",
 ]);
 
 /**

@@ -63,7 +63,7 @@ export async function appendMessages(
   // two concurrent messages from the same user overwrite each other's history.
   await supabase.rpc("append_conversation_messages", {
     p_phone_number: phoneNumber,
-    p_new_messages: JSON.stringify(newMessages),
+    p_new_messages: newMessages,
     p_max_messages: MAX_CONVERSATION_MESSAGES,
   });
 }
@@ -102,41 +102,125 @@ export interface Spot {
   embedding?: number[];
   last_verified?: string;
   created_at?: string;
+  isStale?: boolean; // computed at query time — not a DB column
 }
 
 export async function querySpots(filters: {
   city?: string;
   cities?: string[];
   area?: string;
+  areas?: string[];
   categories?: string[];
   indoor_outdoor?: string;
+  priceRange?: string[];
   limit?: number;
 }): Promise<Spot[]> {
+  const requestedLimit = filters.limit ?? 5;
+  // Fetch a larger pool so we can shuffle within tiers — prevents same spots dominating every response
+  const poolSize = Math.min(requestedLimit * 4, 20);
+
   let query = supabase
     .from("spots")
     .select("*")
     .order("must_go", { ascending: false })
-    .order("verified", { ascending: false })
-    .order("use_count", { ascending: false });
+    .order("verified", { ascending: false });
 
   if (filters.cities && filters.cities.length > 0) {
     query = query.in("city", filters.cities);
   } else if (filters.city) {
     query = query.eq("city", filters.city);
   }
-  if (filters.area)
+  if (filters.areas && filters.areas.length > 0) {
+    // Quote values so PostgREST correctly handles area names with spaces (e.g. "Taman Megah")
+    const orClause = filters.areas.map(a => `area.ilike."%${a}%"`).join(',');
+    query = query.or(orClause);
+  } else if (filters.area) {
     query = query.ilike("area", `%${filters.area}%`);
-  if (filters.category) query = query.contains("categories", [filters.category]);
+  }
   if (filters.categories)
     query = query.overlaps("categories", filters.categories);
   if (filters.indoor_outdoor)
     query = query.in("indoor_outdoor", [filters.indoor_outdoor, "both"]);
+  if (filters.priceRange && filters.priceRange.length > 0)
+    query = query.in("price_range", filters.priceRange);
 
-  query = query.limit(filters.limit ?? 5);
+  query = query.limit(poolSize);
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as Spot[];
+  const pool = (data ?? []) as Spot[];
+
+  // Compute staleness: no last_verified, or last_verified older than 180 days
+  const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+  const withStaleness = pool.map(s => ({
+    ...s,
+    isStale: !s.last_verified || s.last_verified < staleThreshold,
+  }));
+
+  // Shuffle within each tier to rotate spots, preserving must_go → verified priority
+  const mustGo = withStaleness.filter(s => s.must_go).sort(() => Math.random() - 0.5);
+  const verified = withStaleness.filter(s => !s.must_go && s.verified).sort(() => Math.random() - 0.5);
+  const rest = withStaleness.filter(s => !s.must_go && !s.verified).sort(() => Math.random() - 0.5);
+  return [...mustGo, ...verified, ...rest].slice(0, requestedLimit);
+}
+
+// In-process cache so repeated widening queries for the same area don't hit the DB twice
+const _areaCentroidCache = new Map<string, { lat: number; lng: number } | null>();
+
+/**
+ * Compute the geographic centroid of all spots tagged to a given area.
+ * Used for proximity filtering when a citywide query widens past the user's area.
+ * Results are cached per process lifetime — no maintenance needed as the DB grows.
+ */
+export async function getAreaCentroid(area: string): Promise<{ lat: number; lng: number } | undefined> {
+  const key = area.toLowerCase().trim();
+  if (_areaCentroidCache.has(key)) {
+    return _areaCentroidCache.get(key) ?? undefined;
+  }
+
+  const { data, error } = await supabase
+    .from("spots")
+    .select("latitude, longitude")
+    .ilike("area", `%${area}%`)
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+
+  if (error || !data || data.length === 0) {
+    _areaCentroidCache.set(key, null);
+    return undefined;
+  }
+
+  const lat = data.reduce((sum, s) => sum + (s.latitude as number), 0) / data.length;
+  const lng = data.reduce((sum, s) => sum + (s.longitude as number), 0) / data.length;
+  const result = { lat, lng };
+  _areaCentroidCache.set(key, result);
+  return result;
+}
+
+let _distinctAreasCache: string[] | null = null;
+
+/**
+ * Return all distinct area values from the spots table.
+ * Cached per process lifetime — used by the area extractor to build match vocabulary.
+ */
+export async function getDistinctAreas(): Promise<string[]> {
+  if (_distinctAreasCache !== null) return _distinctAreasCache;
+
+  const { data, error } = await supabase
+    .from("spots")
+    .select("area")
+    .not("area", "is", null);
+
+  if (error || !data) { _distinctAreasCache = []; return []; }
+
+  const seen = new Set<string>();
+  const areas: string[] = [];
+  for (const row of data) {
+    const a = (row as { area: string }).area;
+    if (a && !seen.has(a)) { seen.add(a); areas.push(a); }
+  }
+  _distinctAreasCache = areas;
+  return areas;
 }
 
 export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {

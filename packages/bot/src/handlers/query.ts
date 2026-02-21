@@ -1,10 +1,12 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
-import { chat, buildSystemPrompt, HAIKU, langInstruction, langUserNote } from "../llm.js";
-import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, type Spot, type SpotContribution } from "../database.js";
+import { chat, buildSystemPrompt, HAIKU, langInstruction, langUserNote, samSays } from "../llm.js";
+import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, getAreaCentroid, getDistinctAreas, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getDefaultCity, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES } from "../utils/city-defaults.js";
+import { getDefaultCity, getCityDefaults, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
+import { filterByDistance, haversineKm } from "../utils/geo.js";
+import { parseAreas } from "../utils/area-extractor.js";
 
 interface QueryDetails {
   area?: string;
@@ -31,20 +33,55 @@ export async function handleQuery(
   const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
 
+  // Gracefully handle unsupported cities — track for product signal, respond honestly
+  if (traveler.current_city && !isSupportedCity(city)) {
+    trackEvent(phoneNumber, channel, "unsupported_city_request", { city });
+    const supportedList = getSupportedCities().join(", ");
+    return samSays(
+      `Respond warmly — you don't have ${city} in your network yet. You currently cover ${supportedList}. Keep it short and friendly.`,
+      getDefaultCity()
+    );
+  }
+
+  // Extract budget signal for price filtering
+  const priceRange = mapBudgetToPriceRange(traveler.preferences?.budget as string | undefined);
+
   // Use specific_place as area fallback if no explicit area given
   // e.g. "I'm near KLCC, want coffee" → area=undefined, specific_place="KLCC" → effectiveArea="KLCC"
-  const effectiveArea = details.area || details.specific_place;
+  // Fall back to traveler's known home area if available
+  const homeArea = traveler.home_areas?.[0];
+  const effectiveArea = details.area || details.specific_place || homeArea;
+
+  // If no area context at all, ask where they are before querying
+  if (!effectiveArea) {
+    return samSays(`Ask where in ${city} they are right now — you need to know their location before recommending spots. One casual question.`, city);
+  }
+
+  // Parse multi-area string using vocabulary matching — handles "ss2 ss23 and taman megah"
+  // (space-separated codes the LLM lumps together) as well as comma-separated lists.
+  const dbAreas = await getDistinctAreas();
+  const rawAreas = effectiveArea
+    ? parseAreas(effectiveArea, dbAreas, AREA_CITY_MAP_KEYS)
+    : [];
 
   // Resolve city from area — "PJ" / "SS2" maps to "Petaling Jaya", etc.
-  // Area filter is always passed through so spots tagged "SS2" are found first.
-  // City resolution is additive — it scopes to the right city while area filter narrows within it.
-  const areaCities = resolveCitiesFromArea(effectiveArea);
-  const resolvedCity = resolveCityFromArea(effectiveArea);
+  // Pass rawAreas so individual areas like "SS23" resolve correctly even when the
+  // original effectiveArea string was "ss2 ss23 and taman megah" (un-comma-separated).
+  const areaCities = resolveCitiesFromArea(rawAreas.length > 0 ? rawAreas : effectiveArea);
+  const resolvedCity = rawAreas.length > 0
+    ? resolveCityFromArea(rawAreas[0])
+    : resolveCityFromArea(effectiveArea);
   const queryCities = areaCities.length > 0 ? areaCities : undefined;
   const queryCity = queryCities ? undefined : city;
-  // Don't use city-level aliases as sub-area filters — "pj" is not a spot area tag
-  const isCityAlias = CITY_LEVEL_ALIASES.has(effectiveArea?.toLowerCase().trim() ?? "");
-  const areaFilter = isCityAlias ? undefined : effectiveArea;
+
+  // Filter out city-level aliases — "pj" / "kl" are not spot area tags
+  const subAreas = rawAreas.filter(a => !CITY_LEVEL_ALIASES.has(a.toLowerCase()));
+  const areaList = subAreas.length > 0 ? subAreas : undefined;
+
+  // Compute centroid for the primary requested sub-area — used to annotate spot distances.
+  // Cached after first hit, so no extra DB cost on repeated queries for the same area.
+  const primaryArea = subAreas[0];
+  const areaCentroid = primaryArea ? await getAreaCentroid(primaryArea) : undefined;
 
   let spots: Spot[];
   let areaWidened = false;
@@ -58,24 +95,53 @@ export async function handleQuery(
     spots = await querySpots({
       city: queryCity,
       cities: queryCities,
-      area: areaFilter,
+      areas: areaList,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      priceRange,
       limit: 5,
     });
-    // If empty and area was filtered, retry without area constraint
-    if (spots.length === 0 && areaFilter) {
+    // If empty and area was filtered, retry without area constraint then apply proximity filter
+    if (spots.length === 0 && areaList) {
       areaWidened = true;
       spots = await querySpots({
         city: queryCity,
         cities: queryCities,
         categories,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
-        limit: 5,
+        limit: 20, // fetch larger pool so proximity filter has something to work with
       });
+      // Proximity filter: keep only spots within 3km of the user's area centroid.
+      // Centroid is computed from actual spot coordinates in the DB — no hardcoded list to maintain.
+      // If centroid is unknown (no geocoded spots for that area) or nothing is within 3km,
+      // return empty — better to say "no coverage" than recommend the wrong part of the city.
+      if (rawAreas.length > 0) {
+        // Use pre-computed centroid; fall back to iterating rawAreas if primary had no centroid
+        const coords = areaCentroid ?? (await Promise.all(rawAreas.map(a => getAreaCentroid(a)))).find(Boolean);
+        if (coords) {
+          spots = filterByDistance(spots, coords.lat, coords.lng, 3);
+        } else {
+          // Can't geo-constrain — don't return citywide results as if they're nearby
+          spots = [];
+        }
+      }
     }
     if (spots.length === 0) {
       spots = await trySemanticSearch(message, resolvedCity ?? city);
+    }
+  }
+
+  // Time-aware soft filter — remove spots whose best_time_of_day doesn't match local hour.
+  // Soft: if filtering would empty results, keep all but add a timing note to the LLM context.
+  let timingNote = "";
+  if (!isDishQuery && spots.length > 0) {
+    const cityDefs = getCityDefaults(resolvedCity ?? city);
+    const localHour = ((new Date().getUTCHours() + cityDefs.utcOffset) % 24 + 24) % 24;
+    const timeFiltered = spots.filter(s => isTimeMatch(s.best_time_of_day, localHour));
+    if (timeFiltered.length > 0) {
+      spots = timeFiltered;
+    } else {
+      timingNote = `\nNote: the current local time is ${localHour}:00 — these spots' usual hours may not match. Mention this gently if relevant (e.g. "usually a breakfast spot but worth checking if they're still open").`;
     }
   }
 
@@ -86,7 +152,7 @@ export async function handleQuery(
       [
         {
           role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${effectiveArea ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${effectiveArea ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking.`,
         },
       ],
       { maxTokens: 512, model: HAIKU }
@@ -95,6 +161,25 @@ export async function handleQuery(
 
   // Track usage and mark as visited
   const topSpots = spots.slice(0, 3);
+
+  // Build distance labels for spots not in one of the requested sub-areas.
+  // Only annotate when we have a centroid reference AND the spot has coordinates.
+  const distanceFromArea = new Map<string, string>();
+  if (areaCentroid && primaryArea) {
+    for (const spot of topSpots) {
+      const inRequestedArea = subAreas.some(a =>
+        spot.area?.toLowerCase().includes(a.toLowerCase())
+      );
+      if (!inRequestedArea && spot.latitude != null && spot.longitude != null) {
+        const km = haversineKm(areaCentroid.lat, areaCentroid.lng, spot.latitude, spot.longitude);
+        const label = km < 1
+          ? `~${Math.round(km * 1000)}m from ${primaryArea}`
+          : `~${km.toFixed(1)}km from ${primaryArea}`;
+        distanceFromArea.set(spot.id, label);
+      }
+    }
+  }
+
   for (const spot of topSpots) {
     incrementSpotUseCount(spot.id);
   }
@@ -116,24 +201,25 @@ export async function handleQuery(
   const prefContext = prefLines.length > 0 ? `\nUser preferences:\n${prefLines.join("\n")}` : "";
 
   // Format spots for Claude (with optional contributor perspectives)
-  const spotContext = formatSpotsForLLM(topSpots);
+  const spotContext = formatSpotsForLLM(topSpots, distanceFromArea);
   const spotContributions = await Promise.all(
     topSpots.map(s => getSpotContributions(s.id).catch(() => [] as SpotContribution[]))
   );
   const perspectivesContext = buildContributorPerspectives(topSpots, spotContributions);
   const weatherContext = weather ? `\nCurrent weather: ${weather.summary}` : "";
 
-  // Detect area mismatch — user asked for a specific area but results are from elsewhere
+  // Detect area mismatch — user asked for specific area(s) but results are from elsewhere
   const requestedArea = effectiveArea;
   const hasAreaMismatch =
     requestedArea &&
+    areaList &&
     spots.length > 0 &&
     !spots.some((s) =>
-      s.area?.toLowerCase().includes(requestedArea.toLowerCase())
+      areaList.some(a => s.area?.toLowerCase().includes(a.toLowerCase()))
     );
   const areaNote =
     hasAreaMismatch || areaWidened
-      ? `\n\nNote: The user asked for spots near "${requestedArea}" but you don't have picks in that exact area for this. These are the best options from the broader city. Be upfront about it — acknowledge the gap, then recommend these nearby alternatives naturally. Don't say "ask locals" — you ARE the local.`
+      ? `\n\nNote: The user asked for spots near "${requestedArea}" but these picks are from other parts of the city. Mention the actual area for each spot so they can judge the distance. Use the Distance field if present — say "~Xkm away" not "a short drive". NEVER invent distances.`
       : "";
 
   const prompt = `The user asked: "${message}"
@@ -143,8 +229,8 @@ ${weatherContext}
 
 Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros. Lead with your strongest pick.
 
-CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
-${areaNote}
+CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. NEVER invent distances, walking times, or driving times. If a spot has a Distance field, you may mention it as a reference — say "~Xkm from [area]", not "a short drive" or "10 minutes away". If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
+${areaNote}${timingNote}
 ${spotContext}${perspectivesContext}${langUserNote(message)}`;
 
   return await chat(buildSystemPrompt(city, options?.channel) + langInstruction(message), [{ role: "user", content: prompt }], {
@@ -168,6 +254,31 @@ export function sourceLabel(source: string | undefined): string {
   }
 }
 
+/** Map traveler budget preference to price_range filter values */
+function mapBudgetToPriceRange(budget: string | undefined): string[] | undefined {
+  if (!budget) return undefined;
+  const b = budget.toLowerCase();
+  if (b === "backpacker" || b === "tight" || b === "budget") return ["$"];
+  if (b === "moderate" || b === "mid") return ["$", "$$"];
+  if (b === "splurge" || b === "luxury") return ["$$", "$$$"];
+  return undefined;
+}
+
+/** Check if a spot's best_time_of_day matches the current local hour */
+function isTimeMatch(bestTimeOfDay: string | undefined, localHour: number): boolean {
+  if (!bestTimeOfDay || bestTimeOfDay === "anytime") return true;
+  switch (bestTimeOfDay) {
+    case "breakfast": return localHour >= 6 && localHour < 11;
+    case "brunch": return localHour >= 9 && localHour < 13;
+    case "lunch": return localHour >= 11 && localHour < 15;
+    case "afternoon": return localHour >= 12 && localHour < 18;
+    case "dinner": return localHour >= 17 && localHour < 23;
+    case "evening": return localHour >= 17 && localHour < 23;
+    case "night": return localHour >= 19 || localHour < 3;
+    default: return true; // unknown values — don't filter
+  }
+}
+
 /** Try semantic search when structured query returns no results */
 async function trySemanticSearch(
   message: string,
@@ -183,11 +294,13 @@ async function trySemanticSearch(
   }
 }
 
-export function formatSpotsForLLM(spots: Spot[]): string {
+export function formatSpotsForLLM(spots: Spot[], distanceFromArea?: Map<string, string>): string {
   return spots
     .map((s, i) => {
       const lines = [`${i + 1}. ${s.name}`];
       if (s.area) lines.push(`   Neighborhood: ${s.area}`);
+      const distLabel = distanceFromArea?.get(s.id);
+      if (distLabel) lines.push(`   Distance: ${distLabel}`);
       if (s.categories?.length) lines.push(`   Category: ${s.categories.join(", ")}`);
       if (s.address) lines.push(`   Address: ${s.address}`);
       if (s.price_range) lines.push(`   Price: ${s.price_range}`);
@@ -211,6 +324,7 @@ export function formatSpotsForLLM(spots: Spot[]): string {
           ? `verified (${sourceLabel(s.source)})`
           : `unverified — treat as a lead, not a guarantee`;
       lines.push(`   Sam's take: ${takeLabel}`);
+      if (s.isStale) lines.push(`   Freshness: last verified 6+ months ago — details may have changed`);
       return lines.join("\n");
     })
     .join("\n\n");

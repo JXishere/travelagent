@@ -129,7 +129,7 @@ export async function chatAsSam(
 
 /** Quick Sam-voiced response for conversational glue (Haiku, max 100 tokens) */
 export async function samSays(instruction: string, city?: string): Promise<string> {
-  const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", city ?? getDefaultCity());
+  const systemPrompt = loadPrompt("system-mini").replaceAll("{{CITY}}", city ?? getDefaultCity());
   return chat(systemPrompt, [{ role: "user", content: instruction }], {
     maxTokens: 100,
     model: HAIKU,

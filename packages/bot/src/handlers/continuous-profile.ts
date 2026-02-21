@@ -34,6 +34,8 @@ const SKIP_FLOWS = new Set([
   "feedback",
   "generate",
   "profile_learning",
+  "spot_info",       // asking about a named place — no traveler profile signal
+  "spot_correction", // reporting bad data — no traveler profile signal
   // Note: "profile" intent is intentionally NOT skipped — continuous extraction
   // acts as the safety net for returning users whose updates would otherwise be
   // lost by startProfileLearning's early-return path.
@@ -43,6 +45,18 @@ const SKIP_FLOWS = new Set([
  * Fire-and-forget entry point — call after every sendMessage.
  * Never throws; logs errors and moves on.
  */
+/** Returns true for short messages that carry no traveler profile signal */
+function isZeroSignalMessage(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  // Pure acknowledgments and reactions
+  if (/^(ok|okay|yep|yup|yes|no|nope|thanks|thank you|cool|nice|great|sure|got it|sounds good|that works|perfect|awesome|haha|lol|😂|👍|🙏)[\s!.]*$/.test(t)) return true;
+  // Follow-up food queries — requesting more options, no new profile info
+  if (/^(what else|any other|something else|more options?|more suggestions?|what about|got more|other recs?)[\s?!]*$/.test(t)) return true;
+  // Pure logistics — no traveler profile value
+  if (/^(how (far|long|much|do i get there)|what('?s)? the (fare|distance|time)|is it open|when does it open|what time)[\s?!]*$/.test(t)) return true;
+  return false;
+}
+
 export async function maybeExtractProfile(
   phoneNumber: string,
   recentMessages: Array<{ role: string; content: string }>,
@@ -51,6 +65,10 @@ export async function maybeExtractProfile(
 ): Promise<void> {
   try {
     if (shouldSkipExtraction(currentFlow)) return;
+
+    // Skip LLM call for zero-signal messages — they return _no_changes: true anyway
+    const userMsg = recentMessages.find(m => m.role === "user")?.content?.trim() ?? "";
+    if (isZeroSignalMessage(userMsg)) return;
 
     const traveler = await getOrCreateTraveler(phoneNumber);
     const delta = await extractProfileDelta(traveler, recentMessages);

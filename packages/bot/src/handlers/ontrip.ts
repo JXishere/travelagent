@@ -581,11 +581,8 @@ export async function handleSpotInfo(
 ): Promise<string> {
   const systemPrompt = buildSystemPrompt(city, options?.channel);
 
-  // Fetch DB record and web data in parallel
-  const [dbSpot, webData] = await Promise.all([
-    findSpotByName(spotName, city),
-    webSearchSpot(spotName, city),
-  ]);
+  // Step 1: fetch DB record first
+  const dbSpot = await findSpotByName(spotName, city);
 
   // No DB record — don't answer from web data alone (hallucination risk).
   // Web search may find real info but we can't verify it matches Sam's knowledge graph.
@@ -596,6 +593,15 @@ export async function handleSpotInfo(
       { maxTokens: 150 }
     );
   }
+
+  // Step 2: decide if web search adds value
+  // Only search for live volatile fields (hours, payment) or sparse spots missing core data
+  const VOLATILE_KEYWORDS = /\b(open|close|shut|hours|today|now|payment|cash|card|credit|debit|pay|accept)\b/i;
+  const spotIsSparse = !dbSpot.what_to_order?.length && !dbSpot.address;
+  const needsWebSearch = VOLATILE_KEYWORDS.test(userMessage) || spotIsSparse;
+
+  // Step 3: conditionally fetch web data
+  const webData = needsWebSearch ? await webSearchSpot(spotName, city) : {};
 
   // Merge: DB fields win, web fills gaps for fields the DB is missing
   const merged: Record<string, any> = { ...webData };

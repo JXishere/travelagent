@@ -113,6 +113,16 @@ scripts/                — Batch research + seed tooling
 └── seed-new-only.ts    — Seed only spots not yet in DB
 
 docs/                   — Strategy docs, competitive analysis, blueprints
+
+SAM/                    — Engineering guides (see below)
+├── SAM.md              — Who Sam is as a product today (identity, flows, gaps)
+├── SCHEMA.md           — Database schema deep-dive
+├── PROMPTS.md          — Prompt system guide
+├── API.md              — External API integrations
+├── INFRA.md            — Infrastructure and deployment
+├── CITY-GUIDE.md       — How to expand Sam to a new city
+├── SKILLS.md           — Skills and capabilities reference
+└── TESTING.md          — Testing strategy and eval guide
 ```
 
 ## Dev Commands

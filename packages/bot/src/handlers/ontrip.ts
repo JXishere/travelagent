@@ -8,14 +8,17 @@ import {
   getOrCreateTraveler,
   incrementSpotUseCount,
   markSpotsVisited,
+  getAreaCentroid,
+  getDistinctAreas,
   type Spot,
   type Traveler,
 } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
-import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea } from "../utils/city-defaults.js";
+import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
 import { formatSpotsForLLM } from "./query.js";
-import { parseCoordinates, filterByDistance, type SpotWithDistance } from "../utils/geo.js";
+import { parseCoordinates, filterByDistance, haversineKm, type SpotWithDistance } from "../utils/geo.js";
+import { parseAreas } from "../utils/area-extractor.js";
 
 interface IntentDetails {
   area?: string;
@@ -241,7 +244,37 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
     };
   }
 
-  const spotsContext = formatSpotsForLLM(toRecommend);
+  // Build distance labels for spots not in the requested sub-area.
+  // Mirrors the same logic in handleQuery so distance annotations appear consistently.
+  // We use details.area here (not areaFilter) because areaFilter is cleared when the
+  // area resolves to a city alias (e.g. "SS2" → Petaling Jaya), but we still want
+  // the centroid from the user's actual requested area for distance annotations.
+  const distanceFromArea = new Map<string, string>();
+  if (details.area) {
+    const dbAreas = await getDistinctAreas();
+    const rawAreas = parseAreas(details.area, dbAreas, AREA_CITY_MAP_KEYS);
+    const subAreas = rawAreas.filter(a => !CITY_LEVEL_ALIASES.has(a.toLowerCase()));
+    const primaryArea = subAreas[0];
+    if (primaryArea) {
+      const areaCentroid = await getAreaCentroid(primaryArea);
+      if (areaCentroid) {
+        for (const spot of toRecommend) {
+          const inRequestedArea = subAreas.some(a =>
+            spot.area?.toLowerCase().includes(a.toLowerCase())
+          );
+          if (!inRequestedArea && spot.latitude != null && spot.longitude != null) {
+            const km = haversineKm(areaCentroid.lat, areaCentroid.lng, spot.latitude, spot.longitude);
+            const label = km < 1
+              ? `~${Math.round(km * 1000)}m from ${primaryArea}`
+              : `~${km.toFixed(1)}km from ${primaryArea}`;
+            distanceFromArea.set(spot.id, label);
+          }
+        }
+      }
+    }
+  }
+
+  const spotsContext = formatSpotsForLLM(toRecommend, distanceFromArea);
   const weatherNote = weather?.is_raining
     ? "It's raining right now — prioritize indoor/covered spots."
     : "";
@@ -260,20 +293,20 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
       : "";
 
   // Detect area mismatch — user asked for a specific area but results are from elsewhere.
-  // Skip mismatch check if the area resolved to a city-level alias (e.g. "PJ" → "Petaling Jaya"),
-  // because spots in that city won't have "PJ" in their area field.
+  // For city-level aliases (e.g. "SS2" → Petaling Jaya), check against the original sub-area
+  // string (e.g. "ss2") rather than skipping — spots in PJ won't have "PJ" in area but they
+  // may or may not have "SS2". We still want to detect when results aren't from the requested spot.
   const requestedArea = details.area;
-  const isCityAlias = areaCities.length > 0;
   const hasAreaMismatch =
-    !isCityAlias &&
     requestedArea &&
     toRecommend.length > 0 &&
     !toRecommend.some((s) =>
       s.area?.toLowerCase().includes(requestedArea.toLowerCase())
     );
+  const hasDistanceLabels = distanceFromArea.size > 0;
   const areaNote =
     hasAreaMismatch || areaWidened
-      ? `\n\nIMPORTANT: The user asked for spots in "${requestedArea}" but you have no specific picks for that area yet. Your FIRST sentence must acknowledge you don't have ${requestedArea} coverage. Then offer these as nearby alternatives — do NOT present them as ${requestedArea} recommendations. Be honest about the gap.`
+      ? `\n\nIMPORTANT: The user asked for spots in "${requestedArea}" but these picks are from nearby areas. Mention the actual area for each spot so they can judge the distance.${hasDistanceLabels ? " Use the Distance field if present — say \"~Xkm away\" not \"a short drive\". NEVER invent distances." : " Be honest about the gap."}`
       : "";
 
   const cuisineNote = details.cuisine
@@ -301,10 +334,16 @@ Here are spots from your knowledge graph:
 
 ${spotsContext}
 
+STRICT DATA RULE — overrides everything:
+- ONLY mention details explicitly listed in the spot data above (Order, Tips, Hours, Price, Payment, Vibe, Setting, Distance).
+- If Order or Tips are absent for a spot, do NOT invent them. Use: "I know this spot but don't have deep intel yet."
+- NEVER mention distance or travel time unless a Distance field is present in the spot data. If no Distance field, do not say how far anything is.
+- NEVER add sell-out times, operating hours, or payment methods unless they appear in the data above.
+
 RESPONSE FORMAT — follow exactly:
 - Start your response with the spot name. No intro sentence. No "If you want..." opener.
 - Line 1: Name (Area)
-- Line 2: what to order + one tip
+- Line 2: what to order + one tip (only if data exists)
 - Blank line between spots
 - Max 3 spots
 - Lead with your #1 pick
@@ -402,7 +441,9 @@ ${spotsContext}
 
 If the user is specifically asking about non-food activities (things to do, sightseeing, etc.), be honest that your strength is food and dining. You can mention any activity spots you have, but flag that you don't have full activities coverage and they should check elsewhere for that.
 
-Build a loose, conversational day structure — "here's a nice flow for today." Include operational details for each spot. Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."${langUserNote(message)}`,
+STRICT DATA RULE: Only mention details explicitly listed for each spot in the data above (Order, Tips, Hours, Price, Vibe). If a spot has no Order or Tips data, say "I know this place but don't have deep intel" — never invent dishes, hours, prices, or travel times. Never estimate how long it takes to get from one spot to another.
+
+Build a loose, conversational day structure — "here's a nice flow for today." Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. For an "eat all day" or food-focused request, cover breakfast/morning, lunch, afternoon, and dinner — aim for 4-5 stops across the day. End with something casual like "text me when you're hungry or want to switch things up."${langUserNote(message)}`,
     spotIds: allDaySpots.map(s => s.id),
     maxTokens: 1024,
   };
@@ -506,7 +547,7 @@ Nearby spots from knowledge graph:
 
 ${spotsContext}
 
-Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot." : " Include walking distance estimates if you can infer from area."} Keep it casual.${langUserNote(message)}`,
+Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot (use the Distances list above)." : " Do NOT estimate walking times or distances — you don't have GPS data."} Keep it casual.${langUserNote(message)}`,
     spotIds: spots.map(s => s.id),
     maxTokens: 512,
   };
@@ -551,8 +592,8 @@ export async function handleSpotInfo(
   if (!dbSpot) {
     return chat(
       systemPrompt,
-      [{ role: "user", content: `User asked: "${userMessage}". You have no record of "${spotName}" in your knowledge graph. Respond in one sentence — be honest that you don't have intel on it yet.` }],
-      { maxTokens: 100 }
+      [{ role: "user", content: `User asked: "${userMessage}". You have no record of "${spotName}" in your knowledge graph. Be honest that you don't have intel on it yet, then offer to show what you do know in ${city} — ask if there's a specific area or type of food they want. Two sentences max.` }],
+      { maxTokens: 150 }
     );
   }
 

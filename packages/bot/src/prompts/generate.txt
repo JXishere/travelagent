@@ -8,13 +8,13 @@ Return ONLY valid JSON in this format:
   "candidates": [
     {
       "name": "Name of the spot",
-      "category": "breakfast|lunch|dinner|cafe|activity|nightlife|market",
+      "categories": ["breakfast|lunch|dinner|cafe|activity|nightlife|market"],
       "area": "area name",
       "address": "approximate address if known",
       "price_range": "$|$$|$$$",
       "what_to_order": ["known dishes or highlights"],
       "vibe": "casual|upscale|chaotic|chill|local|touristy",
-      "notes": "brief note on why this spot is notable"
+      "pro_tips": ["brief note on why this spot is notable"]
     }
   ]
 }

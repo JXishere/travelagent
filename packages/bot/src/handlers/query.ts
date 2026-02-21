@@ -13,6 +13,7 @@ interface QueryDetails {
   meal_type?: string;
   time_of_day?: string;
   mood?: string;
+  budget?: string;
   specific_place?: string;
   cuisine?: string;
 }
@@ -43,8 +44,9 @@ export async function handleQuery(
     );
   }
 
-  // Extract budget signal for price filtering
-  const priceRange = mapBudgetToPriceRange(traveler.preferences?.budget as string | undefined);
+  // Extract budget signal for price filtering — message-level budget overrides traveler profile
+  const budgetSignal = details.budget ?? (traveler.preferences?.budget as string | undefined);
+  const priceRange = mapBudgetToPriceRange(budgetSignal);
 
   // Use specific_place as area fallback if no explicit area given
   // e.g. "I'm near KLCC, want coffee" → area=undefined, specific_place="KLCC" → effectiveArea="KLCC"
@@ -145,6 +147,21 @@ export async function handleQuery(
     }
   }
 
+  // Vibe soft filter — prefer spots matching user's requested mood/vibe.
+  // Soft: only apply if at least one spot matches; otherwise keep all and add a note.
+  let vibeNote = "";
+  if (details.mood && spots.length > 0) {
+    const preferredVibes = mapMoodToVibes(details.mood);
+    if (preferredVibes.length > 0) {
+      const vibeFiltered = spots.filter(s => !s.vibe || preferredVibes.includes(s.vibe));
+      if (vibeFiltered.length > 0) {
+        spots = vibeFiltered;
+      } else {
+        vibeNote = `\nNote: the user wants a ${details.mood} vibe. The available spots don't specifically match — acknowledge this if relevant.`;
+      }
+    }
+  }
+
   if (spots.length === 0) {
     console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
     return await chat(
@@ -222,6 +239,8 @@ export async function handleQuery(
       ? `\n\nNote: The user asked for spots near "${requestedArea}" but these picks are from other parts of the city. Mention the actual area for each spot so they can judge the distance. Use the Distance field if present — say "~Xkm away" not "a short drive". NEVER invent distances.`
       : "";
 
+  const budgetNote = priceRange ? `\nThe user wants budget-friendly options (${priceRange.join("/")}). Mention the price range when presenting spots (e.g. "$ — around RM15" or "$$ — mid-range").` : "";
+
   const prompt = `The user asked: "${message}"
 ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
@@ -229,8 +248,12 @@ ${weatherContext}
 
 Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros. Lead with your strongest pick.
 
-CRITICAL: ONLY mention details that appear in the spot data below. If a spot only has a name and area, just say the name and area. Do NOT invent prices, dishes, pro tips, hours, or any other details not listed. NEVER invent distances, walking times, or driving times. If a spot has a Distance field, you may mention it as a reference — say "~Xkm from [area]", not "a short drive" or "10 minutes away". If a spot has limited data, keep the recommendation short and honest — "I know the spot but don't have deep intel on it yet" is fine.
-${areaNote}${timingNote}
+STRICT DATA RULES — these override everything else:
+- ONLY mention details explicitly listed in the spot data below. If Order/Tips/Hours/Price fields are absent, say NOTHING about them.
+- Do NOT invent dishes, pro tips, hours, prices, payment methods, or any other operational detail.
+- NEVER mention distance, travel time, or proximity ("10 minutes away", "a short drive") unless a Distance field is present in the spot data. If no Distance field, do not say how far anything is.
+- If a spot has no Order or Tips data, use: "I know the spot but don't have deep intel on it yet."
+${areaNote}${timingNote}${vibeNote}${budgetNote}
 ${spotContext}${perspectivesContext}${langUserNote(message)}`;
 
   return await chat(buildSystemPrompt(city, options?.channel) + langInstruction(message), [{ role: "user", content: prompt }], {
@@ -262,6 +285,17 @@ function mapBudgetToPriceRange(budget: string | undefined): string[] | undefined
   if (b === "moderate" || b === "mid") return ["$", "$$"];
   if (b === "splurge" || b === "luxury") return ["$$", "$$$"];
   return undefined;
+}
+
+/** Map user mood to preferred spot vibes for soft filtering */
+function mapMoodToVibes(mood: string): string[] {
+  switch (mood.toLowerCase()) {
+    case "chill": return ["chill", "casual"];
+    case "tired": return ["chill"];
+    case "adventurous": return ["local", "chaotic"];
+    case "celebratory": return ["upscale"];
+    default: return [];
+  }
 }
 
 /** Check if a spot's best_time_of_day matches the current local hour */
@@ -379,5 +413,5 @@ export function formatSpotWithContributorPerspectives(
   }
   if (displayOrders.length <= 1) return null;
 
-  return `${contributions.length} contributors, ${displayOrders.length} takes on what to order: ${displayOrders.join(", ")}`;
+  return `${contributions.length} people know this spot well — between them, they recommend: ${displayOrders.join(", ")}`;
 }

@@ -365,8 +365,15 @@ Extract relevant details with these exact field names:
 - time_of_day: morning, afternoon, evening, late-night
 - specific_place: a landmark or venue they're currently AT (not where they want to eat)
 - mood: chill, adventurous, tired, celebratory
+- budget: cheap, moderate, splurge — extract when the user signals a price constraint (e.g. "cheap", "budget", "affordable", "murah", "under RM30", "splurge", "fancy", "special occasion spend")
 - spot_name: name of a specific venue (for spot_info and spot_correction)
 - correction: brief description of what's wrong (for spot_correction, e.g. "closed", "moved", "wrong address")
+
+Examples with budget:
+- "cheap makan near Chow Kit" → hungry, area: "Chow Kit", budget: "cheap"
+- "something affordable for lunch" → hungry, budget: "cheap"
+- "want to splurge on dinner" → hungry, budget: "splurge"
+- "mid-range dinner spot" → hungry, budget: "moderate"
 
 Respond in JSON only:
 { "intent": "...", "details": { ... } }`;

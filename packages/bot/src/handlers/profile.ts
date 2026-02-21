@@ -188,7 +188,7 @@ export async function startProfileLearning(
   }
 
   const city = getDefaultCity();
-  return `Hey! I'm Sam — your ${city} insider.
+  return `Hey, I'm Sam. I know ${city} well — and a lot of other cities too.
 
-Whether you're visiting or you live here, I'll point you to the best spots. Quick question: are you planning a trip to ${city}, or do you live here?`;
+Are you planning a trip here, or do you live here?`;
 }

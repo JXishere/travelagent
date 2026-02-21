@@ -16,11 +16,15 @@ import {
   type Spot,
 } from "../database.js";
 import { getDefaultCity } from "../utils/city-defaults.js";
+import { geocodeAddress } from "../utils/geocoding.js";
 import { handleQuery } from "./query.js";
 
-/** Only these fields may be filled from web search — everything else must come from the contributor */
+/** Only these fields may be filled from web search — everything else must come from the contributor.
+ *  Deliberately excludes:
+ *  - "address" — web often returns addresses for other businesses with the same name (chains, wrong outlets)
+ *  - "area" — web returns generic descriptions ("Multiple locations", wrong district) that confuse contributors */
 const WEB_ALLOWED_FIELDS = new Set([
-  "name", "area", "address", "categories", "city",
+  "name", "categories", "city",
   "price_range", "payment_methods",
 ]);
 
@@ -187,7 +191,10 @@ export async function handleContribution(
       },
     });
 
-    return formatSummary(merged, updatedWebFields, updatedAreaConflict);
+    const correctionAck = correctedKeys.length === 1
+      ? `Got it — updated ${correctedKeys[0]}. Here's the revised summary:\n\n`
+      : `Got it — updated those details. Here's the revised summary:\n\n`;
+    return correctionAck + formatSummary(merged, updatedWebFields, updatedAreaConflict);
   }
 
   // Asking must-go stage
@@ -605,14 +612,15 @@ async function saveSpot(
 
   const contributor = await getOrCreateContributor(phoneNumber);
 
-  const { missing_fields, ...spotData } = data as any;
+  const { missing_fields, is_must_go: isMustGo, ...spotData } = data as any;
 
   // Strip web-sourced fields — only contributor-verified data goes to DB
   for (const field of webSourcedFields) {
     delete spotData[field];
   }
-  // Belt-and-suspenders: never persist opening_hours
+  // Belt-and-suspenders: never persist opening_hours or is_must_go (mapped to must_go)
   delete spotData.opening_hours;
+  delete spotData.is_must_go;
 
   // Check for duplicate — auto-merge new intel, tell contributor the spot already exists
   const duplicate = await findDuplicateSpot(spotData.name, spotData.area);
@@ -637,7 +645,7 @@ async function saveSpot(
       }
     }
     // Propagate must-go flag to existing spot
-    if (spotData.is_must_go) {
+    if (isMustGo) {
       (updates as any).must_go = true;
     }
     await updateSpot(duplicate.id, updates);
@@ -650,7 +658,7 @@ async function saveSpot(
       what_to_skip: spotData.what_to_skip?.length ? spotData.what_to_skip : undefined,
       pro_tips: spotData.pro_tips?.length ? spotData.pro_tips : undefined,
       vibe: spotData.vibe,
-      is_must_go: spotData.is_must_go,
+      is_must_go: isMustGo,
     }).catch(err => console.error("[attribution] Failed to save contribution:", err));
     incrementSpotContributionCount(duplicate.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
@@ -666,12 +674,24 @@ async function saveSpot(
     return samSays(`A contributor added intel to "${duplicate.name}" which already exists in your knowledge graph. Their new info:\n${newInfo.join("\n")}\nRespond warmly — ${duplicate.name} already exists in your graph, but their new perspective makes it richer and you've merged it in. One sentence.`);
   }
 
+  // Geocode address → lat/lng so proximity filtering works for this area in future queries.
+  // Uses the address from the full data object (may be web-sourced) — coordinates are
+  // factual metadata, not contributor opinion, so deriving them from a web address is fine.
+  // Fire-and-forget friendly: if geocoding fails, spot saves without coordinates.
+  if (!spotData.latitude && !spotData.longitude && data.address) {
+    const coords = await geocodeAddress(data.address, data.city || getDefaultCity());
+    if (coords) {
+      spotData.latitude = coords.lat;
+      spotData.longitude = coords.lng;
+    }
+  }
+
   const newSpot = await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
     source,
     verified: true,
-    must_go: spotData.is_must_go ?? false,
+    must_go: isMustGo ?? false,
   });
 
   // Record this contributor's specific notes for attribution
@@ -682,7 +702,7 @@ async function saveSpot(
     what_to_skip: spotData.what_to_skip,
     pro_tips: spotData.pro_tips,
     vibe: spotData.vibe,
-    is_must_go: spotData.is_must_go,
+    is_must_go: isMustGo,
   }).catch(err => console.error("[attribution] Failed to save contribution:", err));
   incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
@@ -700,5 +720,5 @@ async function saveSpot(
     source,
   });
 
-  return samSays(`You just saved "${data.name}" to your knowledge graph from a contributor. They've contributed ${updated.spots_contributed} spot(s) total. Thank them warmly, mention the spot name. One sentence.`);
+  return samSays(`Respond to confirm you just saved "${data.name}" to your knowledge graph. The contributor has now added ${updated.spots_contributed} spot(s) total. Confirm it's saved, thank them warmly, mention the spot name. One sentence.`);
 }

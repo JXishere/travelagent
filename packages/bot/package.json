@@ -6,6 +6,7 @@
   "exports": {
     "./llm": "./src/llm.ts",
     "./database": "./src/database.ts",
+    "./weather": "./src/weather.ts",
     "./handlers/*": "./src/handlers/*.ts",
     "./utils/*": "./src/utils/*.ts"
   },

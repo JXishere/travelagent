@@ -76,6 +76,7 @@ const AREA_CITY_MAP: Record<string, string> = {
   "damansara utama": "Petaling Jaya",
   "damansara kim": "Petaling Jaya",
   ss2: "Petaling Jaya",
+  ss23: "Petaling Jaya",
   "subang jaya": "Petaling Jaya",
   subang: "Petaling Jaya",
   "bandar sunway": "Petaling Jaya",
@@ -112,6 +113,9 @@ const AREA_CITY_MAP: Record<string, string> = {
  * When users say "pj" or "kl" they mean the city, not a neighbourhood tag.
  * These should never be used as sub-area filters in DB queries.
  */
+/** All known area alias keys — used by area extractor as matching vocabulary */
+export const AREA_CITY_MAP_KEYS: string[] = Object.keys(AREA_CITY_MAP);
+
 export const CITY_LEVEL_ALIASES = new Set([
   "pj", "petaling jaya",
   "kl", "kuala lumpur",

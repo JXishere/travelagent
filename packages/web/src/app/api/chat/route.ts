@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
         break;
 
       case "feedback":
-        response = await startFeedbackCollection(sessionId);
+        response = await startFeedbackCollection(sessionId, message);
         break;
 
       case "spot_correction":
@@ -348,18 +348,23 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "weather": {
-      // Weather-aware: use handleQuery (non-streamed, returns complete string)
-      const response = await handleQuery(sessionId, message, { ...details }, undefined, { channel: "web" });
+      // Return actual weather data — not a food recommendation
+      const { getCurrentWeather } = await import("@sam/bot/weather");
+      const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
+      const { chat, buildSystemPrompt } = await import("@sam/bot/llm");
+      const travelerForWeather = await getOrCreateTraveler(sessionId);
+      const weatherCity = travelerForWeather.current_city ?? getDefaultCity();
+      const weather = await getCurrentWeather(weatherCity);
+      const weatherPrompt = weather
+        ? `User asks: "${message}". Answer directly and casually about the weather in ${weatherCity} right now: ${weather.temp}°C, feels like ${weather.feels_like}°C, ${weather.description}, humidity ${weather.humidity}%.${weather.is_raining ? " It's raining — mention bringing an umbrella." : ""} One or two sentences.`
+        : `User asks: "${message}". You don't have live weather data right now — say so honestly in one sentence.`;
+      const weatherResponse = await chat(buildSystemPrompt(weatherCity, "web"), [{ role: "user", content: weatherPrompt }], { maxTokens: 150 });
       await appendMessages(sessionId, [
         { role: "user", content: message },
-        { role: "assistant", content: response },
+        { role: "assistant", content: weatherResponse },
       ]);
-      maybeExtractProfile(sessionId, [
-        { role: "user", content: message },
-        { role: "assistant", content: response },
-      ], intent).catch(() => {});
       flushAndTrackUsage(sessionId, "weather");
-      return sseTextResponse(response, rateLimitRemaining);
+      return sseTextResponse(weatherResponse, rateLimitRemaining);
     }
     case "spot_info": {
       const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");

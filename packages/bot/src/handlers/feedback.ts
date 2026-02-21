@@ -1,6 +1,6 @@
 // Feedback flow — post-trip validation and tip collection
 
-import { chat, loadPrompt, HAIKU } from "../llm.js";
+import { chat, loadPrompt, samSays, HAIKU } from "../llm.js";
 import {
   getSpotsNeedingFeedback,
   markFeedbackAsked,
@@ -105,13 +105,24 @@ export async function handleFeedback(
   return await startFeedbackCollection(phoneNumber);
 }
 
-/** Proactively ask about recently recommended spots */
+/** Proactively ask about recently recommended spots, or capture spontaneous feedback from a message */
 export async function startFeedbackCollection(
-  phoneNumber: string
+  phoneNumber: string,
+  userMessage?: string
 ): Promise<string> {
   const spots = await getSpotsNeedingFeedback(phoneNumber);
 
   if (spots.length === 0) {
+    // If user sent a spontaneous feedback message, acknowledge it warmly
+    if (userMessage) {
+      await updateConversation(phoneNumber, {
+        current_flow: "general",
+        flow_state: {},
+      });
+      return samSays(
+        `Respond warmly: the user said "${userMessage}" — they're sharing feedback about a spot. Acknowledge their experience enthusiastically, thank them for sharing, and encourage them to keep sending spots or tips. Two sentences max.`
+      );
+    }
     await updateConversation(phoneNumber, {
       current_flow: "general",
       flow_state: {},

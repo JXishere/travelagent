@@ -25,7 +25,7 @@ Based on your profile:
 
 ━━━ WHAT TO BOOK AHEAD ━━━
 
-[Only if applicable — spots that fill up]
+[Only include if you have specific intel that a spot fills up quickly. If you have no specific knowledge, skip this section entirely — don't invent booking pressure.]
 [Include timing + reservation guidance]
 
 ━━━ YOUR ANCHOR SPOTS ━━━
@@ -41,9 +41,8 @@ Based on your profile:
 
 ━━━ WHAT TO EXPECT ━━━
 
-[Weather for their dates]
-[Money/payment tips]
-[Getting around the city]
+[Seasonal climate — what to generally expect for this time of year (heat, humidity, wet/dry season). Do not forecast specific conditions.]
+[Money and payment — cash vs card norms, tipping culture]
 [Cultural notes]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

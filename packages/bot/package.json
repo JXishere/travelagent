@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "backfill-embeddings": "tsx --env-file ../../.env.local src/backfill-embeddings.ts",
+    "backfill-coords": "tsx --env-file ../../.env.local src/backfill-coords-websearch.ts",
     "eval": "tsx --env-file ../../.env.local src/eval/eval-runner.ts",
     "coach": "tsx --env-file ../../.env.local src/coach.ts",
     "coach:auto": "tsx --env-file ../../.env.local src/coach-auto.ts"

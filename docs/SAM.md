@@ -2,7 +2,7 @@
 
 _Internal reference — last updated 2026-02-21_
 
-For stack, file tree, schema, and code rules, see [CLAUDE.md](../CLAUDE.md). This document answers a different question: **what is Sam as a product today?**
+For stack, file tree, schema, and code rules, see [CLAUDE.md](../CLAUDE.md). For deeper engineering guides, see the [`SAM/`](../SAM/) folder: [PROMPTS.md](../SAM/PROMPTS.md), [SCHEMA.md](../SAM/SCHEMA.md), [API.md](../SAM/API.md), [INFRA.md](../SAM/INFRA.md), [TESTING.md](../SAM/TESTING.md), [CITY-GUIDE.md](../SAM/CITY-GUIDE.md), [SKILLS.md](../SAM/SKILLS.md). This document answers a different question: **what is Sam as a product today?**
 
 ---
 
@@ -158,4 +158,4 @@ Prompts live in `packages/bot/src/prompts/`. The system is layered:
 
 Eval catches "did the prompt break?" — Coach discovers "how could it be better?"
 
-See `packages/bot/src/eval/` for scenario files and `coach.txt` for the 6-dimension rubric.
+See `packages/bot/src/eval/` for scenario files, `coach.txt` for the 6-dimension rubric, and [SAM/TESTING.md](../SAM/TESTING.md) for the full testing strategy.

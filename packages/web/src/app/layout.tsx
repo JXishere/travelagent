@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -43,6 +44,7 @@ export default function RootLayout({
         style={{ backgroundColor: "var(--bg)", color: "var(--fg)" }}
       >
         {children}
+        <Analytics />
       </body>
     </html>
   );

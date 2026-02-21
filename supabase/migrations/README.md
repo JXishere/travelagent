@@ -39,3 +39,4 @@ npm run migrate
 | `20260220_000000_clear_stale_operational_data.sql` | Clear opening_hours and payment_methods from all spots — both fields are now fetched live from web search, seeded values are stale noise | pending |
 | `20260220_010000_atomic_helpers.sql` | Atomic RPC helpers: append_conversation_messages (row-locked append), increment_spot_use_count, increment_spot_contribution_count — eliminates read-modify-write race conditions | applied via MCP |
 | `20260220_200000_category_text_to_categories_array.sql` | Migrate spots.category (text) → categories (text[]); split 4 pipe-hacked rows on \|; update match_spots RPC to filter with array overlap (&&) | applied via MCP |
+| `20260221_000000_add_avg_rating_to_spots.sql` | Add avg_rating (numeric 3,2) to spots; index; backfill from existing feedback | applied via MCP |

@@ -385,7 +385,7 @@ describe("enrichFromWeb", () => {
   it("strips non-allowed fields from web data via allowlist", async () => {
     mockedWebSearch.mockResolvedValue({
       area: "Bangsar South",
-      address: "10 Jalan Maarof",
+      address: "10 Jalan Maarof",  // address is NOT in allowlist — stripped
       price_range: "$$",
       what_to_order: ["flat white"],
       what_to_skip: ["the pastries"],
@@ -399,10 +399,10 @@ describe("enrichFromWeb", () => {
     const data = { name: "Ka'ia" };
     const result = await enrichFromWeb(data);
 
-    // Allowed fields filled (area, address, price_range)
+    // Allowed fields filled (area, price_range) — address is NOT in allowlist
     expect(result.enriched.price_range).toBe("$$");
     expect(result.enriched.area).toBe("Bangsar South");
-    expect(result.enriched.address).toBe("10 Jalan Maarof");
+    expect(result.enriched.address).toBeUndefined();
 
     // Non-allowed fields stripped — not present from web
     expect(result.enriched.what_to_order).toBeUndefined();
@@ -411,14 +411,14 @@ describe("enrichFromWeb", () => {
     expect(result.enriched.vibe).toBeUndefined();
     expect(result.enriched.is_must_go).toBeUndefined();
     expect(result.enriched.best_time_of_day).toBeUndefined();
-    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "address", "price_range"]));
-    expect(result.webSourcedFields).toHaveLength(3);
+    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "price_range"]));
+    expect(result.webSourcedFields).toHaveLength(2);
   });
 
-  it("blocks unexpected fields like latitude and random keys", async () => {
+  it("blocks unexpected fields like latitude, address, and random keys", async () => {
     mockedWebSearch.mockResolvedValue({
       area: "KLCC",
-      address: "Suria KLCC",
+      address: "Suria KLCC",  // address is NOT in allowlist — stripped
       latitude: 3.157,
       longitude: 101.712,
       random_field: "unexpected",
@@ -428,16 +428,16 @@ describe("enrichFromWeb", () => {
     const data = { name: "Petronas Cafe" };
     const result = await enrichFromWeb(data);
 
-    // area and address ARE in allowlist — allowed through
+    // area IS in allowlist — allowed through; address is NOT
     expect(result.enriched.area).toBe("KLCC");
-    expect(result.enriched.address).toBe("Suria KLCC");
+    expect((result.enriched as any).address).toBeUndefined();
     // latitude, longitude, random_field still blocked
     expect((result.enriched as any).latitude).toBeUndefined();
     expect((result.enriched as any).longitude).toBeUndefined();
     expect((result.enriched as any).random_field).toBeUndefined();
     // categories IS in allowlist
     expect(result.enriched.categories).toEqual(["cafe"]);
-    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "address", "categories"]));
+    expect(result.webSourcedFields).toEqual(expect.arrayContaining(["area", "categories"]));
   });
 
   it("returns empty webSourcedFields when web returns only non-allowed fields", async () => {

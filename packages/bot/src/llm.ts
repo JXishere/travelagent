@@ -299,6 +299,7 @@ export async function classifyIntent(
     | "profile"
     | "feedback"
     | "spot_info"
+    | "spot_correction"
     | "general";
   details: Record<string, string>;
 }> {
@@ -307,6 +308,7 @@ export async function classifyIntent(
 
 Classify the user's message into exactly one intent:
 
+- "spot_correction": They are reporting that a specific spot has incorrect or outdated information — it closed, moved, changed, is wrong, or no longer exists. Triggers: "that place closed", "it's closed now", "they moved", "wrong address", "that's outdated", "doesn't exist anymore", "shut down", "not there anymore", "[place] closed down". Extract the place name into spot_name and the correction detail into correction. Do NOT confuse with negative feedback about a visit ("it was bad") — that's "feedback".
 - "spot_info": They are asking about a specific, named place — hours, address, payment, what to order, or want more detail about a place. Triggers: "is [place] open", "address for [place]", "cash only at [place]", "tell me more about [place]", "what's [place] like", "does [place] take card". Extract the place name into spot_name. PRIORITY: Use this when a specific venue name is present in the question.
 - "hungry": They want food, drink, or dining recommendations. Triggers include:
   - Direct: hungry, eat, eating, food, restaurant, cafe, bar, breakfast, lunch, dinner, supper, brunch
@@ -320,6 +322,12 @@ Classify the user's message into exactly one intent:
 - "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message.
 - "feedback": They're giving feedback about a SPECIFIC SPOT they visited ("it was great", "didn't like it", rating). ONLY use this when they reference a specific place they went to. General frustration with Sam ("this is useless", "you don't know KL", "this doesn't work") is "general", NOT feedback.
 - "general": General conversation, greetings, questions about Sam, off-topic
+
+Examples of "spot_correction":
+- "hey that place you recommended closed down" → spot_correction
+- "Fatty Crab moved from Taman Megah" → spot_correction, spot_name: "Fatty Crab"
+- "Village Park shut down" → spot_correction, spot_name: "Village Park"
+- "that address for Dewakan is wrong" → spot_correction, spot_name: "Dewakan"
 
 PRIORITY RULES:
 1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
@@ -351,12 +359,14 @@ Examples:
 - "what else you got?" (after cafe recs) → hungry, meal_type: "cafe"
 
 Extract relevant details with these exact field names:
-- area: neighbourhood or district they want (e.g. "Bangsar", "SS2", "KLCC")
+- area: neighbourhood(s) or district(s) they want — if multiple, comma-separated (e.g. "Bangsar", "SS2", "SS2, SS23, Bangsar, Taman Megah")
 - meal_type: category of food/drink — only use known categories: breakfast, brunch, lunch, dinner, coffee, cafe, dessert, drinks, bar, supper
 - cuisine: specific dish or food type they want (e.g. "roti canai", "laksa", "sushi", "nasi lemak") — use this when it's NOT a meal category
 - time_of_day: morning, afternoon, evening, late-night
 - specific_place: a landmark or venue they're currently AT (not where they want to eat)
 - mood: chill, adventurous, tired, celebratory
+- spot_name: name of a specific venue (for spot_info and spot_correction)
+- correction: brief description of what's wrong (for spot_correction, e.g. "closed", "moved", "wrong address")
 
 Respond in JSON only:
 { "intent": "...", "details": { ... } }`;
@@ -376,12 +386,12 @@ Respond in JSON only:
     const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)```/);
     const jsonStr = jsonMatch ? jsonMatch[1].trim() : result.trim();
     const parsed = JSON.parse(jsonStr);
-    // Normalize details: the LLM sometimes returns arrays (e.g. area: ["PJ", "KL"])
-    // but downstream code expects string values. Join arrays with " or ".
+    // Normalize details: the LLM sometimes returns arrays (e.g. area: ["SS2", "Bangsar"])
+    // area arrays join with ", " to preserve multi-area format; other arrays join with " or ".
     if (parsed.details) {
       for (const [key, value] of Object.entries(parsed.details)) {
         if (Array.isArray(value)) {
-          parsed.details[key] = value.join(" or ");
+          parsed.details[key] = key === "area" ? value.join(", ") : value.join(" or ");
         }
       }
     }

@@ -26,9 +26,10 @@ export async function handleStrategic(phoneNumber: string): Promise<string> {
   }
   const prefs = traveler.preferences ?? {};
 
-  // Query spots matching their profile
+  // Query spots matching their profile, excluding spots the traveler disliked
   const allSpots = await querySpots({
     city,
+    excludeIds: traveler.spots_disliked ?? [],
     limit: 20,
   });
 

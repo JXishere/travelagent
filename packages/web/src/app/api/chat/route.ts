@@ -33,6 +33,7 @@ import {
   isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION,
 } from "@sam/bot/handlers/ontrip";
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
+import { handleSpotCorrection } from "@sam/bot/handlers/spot-correction";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
 
 export async function GET(req: NextRequest) {
@@ -144,7 +145,8 @@ export async function POST(req: NextRequest) {
       .map((m) => `${m.role}: ${m.content}`)
       .join("\n");
 
-    const { intent, details } = await classifyIntent(message, recentContext);
+    const { intent, details: rawDetails } = await classifyIntent(message, recentContext);
+    const details = rawDetails ?? {};
     console.log("[web-chat] intent:", intent, "details:", details);
 
     // Persist city resolved from area so follow-up queries without an explicit area stay in context.
@@ -189,6 +191,10 @@ export async function POST(req: NextRequest) {
 
       case "feedback":
         response = await startFeedbackCollection(sessionId);
+        break;
+
+      case "spot_correction":
+        response = await handleSpotCorrection(sessionId, message, details, { channel: "web" });
         break;
 
       default:

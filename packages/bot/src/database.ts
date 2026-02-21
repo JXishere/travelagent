@@ -98,6 +98,7 @@ export interface Spot {
   contributor_id?: string;
   use_count?: number;
   contribution_count?: number;
+  avg_rating?: number;
   source?: string;
   embedding?: number[];
   last_verified?: string;
@@ -113,6 +114,7 @@ export async function querySpots(filters: {
   categories?: string[];
   indoor_outdoor?: string;
   priceRange?: string[];
+  excludeIds?: string[];
   limit?: number;
 }): Promise<Spot[]> {
   const requestedLimit = filters.limit ?? 5;
@@ -143,6 +145,8 @@ export async function querySpots(filters: {
     query = query.in("indoor_outdoor", [filters.indoor_outdoor, "both"]);
   if (filters.priceRange && filters.priceRange.length > 0)
     query = query.in("price_range", filters.priceRange);
+  if (filters.excludeIds && filters.excludeIds.length > 0)
+    query = query.not("id", "in", `(${filters.excludeIds.join(",")})`);
 
   query = query.limit(poolSize);
 
@@ -157,10 +161,14 @@ export async function querySpots(filters: {
     isStale: !s.last_verified || s.last_verified < staleThreshold,
   }));
 
+  // Spots with avg_rating < 2.5 are demoted to rest tier (poor traveler experience signals)
+  const isPoorlyRated = (s: typeof withStaleness[0]) =>
+    s.avg_rating != null && s.avg_rating < 2.5;
+
   // Shuffle within each tier to rotate spots, preserving must_go → verified priority
-  const mustGo = withStaleness.filter(s => s.must_go).sort(() => Math.random() - 0.5);
-  const verified = withStaleness.filter(s => !s.must_go && s.verified).sort(() => Math.random() - 0.5);
-  const rest = withStaleness.filter(s => !s.must_go && !s.verified).sort(() => Math.random() - 0.5);
+  const mustGo = withStaleness.filter(s => s.must_go && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
+  const verified = withStaleness.filter(s => !s.must_go && s.verified && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
+  const rest = withStaleness.filter(s => (!s.must_go && !s.verified) || isPoorlyRated(s)).sort(() => Math.random() - 0.5);
   return [...mustGo, ...verified, ...rest].slice(0, requestedLimit);
 }
 
@@ -609,6 +617,24 @@ export async function insertFeedback(
   feedback: Omit<Feedback, "id">
 ): Promise<void> {
   await supabase.from("feedback").insert(feedback);
+
+  // After insert, recompute avg_rating from all verified visits for this spot
+  if (feedback.rating != null && feedback.did_they_go !== false) {
+    const { data: ratings } = await supabase
+      .from("feedback")
+      .select("rating")
+      .eq("spot_id", feedback.spot_id)
+      .eq("did_they_go", true)
+      .not("rating", "is", null);
+
+    if (ratings && ratings.length > 0) {
+      const avg = ratings.reduce((sum, r) => sum + (r.rating as number), 0) / ratings.length;
+      await supabase
+        .from("spots")
+        .update({ avg_rating: Math.round(avg * 100) / 100 })
+        .eq("id", feedback.spot_id);
+    }
+  }
 
   // Append user tips to spot
   if (feedback.user_tips?.length) {

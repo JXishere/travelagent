@@ -148,12 +148,15 @@ export async function buildHungryPrompt(
   let spots: Spot[];
   let areaWidened = false;
 
+  const dislikedIds = traveler.spots_disliked ?? [];
+
   if (isDishQuery) {
     // Dish query ("roti", "laksa") — semantic search first, no category filter
     // Use the specific dish/cuisine from details as the search query, not the raw message
     // (raw message might be "other choices?" which has no semantic signal for the dish)
     const searchQuery = details.cuisine ?? message;
-    spots = await trySemanticSearch(searchQuery, resolvedCity ?? cityDefaults.name);
+    spots = (await trySemanticSearch(searchQuery, resolvedCity ?? cityDefaults.name))
+      .filter(s => !dislikedIds.includes(s.id));
     if (spots.length === 0) {
       // Fallback: broad food categories
       spots = await querySpots({
@@ -162,6 +165,7 @@ export async function buildHungryPrompt(
         area: areaFilter,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        excludeIds: dislikedIds,
         limit: 5,
       });
       // If still empty and area was filtered, retry without area constraint
@@ -172,6 +176,7 @@ export async function buildHungryPrompt(
           cities: queryCities,
           categories: DEFAULT_CATEGORIES,
           indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+          excludeIds: dislikedIds,
           limit: 5,
         });
       }
@@ -184,6 +189,7 @@ export async function buildHungryPrompt(
       area: areaFilter,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      excludeIds: dislikedIds,
       limit: 5,
     });
     // If empty and area was filtered, retry without area constraint
@@ -194,6 +200,7 @@ export async function buildHungryPrompt(
         cities: queryCities,
         categories,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        excludeIds: dislikedIds,
         limit: 5,
       });
     }
@@ -228,7 +235,7 @@ export async function buildHungryPrompt(
       systemPrompt: buildSystemPrompt(cityDefaults.name, channel) + langInstruction(message),
       userPrompt: `The user says: "${message}"
 
-You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you ARE their local friend. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
+You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
       spotIds: [],
       maxTokens: 512,
     };
@@ -360,11 +367,13 @@ export async function buildDayPlanPrompt(
   const city = queryCities ? undefined : defaultCity;
   const cities = queryCities;
 
+  const dislikedIds = traveler.spots_disliked ?? [];
+
   // Get a mix of spots for the day
-  const breakfastSpots = await querySpots({ city, cities, categories: ["breakfast", "cafe"], limit: 3 });
-  const lunchSpots = await querySpots({ city, cities, categories: ["lunch"], limit: 3 });
-  const activitySpots = await querySpots({ city, cities, categories: ["activity", "market"], limit: 3 });
-  const dinnerSpots = await querySpots({ city, cities, categories: ["dinner"], limit: 3 });
+  const breakfastSpots = await querySpots({ city, cities, categories: ["breakfast", "cafe"], excludeIds: dislikedIds, limit: 3 });
+  const lunchSpots = await querySpots({ city, cities, categories: ["lunch"], excludeIds: dislikedIds, limit: 3 });
+  const activitySpots = await querySpots({ city, cities, categories: ["activity", "market"], excludeIds: dislikedIds, limit: 3 });
+  const dinnerSpots = await querySpots({ city, cities, categories: ["dinner"], excludeIds: dislikedIds, limit: 3 });
 
   const allDaySpots = [...breakfastSpots, ...lunchSpots, ...activitySpots, ...dinnerSpots];
   const spotsContext = formatSpotsForLLM(allDaySpots);
@@ -438,6 +447,7 @@ export async function buildNearbyPrompt(
   }
 
   const area = details.area ?? details.specific_place;
+  const dislikedIds = traveler.spots_disliked ?? [];
 
   // Check if the user provided coordinates (e.g. "3.139,101.687")
   const coords = parseCoordinates(details.specific_place ?? message);
@@ -449,6 +459,7 @@ export async function buildNearbyPrompt(
     const allSpots = await querySpots({
       city,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      excludeIds: dislikedIds,
       limit: 50,
     });
     const nearby = filterByDistance(allSpots, coords.lat, coords.lng, 3);
@@ -467,6 +478,7 @@ export async function buildNearbyPrompt(
       city,
       area,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      excludeIds: dislikedIds,
       limit: 5,
     });
   }

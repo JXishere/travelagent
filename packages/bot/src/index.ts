@@ -12,6 +12,8 @@ import {
   findDuplicateSpot,
   touchLastUserMessage,
   trackEvent,
+  getOrCreateTraveler,
+  getSpotsByIds,
 } from "./database.js";
 import { getDefaultCity } from "./utils/city-defaults.js";
 import { handleContribution } from "./handlers/contribution.js";
@@ -275,21 +277,30 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       break;
 
     case "spot_correction":
-      response = await handleSpotCorrection(from, text, details, { channel: "whatsapp" });
+      response = await handleSpotCorrection(from, text, details, { channel: "whatsapp", conversation });
       break;
 
     case "weather": {
-      // Weather-aware response — prepend weather summary to query response
+      // Weather-aware response — route through handleHungry with weather context injected
       const { getCurrentWeather } = await import("./weather.js");
       const weather = await getCurrentWeather();
       const weatherSummary = weather
         ? `Current weather in ${getDefaultCity()}: ${weather.summary}${weather.is_raining ? " (raining)" : ""}`
         : "";
-      const weatherContext = weatherSummary ? `Weather info: ${weatherSummary}` : undefined;
-      response = await handleQuery(from, text, {
-        ...details,
-        ...(weather?.is_raining ? { mood: "indoor" } : {}),
-      }, weatherContext);
+      const recentCtxForWeather = conversation.messages
+        .slice(-6)
+        .map((m) => `${m.role}: ${m.content}`)
+        .join("\n");
+      response = await handleHungry(
+        from,
+        weatherSummary ? `${text}\n\n[Context: ${weatherSummary}]` : text,
+        {
+          ...details,
+          ...(weather?.is_raining ? { mood: "indoor" } : {}),
+        },
+        recentCtxForWeather,
+        { channel: "whatsapp" }
+      );
       break;
     }
 
@@ -301,17 +312,37 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     }
 
     case "general":
-    default:
+    default: {
       // General conversation — Sam's personality via Claude
+      // Only load recommendation history when the user is asking about past recommendations
+      let systemContext: string | undefined;
+      // Detect activity/sightseeing queries — give Sam's honest "food is my thing" framing
+      const askingAboutActivities = /\b(activity|activities|sightseeing|things to do|what to do|museums?|attractions?|temples?|tours?|besides (eating|food)|non-food)\b/i.test(text);
+      if (askingAboutActivities) {
+        systemContext = "The user is asking about activities or sightseeing. Be honest: your strength is food and dining. You have some activity spots in your knowledge graph but limited coverage. Acknowledge this warmly, mention you can help with food-focused day plans, and suggest they check Google Maps or TripAdvisor for full activities coverage. Don't pretend you have comprehensive activities data.";
+      }
+      const askingAboutHistory = /recommend|suggest|told me|what did you|remember|your picks|list/i.test(text);
+      if (askingAboutHistory) {
+        const traveler = await getOrCreateTraveler(from);
+        if (traveler.spots_recommended?.length) {
+          const recentIds = traveler.spots_recommended.slice(-15);
+          const spots = await getSpotsByIds(recentIds);
+          if (spots.length) {
+            const names = spots.map(s => `${s.name}${s.area ? ` (${s.area})` : ""}`).join(", ");
+            systemContext = `Spots you have previously recommended to this user: ${names}. If they ask what you've recommended, list these naturally.`;
+          }
+        }
+      }
       response = await chatAsSam(
         conversation.messages.slice(-10).map((m) => ({
           role: m.role as "user" | "assistant",
           content: m.content,
         })),
         text,
-        { channel: "whatsapp" }
+        { channel: "whatsapp", systemContext }
       );
       break;
+    }
   }
 
   // Save conversation history
@@ -373,6 +404,9 @@ async function routeToCurrentFlow(
 
     case "feedback":
       return handleFeedback(phoneNumber, text, conversation);
+
+    case "spot_correction":
+      return handleSpotCorrection(phoneNumber, text, {}, { channel: "whatsapp", conversation });
 
     case "generate":
       return handleGenerate(phoneNumber, text, conversation);

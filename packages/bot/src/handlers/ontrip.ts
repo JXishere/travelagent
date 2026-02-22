@@ -8,6 +8,7 @@ import {
   getOrCreateTraveler,
   incrementRecommendationCount,
   markSpotsRecommended,
+  trackEvent,
   getAreaCentroid,
   getDistinctAreas,
   type Spot,
@@ -236,6 +237,16 @@ export async function buildHungryPrompt(
     incrementRecommendationCount(spot.id);
   }
   await markSpotsRecommended(phoneNumber, toRecommend.map(s => s.id));
+  if (toRecommend.length > 0) {
+    trackEvent(phoneNumber, options?.channel ?? "whatsapp", "recommendation", {
+      spot_ids: toRecommend.map(s => s.id),
+      spot_names: toRecommend.map(s => s.name),
+      intent: "hungry",
+      area: details.area,
+      meal_type: details.meal_type,
+      cuisine: details.cuisine,
+    });
+  }
 
   // No spots in DB — be honest
   if (toRecommend.length === 0) {
@@ -441,6 +452,14 @@ export async function buildDayPlanPrompt(
 
   // Mark all recommended spots
   await markSpotsRecommended(phoneNumber, allDaySpots.map(s => s.id));
+  if (allDaySpots.length > 0) {
+    trackEvent(phoneNumber, options?.channel ?? "whatsapp", "recommendation", {
+      spot_ids: allDaySpots.map(s => s.id),
+      spot_names: allDaySpots.map(s => s.name),
+      intent: "day_plan",
+      area: details.area,
+    });
+  }
 
   const prefContext = buildPrefContext(traveler);
 
@@ -578,6 +597,14 @@ export async function buildNearbyPrompt(
     incrementRecommendationCount(spot.id);
   }
   await markSpotsRecommended(phoneNumber, spots.map(s => s.id));
+  if (spots.length > 0) {
+    trackEvent(phoneNumber, options?.channel ?? "whatsapp", "recommendation", {
+      spot_ids: spots.map(s => s.id),
+      spot_names: spots.map(s => s.name),
+      intent: "nearby",
+      area: area ?? (coords ? `${coords.lat},${coords.lng}` : undefined),
+    });
+  }
 
   const prefContext = buildPrefContext(traveler);
 

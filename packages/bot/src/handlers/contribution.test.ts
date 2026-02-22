@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock modules that have side effects at import time
+// Mock all database functions. When adding a new function to database.ts that
+// contribution.ts imports, add it here too — otherwise tests fail at runtime.
+// Note: auto-mock (vi.mock without factory) doesn't work here because database.ts
+// initialises the Supabase client at module level, which throws without env vars.
 vi.mock("../database.js", () => ({
   updateConversation: vi.fn().mockResolvedValue(undefined),
   insertSpot: vi.fn().mockResolvedValue({ id: "spot-1", name: "Test Spot" }),
@@ -488,6 +491,8 @@ import {
   incrementContributorCount,
   updateSpot,
   trackEvent,
+  getContributorApprovedCount,
+  getContributorSpotCountLast24h,
 } from "../database.js";
 import { extractJSON } from "../llm.js";
 
@@ -533,6 +538,9 @@ beforeEach(() => {
   mockedClassify.mockResolvedValue("confirm");
   mockedFindDuplicate.mockResolvedValue(null);
   mockedGetContributor.mockResolvedValue({ id: "c1", contribution_count: 1 } as any);
+  mockedInsertSpot.mockResolvedValue({ id: "spot-1", name: "Test Spot" } as any);
+  vi.mocked(getContributorApprovedCount).mockResolvedValue(10);
+  vi.mocked(getContributorSpotCountLast24h).mockResolvedValue(0);
 });
 
 describe("handleContribution — first message (no stage)", () => {

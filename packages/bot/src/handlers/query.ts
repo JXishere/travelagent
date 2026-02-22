@@ -382,11 +382,11 @@ export function formatSpotsForLLM(spots: Spot[], distanceFromArea?: Map<string, 
         ? `must-go (${sourceLabel(s.input_method)})`
         : s.verified
           ? `verified (${sourceLabel(s.input_method)})`
-          : `unverified — treat as a lead, not a guarantee`;
+          : `unverified, treat as a lead, not a guarantee`;
       lines.push(`   Sam's take: ${takeLabel}`);
       if (s.avg_rating != null)
         lines.push(`   Traveler rating: ${s.avg_rating.toFixed(1)}/5`);
-      if (s.isStale) lines.push(`   Freshness: last verified 6+ months ago — details may have changed`);
+      if (s.isStale) lines.push(`   Freshness: last verified 6+ months ago, details may have changed`);
       return lines.join("\n");
     })
     .join("\n\n");

@@ -126,7 +126,7 @@ describe("formatSpotsForLLM", () => {
 
   it("shows unverified for spots with no must_go/verified", () => {
     const result = formatSpotsForLLM([baseSpot]);
-    expect(result).toContain("Sam's take: unverified — treat as a lead, not a guarantee");
+    expect(result).toContain("Sam's take: unverified, treat as a lead, not a guarantee");
   });
 });
 

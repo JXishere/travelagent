@@ -312,9 +312,9 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
   const prefContext = buildPrefContext(traveler);
   const alreadyAskedLocalOrVisiting = !!conversationHistory?.includes("local or just visiting");
   const newUserNote = alreadyAskedLocalOrVisiting
-    ? `\nDo NOT ask "local or just visiting?" — you have already asked this.`
+    ? `\nDo NOT ask "local or just visiting?" You have already asked this.`
     : !alreadyAskedLocalOrVisiting && isNewUser(traveler)
-      ? `\nThis user is new — Sam doesn't know them yet. After giving the recommendation, add one casual line: "Quick one — local or just visiting? Helps me tune what I show you." Only add this if you haven't already asked.`
+      ? `\nThis user is new. After giving the recommendation, add one casual line: "Quick one, local or just visiting? Helps me tune what I show you." Only add this if you haven't already asked.`
       : "";
 
   // Detect area mismatch — user asked for a specific area but results are from elsewhere.
@@ -374,13 +374,14 @@ RESPONSE FORMAT — follow exactly:
 - Max ${listCount} spots
 - Lead with your #1 pick
 
-Example of correct format:
+Example of correct format (no em dashes, ever):
 Dewakan (KLCC)
-Tasting menu only — book 2 weeks ahead.
+Tasting menu only, book 2 weeks ahead.
 
 Bar.Kar (KLCC)
 Open-flame dishes, reserve in advance.
 
+FORMATTING REMINDER: No em dashes (—). Use commas or periods instead. Never: "great coffee — order the latte". Always: "great coffee, order the latte".
 Respect dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}${langUserNote(message)}`,
     spotIds: toRecommend.map(s => s.id),
     maxTokens: Math.max(512, listCount * 80),

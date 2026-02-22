@@ -3,10 +3,21 @@
 import { createClient } from "@supabase/supabase-js";
 import { getDefaultCity, getCityDefaults } from "./utils/city-defaults.js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_KEY!
-);
+// Lazy-init: defer createClient until first use so importing this module in test
+// environments (where SUPABASE_URL / SUPABASE_KEY are unset) doesn't throw.
+// All existing `supabase.from(...)` calls work unchanged — the Proxy is transparent.
+let _supabase: ReturnType<typeof createClient> | null = null;
+const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_: ReturnType<typeof createClient>, prop: string | symbol) {
+    if (!_supabase) {
+      _supabase = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_KEY!
+      );
+    }
+    return (_supabase as any)[prop];
+  },
+});
 
 const MAX_CONVERSATION_MESSAGES = 40;
 

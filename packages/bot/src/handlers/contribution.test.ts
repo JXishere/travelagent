@@ -1,23 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock all database functions. When adding a new function to database.ts that
-// contribution.ts imports, add it here too — otherwise tests fail at runtime.
-// Note: auto-mock (vi.mock without factory) doesn't work here because database.ts
-// initialises the Supabase client at module level, which throws without env vars.
-vi.mock("../database.js", () => ({
-  updateConversation: vi.fn().mockResolvedValue(undefined),
-  insertSpot: vi.fn().mockResolvedValue({ id: "spot-1", name: "Test Spot" }),
-  updateSpot: vi.fn().mockResolvedValue(undefined),
-  findDuplicateSpot: vi.fn().mockResolvedValue(null),
-  getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", contribution_count: 1 }),
-  incrementContributorCount: vi.fn().mockResolvedValue(undefined),
-  incrementSpotContributionCount: vi.fn().mockResolvedValue(undefined),
-  insertSpotContribution: vi.fn().mockResolvedValue(undefined),
-  getSpotById: vi.fn().mockResolvedValue(null),
-  getContributorApprovedCount: vi.fn().mockResolvedValue(10),
-  getContributorSpotCountLast24h: vi.fn().mockResolvedValue(0),
-  trackEvent: vi.fn(),
-}));
+// Auto-mock: every export from database.ts becomes vi.fn() automatically.
+// New functions added to database.ts require no changes here — they're mocked for free.
+// This works because database.ts now lazy-inits the Supabase client (no eager createClient
+// at module load), so vitest can import the module to inspect exports without throwing.
+vi.mock("../database.js");
 vi.mock("../transcription.js", () => ({}));
 vi.mock("../whatsapp.js", () => ({}));
 vi.mock("../llm.js", () => ({
@@ -489,6 +476,8 @@ import {
   findDuplicateSpot,
   getOrCreateContributor,
   incrementContributorCount,
+  incrementSpotContributionCount,
+  insertSpotContribution,
   updateSpot,
   trackEvent,
   getContributorApprovedCount,
@@ -530,17 +519,22 @@ const readySpot = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // LLM mocks
   mockedSamSays.mockImplementation((instruction: string) =>
     Promise.resolve(`[sam: ${instruction.slice(0, 60)}]`)
   );
   mockedExtract.mockResolvedValue({});
   mockedWebSearch.mockResolvedValue({});
   mockedClassify.mockResolvedValue("confirm");
+  // DB mocks — only functions that need a specific return value (void functions return undefined by default)
   mockedFindDuplicate.mockResolvedValue(null);
   mockedGetContributor.mockResolvedValue({ id: "c1", contribution_count: 1 } as any);
   mockedInsertSpot.mockResolvedValue({ id: "spot-1", name: "Test Spot" } as any);
   vi.mocked(getContributorApprovedCount).mockResolvedValue(10);
   vi.mocked(getContributorSpotCountLast24h).mockResolvedValue(0);
+  // Fire-and-forget functions that use .catch() — must return a Promise, not undefined
+  vi.mocked(insertSpotContribution).mockResolvedValue(undefined as any);
+  vi.mocked(incrementSpotContributionCount).mockResolvedValue(undefined as any);
 });
 
 describe("handleContribution — first message (no stage)", () => {

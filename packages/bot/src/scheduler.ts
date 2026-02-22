@@ -8,6 +8,12 @@ import {
   touchLastProactive,
   markFeedbackAsked,
   getSpotsNeedingFeedback,
+  getDailyDigestData,
+  hasDailyDigestRunToday,
+  hasStalenessCheckRunToday,
+  getStaleSpotsForVerification,
+  trackEvent,
+  updateConversation,
   type Traveler,
 } from "./database.js";
 import { getCurrentWeather } from "./weather.js";
@@ -91,6 +97,105 @@ async function tick(): Promise<void> {
     }
   } catch (err) {
     console.error("[scheduler] Tick error:", err);
+  }
+
+  // Run maintenance jobs — fire-and-forget so proactive messaging isn't affected
+  maybeRunDailyDigest().catch(err => console.error("[scheduler] Daily digest error:", err));
+  maybeRunStalenessCheck().catch(err => console.error("[scheduler] Staleness check error:", err));
+}
+
+// ============================================
+// P1.A — DAILY DIGEST
+// ============================================
+
+/** Send the admin a daily metrics digest at 9:00–9:05am KL time */
+async function maybeRunDailyDigest(): Promise<void> {
+  const ADMIN_PHONE = process.env.ADMIN_PHONE_NUMBER;
+  if (!ADMIN_PHONE) return;
+
+  const now = new Date();
+  const klHour = getKLHour(now);
+  const klMinute = getKLMinute(now);
+
+  // Window: 9:00–9:05am KL
+  if (klHour !== 9 || klMinute > 5) return;
+  if (await hasDailyDigestRunToday()) return;
+
+  const data = await getDailyDigestData();
+
+  const dateStr = formatKLDate(now);
+  const dayName = new Date(now.getTime() + KL_OFFSET_HOURS * 60 * 60 * 1000)
+    .toLocaleDateString("en-US", { weekday: "short" });
+
+  const totalMessages = data.waMessages + data.webMessages;
+  const totalTokens = data.totalInputTokens + data.totalOutputTokens;
+  const tokenStr = totalTokens > 1000 ? `${Math.round(totalTokens / 1000)}K` : `${totalTokens}`;
+  const costStr = `$${data.totalCost.toFixed(2)}`;
+
+  // Spots by city
+  const byCityMap: Record<string, number> = {};
+  for (const s of data.newSpots) {
+    const k = s.city ?? "unknown";
+    byCityMap[k] = (byCityMap[k] ?? 0) + 1;
+  }
+  const spotCityLine = Object.entries(byCityMap).map(([c, n]) => `  ${c}: ${n}`).join(" · ");
+  const uniqueCountries = [...new Set(data.newSpots.map(s => s.country).filter(Boolean))];
+
+  const lines = [
+    `📊 Sam Daily — ${dayName} ${dateStr}`,
+    ``,
+    `Messages: ${totalMessages} (${data.waMessages} WhatsApp · ${data.webMessages} web)`,
+    `Cost: ${costStr} (${tokenStr} tokens)`,
+    ``,
+    `New spots: ${data.newSpots.length}`,
+    data.newSpots.length > 0 ? spotCityLine : `  (none)`,
+    uniqueCountries.length > 0 ? `Countries: ${uniqueCountries.length} (${uniqueCountries.join(", ")})` : null,
+    ``,
+    `Top intent: ${data.topIntent} (${data.topIntentCount})`,
+    `Contributions: ${data.contributions} · Feedback: ${data.feedbacks}`,
+  ].filter(l => l !== null).join("\n");
+
+  await sendMessage(ADMIN_PHONE, lines);
+  trackEvent(ADMIN_PHONE, "whatsapp", "daily_digest", { date: dateStr });
+  console.log("[scheduler] Daily digest sent");
+}
+
+// ============================================
+// P2.B — STALE SPOT RE-VERIFICATION
+// ============================================
+
+/** Ping original contributors for spots not verified in 180+ days (10am–12pm KL) */
+async function maybeRunStalenessCheck(): Promise<void> {
+  const now = new Date();
+  const klHour = getKLHour(now);
+
+  // Window: 10am–12pm KL
+  if (klHour < 10 || klHour >= 12) return;
+  if (await hasStalenessCheckRunToday()) return;
+
+  const staleSpots = await getStaleSpotsForVerification(5);
+  if (staleSpots.length === 0) return;
+
+  // Record that we ran today before sending to prevent double-fire
+  const ADMIN_PHONE = process.env.ADMIN_PHONE_NUMBER ?? "system";
+  trackEvent(ADMIN_PHONE, "whatsapp", "staleness_check", {
+    date: formatKLDate(now),
+    count: staleSpots.length,
+  });
+
+  for (const spot of staleSpots) {
+    const areaNote = spot.area ? ` (${spot.area})` : "";
+    const message = `Hey! A quick check — you added *${spot.name}*${areaNote} a while back.\n\nStill accurate? Just reply "yes" or tell me if anything changed 🙏`;
+    try {
+      await sendMessage(spot.contributor_phone, message);
+      await updateConversation(spot.contributor_phone, {
+        current_flow: "spot_verification",
+        flow_state: { stage: "awaiting_response", spotId: spot.id, spotName: spot.name },
+      });
+      console.log(`[scheduler] Staleness ping → ${spot.contributor_phone} for "${spot.name}"`);
+    } catch (err) {
+      console.error(`[scheduler] Staleness ping failed for spot ${spot.id}:`, err);
+    }
   }
 }
 
@@ -263,6 +368,10 @@ async function sendProactiveMessage(
 function getKLHour(now: Date): number {
   const utcHour = now.getUTCHours();
   return (utcHour + KL_OFFSET_HOURS) % 24;
+}
+
+function getKLMinute(now: Date): number {
+  return new Date(now.getTime() + KL_OFFSET_HOURS * 60 * 60 * 1000).getUTCMinutes();
 }
 
 /** Convert a date string (YYYY-MM-DD) to a Date at midnight KL time */

@@ -101,6 +101,8 @@ export interface Spot {
   embedding?: number[];
   created_at?: string;
   is_closed?: boolean;
+  needs_review?: boolean;
+  last_verified?: string;
   isStale?: boolean; // computed at query time — not a DB column
 }
 
@@ -124,6 +126,7 @@ export async function querySpots(filters: {
     .from("spots")
     .select("*")
     .not("is_closed", "eq", true)
+    .not("needs_review", "eq", true)
     .order("must_go", { ascending: false })
     .order("verified", { ascending: false });
 
@@ -178,7 +181,25 @@ export async function querySpots(filters: {
   const sorted = [...mustGo, ...verified, ...rest];
   const thick  = sorted.filter(s => !isThinSpot(s));
   const thin   = sorted.filter(s =>  isThinSpot(s));
-  return (thick.length > 0 ? thick : thin).slice(0, requestedLimit);
+  const finalSpots = (thick.length > 0 ? thick : thin).slice(0, requestedLimit);
+
+  // P2.C: Discovery boost — 30% chance to inject a verified but under-exposed spot at position 2
+  if (finalSpots.length >= 2 && Math.random() < 0.3) {
+    const alreadyIncluded = new Set(finalSpots.map(s => s.id));
+    const discoveryCandidate = sorted.find(s =>
+      s.verified === true &&
+      s.must_go !== true &&
+      (s.recommendation_count == null || s.recommendation_count < 5) &&
+      (s.avg_rating == null || s.avg_rating >= 3.0) &&
+      !alreadyIncluded.has(s.id)
+    );
+    if (discoveryCandidate) {
+      finalSpots.splice(1, 0, discoveryCandidate);
+      if (finalSpots.length > requestedLimit) finalSpots.pop();
+    }
+  }
+
+  return finalSpots;
 }
 
 // In-process cache so repeated widening queries for the same area don't hit the DB twice
@@ -858,4 +879,159 @@ export async function getRecentlyRecommendedSpots(
     .in("id", traveler.spots_recommended.slice(-5));
 
   return (data ?? []) as Spot[];
+}
+
+// ============================================
+// DAILY DIGEST — P1.A
+// ============================================
+
+export interface DailyDigestData {
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  waMessages: number;
+  webMessages: number;
+  newSpots: Array<{ city: string; country?: string }>;
+  topIntent: string;
+  topIntentCount: number;
+  contributions: number;
+  feedbacks: number;
+}
+
+/** Compute KL calendar-day UTC boundaries. offsetDays=-1 = yesterday, 0 = today */
+function getKLDayBounds(offsetDays = -1): { start: string; end: string } {
+  const klOffsetMs = 8 * 60 * 60 * 1000;
+  const now = new Date();
+  const klNow = new Date(now.getTime() + klOffsetMs);
+  const klToday = new Date(klNow);
+  klToday.setUTCHours(0, 0, 0, 0);
+  const start = new Date(klToday.getTime() + offsetDays * 24 * 60 * 60 * 1000 - klOffsetMs);
+  const end   = new Date(klToday.getTime() - klOffsetMs);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/** Approximate cost from token counts (Haiku rates: $0.80/M in, $3.00/M out) */
+function estimateCost(inputTokens: number, outputTokens: number): number {
+  return inputTokens * 0.0000008 + outputTokens * 0.000003;
+}
+
+export async function getDailyDigestData(): Promise<DailyDigestData> {
+  const { start, end } = getKLDayBounds(-1);
+
+  const [costResult, msgResult, spotResult, flowResult] = await Promise.all([
+    supabase.from("events").select("event_data").eq("event_type", "llm_usage")
+      .gte("created_at", start).lt("created_at", end),
+    supabase.from("events").select("channel, event_data").eq("event_type", "message")
+      .gte("created_at", start).lt("created_at", end),
+    supabase.from("spots").select("city, country").gte("created_at", start).lt("created_at", end),
+    supabase.from("events").select("event_data").eq("event_type", "flow_complete")
+      .gte("created_at", start).lt("created_at", end),
+  ]);
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  for (const row of costResult.data ?? []) {
+    const d = row.event_data as any;
+    if (d?.input_tokens)  totalInputTokens  += d.input_tokens;
+    if (d?.output_tokens) totalOutputTokens += d.output_tokens;
+  }
+  const totalCost = estimateCost(totalInputTokens, totalOutputTokens);
+
+  let waMessages = 0;
+  let webMessages = 0;
+  const intentCounts: Record<string, number> = {};
+  for (const row of msgResult.data ?? []) {
+    if ((row as any).channel === "whatsapp") waMessages++;
+    else if ((row as any).channel === "web") webMessages++;
+    const intent = (row.event_data as any)?.intent;
+    if (intent) intentCounts[intent] = (intentCounts[intent] ?? 0) + 1;
+  }
+  const topEntry = Object.entries(intentCounts).sort(([, a], [, b]) => b - a)[0];
+  const topIntent = topEntry?.[0] ?? "—";
+  const topIntentCount = topEntry?.[1] ?? 0;
+
+  const newSpots = (spotResult.data ?? []) as Array<{ city: string; country?: string }>;
+
+  let contributions = 0;
+  let feedbacks = 0;
+  for (const row of flowResult.data ?? []) {
+    const flow = (row.event_data as any)?.flow;
+    if (flow === "contribution") contributions++;
+    else if (flow === "feedback") feedbacks++;
+  }
+
+  return { totalCost, totalInputTokens, totalOutputTokens, waMessages, webMessages, newSpots, topIntent, topIntentCount, contributions, feedbacks };
+}
+
+export async function hasDailyDigestRunToday(): Promise<boolean> {
+  const { start, end } = getKLDayBounds(0);
+  const { count } = await supabase.from("events").select("*", { count: "exact", head: true })
+    .eq("event_type", "daily_digest").gte("created_at", start).lt("created_at", end);
+  return (count ?? 0) > 0;
+}
+
+export async function hasStalenessCheckRunToday(): Promise<boolean> {
+  const { start, end } = getKLDayBounds(0);
+  const { count } = await supabase.from("events").select("*", { count: "exact", head: true })
+    .eq("event_type", "staleness_check").gte("created_at", start).lt("created_at", end);
+  return (count ?? 0) > 0;
+}
+
+// ============================================
+// CONTRIBUTOR REVIEW QUEUE — P2.A
+// ============================================
+
+/** Count of contributor's spots that are already published (needs_review is false/null) */
+export async function getContributorApprovedCount(contributorId: string): Promise<number> {
+  const { count } = await supabase.from("spots").select("*", { count: "exact", head: true })
+    .eq("contributor_id", contributorId).not("needs_review", "eq", true);
+  return count ?? 0;
+}
+
+/** Count of spots this contributor created in the last 24 hours */
+export async function getContributorSpotCountLast24h(contributorId: string): Promise<number> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase.from("spots").select("*", { count: "exact", head: true })
+    .eq("contributor_id", contributorId).gte("created_at", since);
+  return count ?? 0;
+}
+
+// ============================================
+// STALE SPOT RE-VERIFICATION — P2.B
+// ============================================
+
+/** Spots not verified in 180+ days, joined with their contributor's WhatsApp number */
+export async function getStaleSpotsForVerification(
+  limit = 5
+): Promise<Array<Spot & { contributor_phone: string }>> {
+  const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: spots } = await supabase
+    .from("spots")
+    .select("*")
+    .not("is_closed", "eq", true)
+    .not("needs_review", "eq", true)
+    .not("contributor_id", "is", null)
+    .or(`last_verified.lt.${staleThreshold},and(last_verified.is.null,created_at.lt.${staleThreshold})`)
+    .order("last_verified", { ascending: true, nullsFirst: true })
+    .limit(limit);
+
+  if (!spots?.length) return [];
+
+  const contributorIds = [...new Set((spots as any[]).map((s: any) => s.contributor_id as string).filter(Boolean))];
+  const { data: contributors } = await supabase
+    .from("contributors").select("id, whatsapp_number").in("id", contributorIds);
+
+  const contribMap = new Map(
+    (contributors ?? []).map((c: any) => [c.id as string, c.whatsapp_number as string])
+  );
+
+  return (spots as any[])
+    .map((s: any) => ({ ...s, contributor_phone: contribMap.get(s.contributor_id) }))
+    .filter((s: any) => s.contributor_phone) as Array<Spot & { contributor_phone: string }>;
+}
+
+/** Refresh last_verified timestamp on a spot — resets the 180-day staleness clock */
+export async function markSpotVerified(spotId: string): Promise<void> {
+  await supabase.from("spots").update({ last_verified: new Date().toISOString() }).eq("id", spotId);
 }

@@ -68,6 +68,7 @@ export default function ReviewPage() {
   const stats = useMemo(() => {
     const byCat: Record<string, number> = {};
     const approved = spots.filter((s) => s.verified).length;
+    const needsReviewCount = spots.filter((s) => s.needs_review).length;
     const thinCount = spots.filter((s) => {
       const noOrder = !s.what_to_order || s.what_to_order.length === 0;
       const noTips  = !s.pro_tips || s.pro_tips.length === 0;
@@ -78,7 +79,7 @@ export default function ReviewPage() {
         byCat[cat] = (byCat[cat] ?? 0) + 1;
       }
     }
-    return { byCat, approved, thinCount, total: spots.length };
+    return { byCat, approved, needsReviewCount, thinCount, total: spots.length };
   }, [spots]);
 
   const handleApprove = useCallback(async (id: string) => {
@@ -111,6 +112,15 @@ export default function ReviewPage() {
     if (ok) {
       setSpots((prev) =>
         prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+      );
+    }
+  }, []);
+
+  const handlePublishSpot = useCallback(async (id: string) => {
+    const ok = await updateSpot(id, { needs_review: false });
+    if (ok) {
+      setSpots((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, needs_review: false } : s))
       );
     }
   }, []);
@@ -149,7 +159,7 @@ export default function ReviewPage() {
         spot review
       </h1>
       <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        {stats.total} total &middot; {stats.approved} approved &middot; {stats.thinCount} thin &middot;{" "}
+        {stats.total} total &middot; {stats.approved} approved &middot; {stats.needsReviewCount > 0 && <span style={{ color: "var(--red)" }}>{stats.needsReviewCount} needs review &middot; </span>}{stats.thinCount} thin &middot;{" "}
         {Object.entries(stats.byCat)
           .sort(([, a], [, b]) => b - a)
           .map(([cat, n]) => `${cat} ${n}`)
@@ -289,6 +299,7 @@ export default function ReviewPage() {
                 onMustGo={handleMustGo}
                 onDelete={handleDelete}
                 onSave={handleSave}
+                onPublish={handlePublishSpot}
               />
             ))}
           </div>

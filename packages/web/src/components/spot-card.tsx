@@ -9,6 +9,7 @@ interface SpotCardProps {
   onMustGo: (id: string, current: boolean) => void;
   onDelete: (id: string) => void;
   onSave: (id: string, updates: Partial<Spot>) => void;
+  onPublish?: (id: string) => void;
 }
 
 const CATEGORIES = [
@@ -22,7 +23,7 @@ const CATEGORIES = [
 ];
 const VIBES = ["casual", "upscale", "chaotic", "chill", "local", "touristy"];
 
-export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCardProps) {
+export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublish }: SpotCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -188,6 +189,11 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
         {spot.must_go && (
           <span style={{ color: "var(--green)", fontWeight: "bold", fontSize: "0.75rem" }}>
             must-go
+          </span>
+        )}
+        {spot.needs_review && (
+          <span style={{ color: "var(--red)", fontSize: "0.75rem", fontWeight: "bold" }}>
+            needs review
           </span>
         )}
         <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>
@@ -399,6 +405,11 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
                   paddingTop: "0.75rem",
                 }}
               >
+                {spot.needs_review && onPublish && (
+                  <button onClick={() => onPublish(spot.id)} style={btnGreen}>
+                    Publish
+                  </button>
+                )}
                 {!approved && (
                   <button onClick={() => onApprove(spot.id)} style={btnGreen}>
                     Verify

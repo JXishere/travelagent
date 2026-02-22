@@ -10,6 +10,8 @@ import {
   incrementContributorCount,
   incrementSpotContributionCount,
   insertSpotContribution,
+  getContributorApprovedCount,
+  getContributorSpotCountLast24h,
   updateConversation,
   trackEvent,
   type Conversation,
@@ -49,12 +51,14 @@ interface ExtractedSpot {
 }
 
 interface ContributionState {
-  stage: "collecting" | "confirming" | "asking_must_go";
+  stage: "collecting" | "confirming_web_match" | "confirming" | "asking_must_go";
   extracted: Partial<ExtractedSpot>;
   source: "voice" | "text";
   messagesReceived: number;
   webSourcedFields?: string[];
   areaConflict?: { contributor: string; web: string };
+  webMatchQuestion?: string;  // The disambiguation question shown to the contributor
+  webMatchDenied?: boolean;   // Whether they rejected the last web match (skip re-enrichment for same name)
 }
 
 
@@ -107,6 +111,61 @@ export async function handleContribution(
     const recentContext = conversation.messages.slice(-2)
       .map(m => `${m.role}: ${m.content}`).join("\n");
     return await collectInfo(phoneNumber, input, currentState, recentContext || undefined);
+  }
+
+  // Confirming web match — contributor response to "Found X in Y area — right place?"
+  if (state.stage === "confirming_web_match") {
+    const input = await resolveInput(phoneNumber, message, audioId);
+    const webMatchQuestion = state.webMatchQuestion ?? `Is that the right *${(state.extracted as any)?.name}*?`;
+    const intent = await classifyConfirmation(input, webMatchQuestion);
+
+    if (intent === "confirm") {
+      // Confirmed — proceed to full confirming summary
+      const webFields = state.webSourcedFields ?? [];
+      await updateConversation(phoneNumber, {
+        flow_state: {
+          stage: "confirming",
+          extracted: state.extracted,
+          source: state.source,
+          messagesReceived: (state.messagesReceived ?? 0) + 1,
+          webSourcedFields: webFields,
+          areaConflict: state.areaConflict,
+        },
+      });
+      const summary = formatSummary(state.extracted ?? {}, webFields, state.areaConflict);
+      const parts: string[] = [];
+      if (webFields.length > 0) {
+        parts.push(`filled in some operational details (${webFields.join(", ").replace(/_/g, " ")}) from the web`);
+      }
+      if (state.areaConflict) {
+        parts.push(`noticed the area might be "${state.areaConflict.web}" — not "${state.areaConflict.contributor}" as they said`);
+      }
+      const intro = await samSays(`You looked up a spot online and ${parts.join(" and ")} for a contributor. Write a one-sentence intro flagging what needs double-checking.`);
+      return `${intro}\n\n${summary}`;
+    }
+
+    if (intent === "unrelated" || intent === "correct") {
+      // "No" / "wrong place" / correction — clear web data and ask for more detail
+      const cleanExtracted = { ...state.extracted };
+      for (const field of state.webSourcedFields ?? []) {
+        delete (cleanExtracted as any)[field];
+      }
+      await updateConversation(phoneNumber, {
+        flow_state: {
+          stage: "collecting",
+          extracted: cleanExtracted,
+          source: state.source,
+          messagesReceived: (state.messagesReceived ?? 0) + 1,
+          webSourcedFields: [],
+          areaConflict: undefined,
+          webMatchDenied: true,
+        },
+      });
+      return samSays(`A contributor said the web found the wrong place for "${(state.extracted as any)?.name ?? "their spot"}". Ask which branch or area they meant. One sentence.`);
+    }
+
+    // "question" — re-ask the same disambiguation question
+    return webMatchQuestion;
   }
 
   // Confirming stage — classify response with LLM instead of regex
@@ -323,6 +382,16 @@ export async function enrichFromWeb(
   return { enriched: merged, webSourcedFields, areaConflict };
 }
 
+/** Build a brief disambiguation question from the enriched spot data (P1.B) */
+function buildWebMatchQuestion(data: Partial<ExtractedSpot>): string {
+  const parts: string[] = [];
+  if (data.area) parts.push(`in ${data.area}`);
+  if (data.categories?.length) parts.push(`${data.categories[0]} spot`);
+  if (data.price_range) parts.push(data.price_range);
+  const detail = parts.length > 0 ? ` — ${parts.join(", ")}` : "";
+  return `Found it 👆 — *${data.name}*${detail}. Right place?`;
+}
+
 /** Process a message during the collecting stage */
 async function collectInfo(
   phoneNumber: string,
@@ -365,9 +434,12 @@ async function collectInfo(
   const messagesReceived = state.messagesReceived + 1;
 
   // When the spot name changed (or was first provided), enrich from web
-  const nameChanged = merged.name && merged.name !== previous.name;
+  const nameChanged = Boolean(merged.name && merged.name !== previous.name);
   let webSourcedFields = state.webSourcedFields ?? [];
   let areaConflict = state.areaConflict;
+  // webMatchDenied resets when the name changes (contributor is describing a different spot)
+  let webMatchDenied = nameChanged ? false : (state.webMatchDenied ?? false);
+
   if (nameChanged) {
     // Early duplicate check — exit before collecting more details if already in DB
     const earlyDuplicate = await findDuplicateSpot(merged.name!, merged.area);
@@ -390,6 +462,25 @@ async function collectInfo(
 
   // Check if we have enough to show a summary
   if (isReady(merged)) {
+    // P1.B: If web returned useful data, ask disambiguation before showing the full summary
+    if ((webSourcedFields.length > 0 || areaConflict) && !webMatchDenied) {
+      const webMatchQuestion = buildWebMatchQuestion(merged);
+      await updateConversation(phoneNumber, {
+        flow_state: {
+          stage: "confirming_web_match",
+          extracted: merged,
+          source: state.source,
+          messagesReceived,
+          webSourcedFields,
+          areaConflict,
+          webMatchQuestion,
+          webMatchDenied: false,
+        },
+      });
+      return webMatchQuestion;
+    }
+
+    // No web data (or contributor already denied a match) — go straight to confirming
     await updateConversation(phoneNumber, {
       flow_state: {
         stage: "confirming",
@@ -400,20 +491,7 @@ async function collectInfo(
         areaConflict,
       },
     });
-    const summary = formatSummary(merged, webSourcedFields, areaConflict);
-    if (webSourcedFields.length > 0 || areaConflict) {
-      const parts: string[] = [];
-      if (webSourcedFields.length > 0) {
-        const fieldNames = webSourcedFields.join(", ").replace(/_/g, " ");
-        parts.push(`filled in some operational details (${fieldNames}) from the web`);
-      }
-      if (areaConflict) {
-        parts.push(`noticed the area might be "${areaConflict.web}" — not "${areaConflict.contributor}" as they said`);
-      }
-      const intro = await samSays(`You looked up a spot online and ${parts.join(" and ")} for a contributor. Write a one-sentence intro flagging what needs double-checking.`);
-      return `${intro}\n\n${summary}`;
-    }
-    return summary;
+    return formatSummary(merged, webSourcedFields, areaConflict);
   }
 
   // Not ready — save progress and ask a follow-up
@@ -425,6 +503,7 @@ async function collectInfo(
       messagesReceived,
       webSourcedFields,
       areaConflict,
+      webMatchDenied,
     },
   });
 
@@ -694,12 +773,22 @@ async function saveSpot(
     }
   }
 
+  // P2.A: Determine if this spot needs review before going live
+  // Rule 1: New contributor (< 5 approved spots) → hold for review
+  // Rule 2: Rate limit (> 5 spots in last 24h) → hold for review
+  const [approvedCount, last24hCount] = await Promise.all([
+    getContributorApprovedCount(contributor.id),
+    getContributorSpotCountLast24h(contributor.id),
+  ]);
+  const needsReview = approvedCount < 5 || last24hCount > 5;
+
   const newSpot = await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
     input_method: source,
     verified: true,
     must_go: isMustGo ?? false,
+    needs_review: needsReview,
   });
 
   // Record this contributor's specific notes for attribution
@@ -715,7 +804,6 @@ async function saveSpot(
   incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
   await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
-  const updated = await getOrCreateContributor(phoneNumber);
 
   await updateConversation(phoneNumber, {
     current_flow: "general",
@@ -726,7 +814,13 @@ async function saveSpot(
     flow: "contribution",
     spot_name: data.name,
     source,
+    needs_review: needsReview,
   });
 
+  if (needsReview) {
+    return samSays(`Your job is to warmly tell a contributor that their spot "${data.name}" in ${data.area} has been received and will go live after a quick review. One sentence, Sam's voice.`);
+  }
+
+  const updated = await getOrCreateContributor(phoneNumber);
   return samSays(`Respond to confirm you just saved "${data.name}" to your knowledge graph. The contributor has now added ${updated.contribution_count} spot(s) total. Confirm it's saved, thank them warmly, mention the spot name. One sentence.`);
 }

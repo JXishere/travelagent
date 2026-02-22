@@ -11,6 +11,8 @@ vi.mock("../database.js", () => ({
   incrementSpotContributionCount: vi.fn().mockResolvedValue(undefined),
   insertSpotContribution: vi.fn().mockResolvedValue(undefined),
   getSpotById: vi.fn().mockResolvedValue(null),
+  getContributorApprovedCount: vi.fn().mockResolvedValue(10),
+  getContributorSpotCountLast24h: vi.fn().mockResolvedValue(0),
   trackEvent: vi.fn(),
 }));
 vi.mock("../transcription.js", () => ({}));
@@ -649,24 +651,30 @@ describe("handleContribution — collecting stage", () => {
     expect(flowState.flow_state.extracted.area).toBe("Bangsar South");
   });
 
-  it("shows web-enriched intro via samSays when summary is ready after enrichment", async () => {
-    // Extraction returns data with area (from contributor) but missing category
-    mockedExtract.mockResolvedValue({ name: "Ka'ia", area: "Bangsar", what_to_order: ["flat white"] });
-    // Web search fills in the missing category — making it ready
-    // (area from web would be stripped by allowlist, but contributor already provided it)
-    mockedWebSearch.mockResolvedValue({ categories: ["cafe"], price_range: "$$" });
+  it("shows web-enriched intro via samSays when contributor confirms the web match", async () => {
+    // Start at confirming_web_match — this is where samSays("...filled in some...") fires
+    // (collecting → web match question is a separate step tested above)
+    mockedClassify.mockResolvedValue("confirm");
 
     const conv = makeConversation({
-      flow_state: { stage: "collecting", extracted: {}, source: "text", messagesReceived: 0 },
+      flow_state: {
+        stage: "confirming_web_match",
+        extracted: { name: "Ka'ia", area: "Bangsar", categories: ["cafe"], price_range: "$$", what_to_order: ["flat white"] },
+        source: "text",
+        messagesReceived: 1,
+        webSourcedFields: ["categories", "price_range"],
+        webMatchQuestion: "Found it 👆 — *Ka'ia* — in Bangsar, cafe spot, $$. Right place?",
+        webMatchDenied: false,
+      },
     });
 
-    const result = await handleContribution("+60123", "Ka'ia in Bangsar, order the flat white", undefined, conv);
+    const result = await handleContribution("+60123", "yes", undefined, conv);
 
-    // samSays generates the web-enriched intro
+    // samSays generates the web-enriched intro after confirmation
     expect(mockedSamSays).toHaveBeenCalledWith(
       expect.stringContaining("filled in some")
     );
-    // Summary data is still present
+    // Summary data is present
     expect(result).toContain("*Ka'ia*");
   });
 });

@@ -12,7 +12,6 @@ export interface Spot {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
-  payment_methods: string[] | null;
   price_range: string | null;
   what_to_order: string[] | null;
   what_to_skip: string[] | null;
@@ -21,7 +20,6 @@ export interface Spot {
   best_time_of_day: string | null;
   indoor_outdoor: string | null;
   weather_dependent: boolean | null;
-  opening_hours: Record<string, string> | null;
   source: string | null;
   use_count: number | null;
   contribution_count: number | null;
@@ -124,7 +122,6 @@ interface RecentSpot {
   vibe: string | null;
   best_time_of_day: string | null;
   price_range: string | null;
-  payment_methods: string[] | null;
   indoor_outdoor: string | null;
 }
 
@@ -170,12 +167,6 @@ function generateTeasers(spot: RecentSpot): string[] {
     );
   }
 
-  // Payment quirks
-  const payments = spot.payment_methods ?? [];
-  if (payments.length === 1 && payments[0]?.toLowerCase() === "cash") {
-    candidates.push(`Sam just got warned: cash only at a ${cat} spot in ${area}.`);
-  }
-
   // Price range
   if (spot.price_range) {
     const pr = spot.price_range.toLowerCase();
@@ -216,7 +207,7 @@ export async function getRecentSpotTeasers(limit = 200): Promise<string[]> {
   // Only pull spots with real intel — at least one of what_to_order or pro_tips
   const { data, error } = await supabase
     .from("spots")
-    .select("name, area, categories, what_to_order, what_to_skip, pro_tips, vibe, best_time_of_day, price_range, payment_methods, indoor_outdoor")
+    .select("name, area, categories, what_to_order, what_to_skip, pro_tips, vibe, best_time_of_day, price_range, indoor_outdoor")
     .not("area", "is", null)
     .or("what_to_order.not.is.null,pro_tips.not.is.null")
     .order("created_at", { ascending: false })

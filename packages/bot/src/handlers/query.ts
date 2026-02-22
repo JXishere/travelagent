@@ -8,6 +8,19 @@ import { getDefaultCity, getCityDefaults, isSupportedCity, getSupportedCities, r
 import { filterByDistance, haversineKm } from "../utils/geo.js";
 import { parseAreas } from "../utils/area-extractor.js";
 
+/** Extract the number of spots the user explicitly requested, clamped 1–10.
+ *  Returns 3 (default) when no explicit count is found. */
+export function extractListCount(message: string): number {
+  const lower = message.toLowerCase();
+  // "top 10", "give me 5", "show me 7", "recommend 4", "want 3", "list 8"
+  const prefixMatch = lower.match(/\b(?:top|give me|show me|list|recommend|want)\s+(\d+)\b/);
+  // "10 spots", "5 restaurants", "8 cafes", "10 reccs", "4 options"
+  const suffixMatch = lower.match(/\b(\d+)\s+(?:spots?|places?|restaurants?|cafes?|options?|rec(?:c?s?|ommendations?))\b/);
+  const raw = prefixMatch?.[1] ?? suffixMatch?.[1];
+  if (!raw) return 3;
+  return Math.min(Math.max(parseInt(raw, 10), 1), 10);
+}
+
 interface QueryDetails {
   area?: string;
   meal_type?: string;
@@ -26,6 +39,7 @@ export async function handleQuery(
   options?: { channel?: "whatsapp" | "web" }
 ): Promise<string> {
   const channel = options?.channel ?? "whatsapp";
+  const listCount = extractListCount(message);
   // Use cuisine as fallback for meal_type — the LLM sometimes puts "coffee" in cuisine instead of meal_type
   const effectiveMealType = details.meal_type || details.cuisine;
   const categories = resolveCategories(effectiveMealType, details.time_of_day);
@@ -102,7 +116,7 @@ export async function handleQuery(
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       exclude_weather_dependent: weather?.is_raining ?? false,
       priceRange,
-      limit: 5,
+      limit: Math.max(5, listCount),
     });
     // If empty and area was filtered, retry without area constraint then apply proximity filter
     if (spots.length === 0 && areaList) {
@@ -188,7 +202,7 @@ export async function handleQuery(
   }
 
   // Track usage and mark as visited
-  const topSpots = spots.slice(0, 3);
+  const topSpots = spots.slice(0, listCount);
 
   // Build distance labels for all spots that have coordinates, relative to the requested area centroid.
   // For nearby queries, showing "~0.3km from KLCC" confirms proximity even for same-area spots.
@@ -254,7 +268,7 @@ ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}
 ${prefContext}
 ${weatherContext}
 
-Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros. Lead with your strongest pick.
+Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max ${listCount} spots. No intros. Lead with your strongest pick.
 
 STRICT DATA RULES — these override everything else:
 - ONLY state details found in the labeled fields below (Order, Tips, Hours, Price, Payment, Distance, Address). Nothing else.
@@ -266,7 +280,7 @@ ${areaNote}${timingNote}${vibeNote}${budgetNote}
 ${spotContext}${perspectivesContext}${langUserNote(message)}`;
 
   return await chat(buildSystemPrompt(city, options?.channel) + langInstruction(message), [{ role: "user", content: prompt }], {
-    maxTokens: 256,
+    maxTokens: Math.max(256, listCount * 80),
   });
 }
 

@@ -17,7 +17,7 @@ import {
 import { getCurrentWeather, getDayForecast } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
-import { formatSpotsForLLM } from "./query.js";
+import { formatSpotsForLLM, extractListCount } from "./query.js";
 import { parseCoordinates, filterByDistance, haversineKm, type SpotWithDistance } from "../utils/geo.js";
 import { parseAreas } from "../utils/area-extractor.js";
 
@@ -108,6 +108,7 @@ export async function buildHungryPrompt(
   options?: { channel?: "whatsapp" | "web" }
 ): Promise<PromptPayload> {
   const channel = options?.channel;
+  const listCount = extractListCount(message);
   const traveler = await getOrCreateTraveler(phoneNumber);
   const weather = await getCurrentWeather(traveler.current_city);
 
@@ -176,7 +177,7 @@ export async function buildHungryPrompt(
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         exclude_weather_dependent: weather?.is_raining ?? false,
         excludeIds: dislikedIds,
-        limit: 5,
+        limit: Math.max(5, listCount),
       });
       // If still empty and area was filtered, retry without area constraint
       if (spots.length === 0 && areaList) {
@@ -188,7 +189,7 @@ export async function buildHungryPrompt(
           indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
           exclude_weather_dependent: weather?.is_raining ?? false,
           excludeIds: dislikedIds,
-          limit: 5,
+          limit: Math.max(5, listCount),
         });
       }
     }
@@ -202,7 +203,7 @@ export async function buildHungryPrompt(
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       exclude_weather_dependent: weather?.is_raining ?? false,
       excludeIds: dislikedIds,
-      limit: 5,
+      limit: Math.max(5, listCount),
     });
     // If empty and area was filtered, retry without area constraint
     if (spots.length === 0 && areaList) {
@@ -214,7 +215,7 @@ export async function buildHungryPrompt(
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         exclude_weather_dependent: weather?.is_raining ?? false,
         excludeIds: dislikedIds,
-        limit: 5,
+        limit: Math.max(5, listCount),
       });
     }
     if (spots.length === 0) {
@@ -237,13 +238,13 @@ export async function buildHungryPrompt(
     const unvisited = spots.filter(
       (s) => !traveler.spots_recommended?.includes(s.id)
     );
-    toRecommend = unvisited.length > 0 ? unvisited.slice(0, 3) : spots.slice(0, 3);
+    toRecommend = unvisited.length > 0 ? unvisited.slice(0, listCount) : spots.slice(0, listCount);
   } else {
     // For locals, filter out disliked spots instead
     const notDisliked = spots.filter(
       (s) => !traveler.spots_disliked?.includes(s.id)
     );
-    toRecommend = notDisliked.slice(0, 3);
+    toRecommend = notDisliked.slice(0, listCount);
   }
 
   for (const spot of toRecommend) {
@@ -370,7 +371,7 @@ RESPONSE FORMAT — follow exactly:
 - Line 1: Name (Area)
 - Line 2: what to order + one tip (only if data exists)
 - Blank line between spots
-- Max 3 spots
+- Max ${listCount} spots
 - Lead with your #1 pick
 
 Example of correct format:
@@ -382,7 +383,7 @@ Open-flame dishes, reserve in advance.
 
 Respect dietary restrictions. Don't end with a question unless the query is genuinely too vague to recommend anything.${noRepeatNote}${langUserNote(message)}`,
     spotIds: toRecommend.map(s => s.id),
-    maxTokens: 512,
+    maxTokens: Math.max(512, listCount * 80),
   };
 }
 

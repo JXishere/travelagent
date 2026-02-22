@@ -354,16 +354,44 @@ async function streamHandlerResponse(
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining, payload.spotIds);
     }
     case "weather": {
-      // Return actual weather data — not a food recommendation
+      // Hybrid check: if the user also asked about food (e.g. "is it raining? where should I eat?"),
+      // route to the food handler with weather context injected — same logic as WhatsApp index.ts
+      const hasFoodIntent = !!(details.meal_type || details.cuisine || details.area);
       const { getCurrentWeather } = await import("@sam/bot/weather");
       const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
       const { chat, buildSystemPrompt } = await import("@sam/bot/llm");
       const travelerForWeather = await getOrCreateTraveler(sessionId);
       const weatherCity = travelerForWeather.current_city ?? getDefaultCity();
       const weather = await getCurrentWeather(weatherCity);
+
+      if (hasFoodIntent) {
+        // Hybrid: inject weather context into food recommendation via buildHungryPrompt
+        const weatherSummary = weather
+          ? `Current weather in ${weatherCity}: ${weather.summary}`
+          : "";
+        const recentCtxForWeather = recentHistory;
+        const payload = await buildHungryPrompt(
+          sessionId,
+          weatherSummary ? `${message}\n\n[Context: ${weatherSummary}]` : message,
+          {
+            ...details,
+            ...(weather?.is_raining ? { mood: "indoor" } : {}),
+          },
+          recentCtxForWeather,
+          { channel: "web" }
+        );
+        const stream = chatStream(
+          payload.systemPrompt,
+          [{ role: "user", content: payload.userPrompt }],
+          { maxTokens: payload.maxTokens }
+        );
+        return streamSSE(stream, sessionId, message, "weather", rateLimitRemaining, payload.spotIds);
+      }
+
+      // Pure weather question — answer directly; no spot recommendations
       const weatherPrompt = weather
         ? `User asks: "${message}". Answer directly and casually about the weather in ${weatherCity} right now: ${weather.temp}°C, feels like ${weather.feels_like}°C, ${weather.description}, humidity ${weather.humidity}%.${weather.is_raining ? " It's raining — mention bringing an umbrella." : ""} One or two sentences.`
-        : `User asks: "${message}". You don't have live weather data right now — say so honestly in one sentence.`;
+        : `User asks: "${message}". You don't have live weather data right now — say so honestly in one sentence. Do not recommend any spots or restaurants.`;
       const weatherResponse = await chat(buildSystemPrompt(weatherCity, "web"), [{ role: "user", content: weatherPrompt }], { maxTokens: 150 });
       await appendMessages(sessionId, [
         { role: "user", content: message },

@@ -20,7 +20,7 @@ Shortcut: `$ARGUMENTS`
 | `week` | 7-day rolling: messages/day, sessions/day, top intents |
 | `funnel` | Contribution funnel: started → confirmed → saved (with drop-off %) |
 | `cities` | Spot use_count by city, total recommendations served per city |
-| `contributors` | Top 10 contributors by spots_contributed, with cities_contributed |
+| `contributors` | Top 10 contributors by contribution_count, with cities_contributed |
 
 ## Process
 
@@ -93,7 +93,7 @@ WHERE created_at >= NOW() - INTERVAL '30 days';
 SELECT
   city,
   COUNT(*) as total_spots,
-  COALESCE(SUM(use_count), 0) as total_recommendations
+  COALESCE(SUM(recommendation_count), 0) as total_recommendations
 FROM spots
 GROUP BY city
 ORDER BY total_recommendations DESC;
@@ -103,11 +103,11 @@ ORDER BY total_recommendations DESC;
 ```sql
 SELECT
   name,
-  spots_contributed,
+  contribution_count,
   array_length(cities_contributed, 1) as city_count,
   cities_contributed
 FROM contributors
-ORDER BY spots_contributed DESC
+ORDER BY contribution_count DESC
 LIMIT 10;
 ```
 

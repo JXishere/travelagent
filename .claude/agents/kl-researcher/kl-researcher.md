@@ -28,14 +28,9 @@ Always output structured data matching Sam's spots schema:
   "name": "Spot Name",
   "city": "Kuala Lumpur",  // or Penang, Petaling Jaya, etc.
   "area": "Bangsar",
-  "category": "lunch",
-  "tier": 2,
+  "categories": ["lunch"],
+  "must_go": false,
   "address": "Full address",
-  "payment_methods": ["cash", "card"],
-  "opening_hours": {
-    "mon": "8am-10pm",
-    "tue": "8am-10pm"
-  },
   "price_range": "$$",
   "what_to_order": ["Nasi lemak with extra sambal", "Ayam goreng berempah"],
   "what_to_skip": ["The fish — not always fresh"],
@@ -47,7 +42,7 @@ Always output structured data matching Sam's spots schema:
   "latitude": 3.1234,
   "longitude": 101.5678,
   "confidence_score": 0.7,
-  "source": "manual"
+  "input_method": "manual"
 }
 ```
 
@@ -64,11 +59,10 @@ Sam's value proposition is **operational intelligence** — not just "this place
 - Any tricks? (where to sit, how to order, what locals know)
 - What's the vibe? (will I feel comfortable here?)
 
-### Tier Assessment
+### Quality Assessment
 
-- **Tier 1 (must-do)**: Iconic, best-in-class, worth going out of your way for
-- **Tier 2 (should-do)**: Excellent, great for the area, solid recommendation
-- **Tier 3 (hidden gem)**: Known to locals, off the beaten path, worth mentioning to the right traveler
+- **must_go: true**: Iconic, best-in-class, worth going out of your way for
+- **must_go: false**: Excellent, great for the area, solid recommendation worth knowing about
 
 ### Duplicate Checking
 

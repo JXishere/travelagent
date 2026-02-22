@@ -52,7 +52,7 @@ You are an end-to-end tester for Sam's WhatsApp travel bot. You trace through th
 **6. Post-Trip Feedback**
 - Trigger: "Just got back from KL!"
 - Expected: Intent → feedback, start feedback flow, ask about visited spots
-- Check: References spots_visited from traveler profile
+- Check: References spots_recommended from traveler profile
 
 ### Edge Cases
 

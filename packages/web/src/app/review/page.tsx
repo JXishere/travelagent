@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { getAllSpots, updateSpot, deleteSpot, type Spot } from "../../lib/supabase";
+import { getAllSpots, updateSpot, deleteSpot, getPendingCorrections, approveCorrection, rejectCorrection, type Spot, type PendingCorrection } from "../../lib/supabase";
 import { SpotFilters } from "../../components/spot-filters";
 import { SpotCard } from "../../components/spot-card";
 
 export default function ReviewPage() {
   const [spots, setSpots] = useState<Spot[]>([]);
+  const [corrections, setCorrections] = useState<PendingCorrection[]>([]);
+  const [showCorrections, setShowCorrections] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     category: "",
@@ -19,8 +21,9 @@ export default function ReviewPage() {
   });
 
   useEffect(() => {
-    getAllSpots().then((data) => {
-      setSpots(data);
+    Promise.all([getAllSpots(), getPendingCorrections()]).then(([spotsData, correctionsData]) => {
+      setSpots(spotsData);
+      setCorrections(correctionsData);
       setLoading(false);
     });
   }, []);
@@ -110,6 +113,16 @@ export default function ReviewPage() {
         prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
       );
     }
+  }, []);
+
+  const handleApproveCorrection = useCallback(async (spotId: string) => {
+    const ok = await approveCorrection(spotId);
+    if (ok) setCorrections((prev) => prev.filter((c) => c.spot_id !== spotId));
+  }, []);
+
+  const handleRejectCorrection = useCallback(async (spotId: string) => {
+    const ok = await rejectCorrection(spotId);
+    if (ok) setCorrections((prev) => prev.filter((c) => c.spot_id !== spotId));
   }, []);
 
   if (loading) {

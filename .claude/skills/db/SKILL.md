@@ -17,7 +17,7 @@ The user provides a natural language query as the argument: `$ARGUMENTS`
 - **"spots"** or **"all"** → `SELECT name, area, categories, must_go, price_range FROM spots ORDER BY area`
 - **"stats"** → Run all of these and format as a summary:
   - `SELECT COUNT(*) FROM spots`
-  - `SELECT category, COUNT(*) FROM spots GROUP BY category ORDER BY count DESC`
+  - `SELECT unnest(categories) as category, COUNT(*) FROM spots GROUP BY category ORDER BY count DESC`
   - `SELECT area, COUNT(*) FROM spots GROUP BY area ORDER BY count DESC`
   - `SELECT must_go, COUNT(*) FROM spots GROUP BY must_go`
   - `SELECT COUNT(*) FROM travelers`
@@ -42,17 +42,17 @@ console.log(JSON.stringify(data, null, 2));
 
 ## Schema Reference
 
-**spots**: id, name, city, country, area, categories text[] (breakfast|lunch|dinner|cafe|activity|nightlife|market), must_go (bool), verified (bool), address, latitude, longitude, google_pin_accurate, payment_methods[], opening_hours, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, use_count, source (seed|voice|text|llm_verified|manual), last_verified
+**spots**: id, name, city, country, area, categories text[] (breakfast|lunch|dinner|cafe|activity|nightlife|market), must_go (bool), verified (bool), address, latitude, longitude, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe (casual|upscale|chaotic|chill|local|touristy), weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, recommendation_count, input_method (seed|voice|text|generate|manual), avg_rating, embedding, created_at
 
-**spot_contributions**: id, spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, created_at
+**spot_contributions**: id, spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, must_go, created_at
 
-**travelers**: id, whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
+**travelers**: id, whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_recommended[], spots_liked[], spots_disliked[]
 
-**contributors**: id, whatsapp_number, name, cities_contributed[], spots_contributed
+**contributors**: id, whatsapp_number, name, cities_contributed[], contribution_count
 
 **conversations**: id, whatsapp_number, current_flow, flow_state, messages
 
-**feedback**: id, spot_id, traveler_id, rating (1-5), did_they_go, comments, user_tips[]
+**feedback**: id, spot_id, traveler_id, rating (1-5), visited, comments, user_tips[]
 
 **events**: id, session_id, channel (web|whatsapp), event_type, event_data (jsonb), created_at
 

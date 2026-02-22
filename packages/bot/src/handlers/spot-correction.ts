@@ -2,6 +2,7 @@
 // Flow: extract delta → show confirmation summary → apply on confirm
 
 import { chat, classifyConfirmation, samSays, HAIKU } from "../llm.js";
+import { sendMessage } from "../whatsapp.js";
 import {
   findSpotByName,
   applySpotCorrection,
@@ -20,6 +21,7 @@ interface CorrectionFlowState {
   stage: "awaiting_confirmation";
   spot_id: string;
   spot_name: string;
+  spot_area?: string;
   delta: CorrectionDelta;
 }
 
@@ -78,6 +80,7 @@ export async function handleSpotCorrection(
       stage: "awaiting_confirmation",
       spot_id: spot.id,
       spot_name: spot.name,
+      spot_area: spot.area,
       delta,
     } satisfies CorrectionFlowState,
   });
@@ -100,7 +103,7 @@ async function handleConfirmation(
   state: CorrectionFlowState,
   channel: "whatsapp" | "web"
 ): Promise<string> {
-  const { spot_id, spot_name, delta } = state;
+  const { spot_id, spot_name, spot_area, delta } = state;
 
   const confirmation = await classifyConfirmation(
     message,
@@ -108,15 +111,42 @@ async function handleConfirmation(
   );
 
   if (confirmation === "confirm") {
-    await applySpotCorrection(spot_id, phoneNumber, delta);
+    const { hardClosed, reportCount } = await applySpotCorrection(spot_id, phoneNumber, delta);
     await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
     trackEvent(phoneNumber, channel, "spot_correction_applied", {
       spot_id,
       spot_name,
       correction_type: delta.correction_type,
+      hard_closed: hardClosed,
     });
+
+    // Notify admin on first report (soft demotion) so they can approve/reject
+    const ADMIN_PHONE = process.env.ADMIN_PHONE_NUMBER;
+    if (!hardClosed && ADMIN_PHONE && channel === "whatsapp") {
+      const reporterDisplay = phoneNumber.slice(-4);
+      const locationStr = spot_area ? ` (${spot_area})` : "";
+      const adminMsg = [
+        `[Correction flagged]`,
+        `Spot: ${spot_name}${locationStr}`,
+        `Type: ${delta.correction_type}`,
+        `Reporter: ...${reporterDisplay}`,
+        `Note: ${delta.correction_summary}`,
+        ``,
+        `Report ${reportCount} of 2 needed for auto-close.`,
+        `Reply /approve ${spot_name} to close now`,
+        `Reply /reject ${spot_name} to dismiss`,
+        `Reply /corrections for all pending`,
+      ].join("\n");
+      sendMessage(ADMIN_PHONE, adminMsg).catch(() => {});
+    }
+
+    if (hardClosed) {
+      return samSays(
+        `Respond: ${spot_name} has been marked as closed and removed from recommendations. Thank the user briefly. One sentence, casual.`
+      );
+    }
     return samSays(
-      `Respond warmly: thank the user for confirming the correction for ${spot_name}. Say you've updated it and won't recommend it until the details are verified. One sentence, casual.`
+      `Respond: ${spot_name} has been flagged for review and you'll hold off recommending it while you verify. Thank the user briefly. One sentence, casual.`
     );
   }
 

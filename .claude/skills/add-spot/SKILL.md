@@ -57,14 +57,12 @@ Format the researched data to match the spots schema:
 {
   name: "Full Spot Name",
   city: "Kuala Lumpur",  // or Penang, Petaling Jaya, etc.
-  area: "Bangsar",           // KL area
+  area: "Bangsar",
   categories: ["lunch"],             // breakfast|lunch|dinner|cafe|activity|nightlife|market
   must_go: false,                    // true = best-in-class, false = solid recommendation
   address: "Full address",
   latitude: 3.1234,                 // decimal coordinates
   longitude: 101.5678,
-  payment_methods: ["cash", "card"],
-  opening_hours: { "mon": "8am-10pm", ... },
   price_range: "$$",
   what_to_order: ["Item 1", "Item 2"],
   what_to_skip: ["Item to avoid"],
@@ -73,7 +71,7 @@ Format the researched data to match the spots schema:
   weather_dependent: false,
   best_time_of_day: "morning",
   indoor_outdoor: "indoor",
-  source: "manual"                  // seed|voice|text|llm_verified|manual
+  input_method: "manual"            // seed|voice|text|generate|manual
 }
 ```
 

@@ -111,6 +111,7 @@ export async function querySpots(filters: {
   areas?: string[];
   categories?: string[];
   indoor_outdoor?: string;
+  exclude_weather_dependent?: boolean;
   priceRange?: string[];
   excludeIds?: string[];
   limit?: number;
@@ -142,6 +143,8 @@ export async function querySpots(filters: {
     query = query.overlaps("categories", filters.categories);
   if (filters.indoor_outdoor)
     query = query.in("indoor_outdoor", [filters.indoor_outdoor, "both"]);
+  if (filters.exclude_weather_dependent)
+    query = query.or("weather_dependent.eq.false,weather_dependent.is.null");
   if (filters.priceRange && filters.priceRange.length > 0)
     query = query.in("price_range", filters.priceRange);
   if (filters.excludeIds && filters.excludeIds.length > 0)
@@ -390,10 +393,20 @@ export async function applySpotCorrection(
   spotId: string,
   reporterId: string,
   delta: CorrectionDelta
-): Promise<void> {
-  const updates: Partial<Spot> = { verified: false };
+): Promise<{ hardClosed: boolean; reportCount: number }> {
+  // Count existing corrections from different reporters — drives the threshold logic
+  const { count } = await supabase
+    .from("spot_corrections")
+    .select("*", { count: "exact", head: true })
+    .eq("spot_id", spotId)
+    .neq("reporter_id", reporterId);
 
-  if (delta.is_closed) updates.is_closed = true;
+  const existingCount = count ?? 0;
+  const hardClosed = existingCount >= 1;
+
+  // First report: soft demotion only (verified: false). Second unique reporter: hard close.
+  const updates: Partial<Spot> = { verified: false };
+  if (hardClosed) updates.is_closed = true;
   if (delta.area) updates.area = delta.area;
   if (delta.address) updates.address = delta.address;
 
@@ -406,6 +419,67 @@ export async function applySpotCorrection(
     correction_note: delta.correction_summary,
     delta,
   });
+
+  return { hardClosed, reportCount: existingCount + 1 };
+}
+
+export interface PendingCorrection {
+  id: string;
+  spot_id: string;
+  spot_name: string;
+  spot_area: string | null;
+  reporter_id: string;
+  correction_type: string;
+  correction_note: string | null;
+  created_at: string;
+}
+
+/** Return all correction reports for spots that are not yet hard-closed */
+export async function getPendingCorrections(): Promise<PendingCorrection[]> {
+  const { data: corrections } = await supabase
+    .from("spot_corrections")
+    .select("id, spot_id, reporter_id, correction_type, correction_note, created_at")
+    .order("created_at", { ascending: false });
+
+  if (!corrections?.length) return [];
+
+  const spotIds = [...new Set(corrections.map((c: any) => c.spot_id as string))];
+  const { data: spots } = await supabase
+    .from("spots")
+    .select("id, name, area, is_closed")
+    .in("id", spotIds)
+    .not("is_closed", "eq", true);
+
+  if (!spots) return [];
+
+  const spotMap = new Map(spots.map((s: any) => [s.id as string, s]));
+  return corrections
+    .filter((c: any) => spotMap.has(c.spot_id))
+    .map((c: any) => {
+      const spot = spotMap.get(c.spot_id)!;
+      return {
+        id: c.id,
+        spot_id: c.spot_id,
+        spot_name: spot.name,
+        spot_area: spot.area ?? null,
+        reporter_id: c.reporter_id,
+        correction_type: c.correction_type,
+        correction_note: c.correction_note ?? null,
+        created_at: c.created_at,
+      } as PendingCorrection;
+    });
+}
+
+/** Admin: force-close a spot and clear its pending corrections */
+export async function adminApproveCorrection(spotId: string): Promise<void> {
+  await supabase.from("spots").update({ is_closed: true, verified: false }).eq("id", spotId);
+  await supabase.from("spot_corrections").delete().eq("spot_id", spotId);
+}
+
+/** Admin: restore a spot and clear its pending corrections */
+export async function adminRejectCorrection(spotId: string): Promise<void> {
+  await supabase.from("spots").update({ verified: true }).eq("id", spotId);
+  await supabase.from("spot_corrections").delete().eq("spot_id", spotId);
 }
 
 /** Semantic similarity search using pgvector embeddings */

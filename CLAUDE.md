@@ -81,8 +81,10 @@ packages/
 │   │   │   └── api/
 │   │   │       ├── chat/
 │   │   │       │   └── route.ts       — SSE streaming endpoint (imports @sam/bot)
-│   │   │       └── extract/
-│   │   │           └── route.ts       — Spot extraction endpoint (text → structured fields)
+│   │   │       ├── extract/
+│   │   │       │   └── route.ts       — Spot extraction endpoint (text → structured fields)
+│   │   │       └── enrich-spot/
+│   │   │           └── route.ts       — Spot enrichment endpoint (web search → fills missing fields)
 │   │   ├── components/
 │   │   │   ├── home-client.tsx        — Landing page client component
 │   │   │   ├── chat-panel.tsx         — Chat container with session mgmt + contribution flow init
@@ -159,16 +161,17 @@ npm run research   # Batch spot research across cities (scripts/batch-research.t
 
 | Table | Purpose | Key Columns |
 |-------|---------|-------------|
-| `spots` | Knowledge graph | name, city, country, area, category, tier(1-3), what_to_order[], what_to_skip[], pro_tips[], vibe, payment_methods[], opening_hours, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, use_count, source, contributor_id |
-| `spot_contributions` | Per-contributor attribution | spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier |
-| `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], spots_contributed |
-| `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_areas[], trips_taken |
+| `spots` | Knowledge graph | name, city, country, area, categories[], must_go(bool), verified(bool), what_to_order[], what_to_skip[], pro_tips[], vibe, price_range, latitude, longitude, best_time_of_day, indoor_outdoor, weather_dependent, embedding, confidence_score, recommendation_count, input_method, contributor_id, avg_rating |
+| `spot_contributions` | Per-contributor attribution | spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, must_go |
+| `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], contribution_count |
+| `travelers` | User profiles | whatsapp_number, preferences(jsonb), dietary_restrictions[], trip_dates, travel_party, user_type, home_areas[], spots_recommended[] |
 | `conversations` | State management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |
-| `feedback` | Post-trip validation | spot_id, traveler_id, rating(1-5), did_they_go, user_tips[] |
+| `feedback` | Post-trip validation | spot_id, traveler_id, rating(1-5), visited, user_tips[] |
 | `events` | Analytics / usage tracking | session_id, channel(web/whatsapp), event_type, event_data(jsonb), created_at |
 
 **Spot categories**: breakfast, lunch, dinner, cafe, activity, nightlife, market
-**Spot tiers**: 1 = must-do, 2 = should-do, 3 = nice-to-have/hidden gem
+**Spot quality flags**: `must_go` (bool) = best-in-class, go out of your way; `verified` (bool) = contributor-confirmed, solid recommendation; neither = unverified lead
+**input_method values**: seed, voice, text, generate, manual
 **Vibes**: casual, upscale, chaotic, chill, local, touristy
 
 ## Live Knowledge Graph (as of 2026-02-20)
@@ -237,6 +240,37 @@ Gated behind `ADMIN_PHONE_NUMBER` env var:
 - **Flow completions**: `flow_complete` event for contribution, profile, and feedback flows
 
 Query the `events` table in Supabase dashboard to analyze usage patterns.
+
+## Deployment
+
+| Service | Environment | Platform | URL |
+|---------|-------------|----------|-----|
+| `@sam/bot` | production | Railway | `https://sambot-production-6ab1.up.railway.app` |
+| `@sam/bot` | development | Railway | `https://sambot-development.up.railway.app` |
+| `@sam/web` | production | Railway | See Railway dashboard |
+| Health check | | | `GET /health` → `{"status":"ok","service":"sam-bot","city":"Kuala Lumpur"}` |
+| WhatsApp webhook | | | `POST /webhook` — registered with Meta |
+| Webhook verify token | | | `sam-webhook-secret-2026` |
+
+Railway project: `fortunate-friendship` (ID: `346e85ed-e6df-43c8-8683-6936a14b6829`)
+
+### Dev vs Prod Deploys
+
+```bash
+# Deploy to development (safe, won't touch prod traffic)
+railway up --service "@sam/bot" --environment development
+
+# Deploy to production
+railway up --service "@sam/bot"
+```
+
+Dev environment shares the same Supabase DB as prod. To clean up test data after a dev session:
+```sql
+DELETE FROM conversations WHERE whatsapp_number LIKE 'web-%' AND updated_at > now() - interval '1 day';
+DELETE FROM events WHERE channel = 'web' AND created_at > now() - interval '1 day';
+```
+
+Deploy: `railway up --service "@sam/bot"` (always run `npm run build:bot` first to verify clean compile)
 
 ## Environment Variables
 

@@ -46,7 +46,7 @@ Prompts are loaded by `src/llm.ts` via `loadPrompt(name)` which reads `src/promp
 
 ### 4. Personality
 - Sam is warm, opinionated, slightly irreverent
-- He's your friend who lives in KL, not a search engine
+- He's your friend who lives in the city, not a search engine
 - Uses Malay food terms naturally (nasi lemak, roti canai, teh tarik)
 - Has preferences — will say "skip the tourist trap, go here instead"
 

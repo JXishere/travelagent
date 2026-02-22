@@ -120,17 +120,17 @@ export async function queryX(filters: { ... }): Promise<X[]> {
 
 ## Schema Quick Reference
 
-**spots**: name, city, area, category (breakfast|lunch|dinner|cafe|activity|nightlife|market), tier (1-3), address, lat/lon, payment_methods[], opening_hours (jsonb), price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, use_count, source, embedding
+**spots**: name, city, area, categories[] (breakfast|lunch|dinner|cafe|activity|nightlife|market), must_go (bool), verified (bool), address, lat/lon, price_range ($|$$|$$$), what_to_order[], what_to_skip[], pro_tips[], vibe, weather_dependent, best_time_of_day, indoor_outdoor, contributor_id, confidence_score, recommendation_count, input_method (seed|voice|text|generate|manual), avg_rating, embedding
 
-**spot_contributions**: spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, tier, created_at
+**spot_contributions**: spot_id, contributor_id, what_to_order[], what_to_skip[], pro_tips[], vibe, must_go, created_at
 
-**travelers**: whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_visited[], spots_liked[], spots_disliked[], trips_taken
+**travelers**: whatsapp_number, name, user_type (local|traveler|unknown), home_areas[], preferences (jsonb), dietary_restrictions[], current_city, trip_dates (jsonb), travel_party, first_time_visitor, spots_recommended[], spots_liked[], spots_disliked[]
 
 **conversations**: whatsapp_number, current_flow, flow_state (jsonb), messages (jsonb[])
 
-**contributors**: whatsapp_number, name, cities_contributed[], spots_contributed
+**contributors**: whatsapp_number, name, cities_contributed[], contribution_count
 
-**feedback**: spot_id, traveler_id, rating (1-5), did_they_go, comments, user_tips[]
+**feedback**: spot_id, traveler_id, rating (1-5), visited, comments, user_tips[]
 
 **events**: session_id, channel (web|whatsapp), event_type, event_data (jsonb), created_at
 

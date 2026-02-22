@@ -14,7 +14,7 @@ import {
   type Spot,
   type Traveler,
 } from "../database.js";
-import { getCurrentWeather } from "../weather.js";
+import { getCurrentWeather, getDayForecast } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
 import { formatSpotsForLLM } from "./query.js";
@@ -109,7 +109,7 @@ export async function buildHungryPrompt(
 ): Promise<PromptPayload> {
   const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const weather = await getCurrentWeather();
+  const weather = await getCurrentWeather(traveler.current_city);
 
   // Detect unsupported city — return honest "no coverage" before querying with wrong defaults
   if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
@@ -174,6 +174,7 @@ export async function buildHungryPrompt(
         areas: areaList,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        exclude_weather_dependent: weather?.is_raining ?? false,
         excludeIds: dislikedIds,
         limit: 5,
       });
@@ -185,6 +186,7 @@ export async function buildHungryPrompt(
           cities: queryCities,
           categories: DEFAULT_CATEGORIES,
           indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+          exclude_weather_dependent: weather?.is_raining ?? false,
           excludeIds: dislikedIds,
           limit: 5,
         });
@@ -198,6 +200,7 @@ export async function buildHungryPrompt(
       areas: areaList,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      exclude_weather_dependent: weather?.is_raining ?? false,
       excludeIds: dislikedIds,
       limit: 5,
     });
@@ -209,6 +212,7 @@ export async function buildHungryPrompt(
         cities: queryCities,
         categories,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        exclude_weather_dependent: weather?.is_raining ?? false,
         excludeIds: dislikedIds,
         limit: 5,
       });
@@ -216,6 +220,15 @@ export async function buildHungryPrompt(
     if (spots.length === 0) {
       spots = await trySemanticSearch(message, resolvedCity ?? cityDefaults.name);
     }
+  }
+
+  // Weather × time-of-day: deprioritize outdoor evening spots when raining
+  if (weather?.is_raining && spots.length > 1) {
+    spots.sort((a, b) => {
+      const aRisky = a.indoor_outdoor === "outdoor" && (a.best_time_of_day === "evening" || a.best_time_of_day === "night");
+      const bRisky = b.indoor_outdoor === "outdoor" && (b.best_time_of_day === "evening" || b.best_time_of_day === "night");
+      return (aRisky ? 1 : 0) - (bRisky ? 1 : 0);
+    });
   }
 
   // Filter out visited spots only for travelers (locals may want to revisit favorites)
@@ -398,8 +411,13 @@ export async function buildDayPlanPrompt(
 ): Promise<PromptPayload> {
   const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const weather = await getCurrentWeather();
   const defaultCity = traveler.current_city ?? getDefaultCity();
+  // Use forecast for day plans — it gives a better full-day picture than current conditions
+  const forecast = await getDayForecast(traveler.current_city);
+  const weather = forecast ? {
+    is_raining: forecast.will_rain,
+    summary: forecast.summary,
+  } : await getCurrentWeather(traveler.current_city);
 
   // Detect unsupported city
   if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
@@ -470,7 +488,7 @@ export async function buildDayPlanPrompt(
     systemPrompt: buildSystemPrompt(systemCity, channel) + langInstruction(message),
     userPrompt: `The user asks: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
-${weather ? `Weather: ${weather.summary}` : ""}
+${forecast ? `Weather today: ${forecast.summary} Best outdoor window: ${forecast.best_window}.` : weather ? `Weather: ${weather.summary}` : ""}
 ${details.area ? `Area focus: ${details.area}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
 ${prefContext}
@@ -522,8 +540,8 @@ export async function buildNearbyPrompt(
 ): Promise<PromptPayload> {
   const channel = options?.channel;
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
+  const weather = await getCurrentWeather(traveler.current_city);
 
   // Detect unsupported city
   if (traveler.current_city && !isSupportedCity(traveler.current_city)) {

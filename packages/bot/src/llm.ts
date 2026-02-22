@@ -116,10 +116,11 @@ export function buildSystemPrompt(city: string, channel?: "whatsapp" | "web"): s
 export async function chatAsSam(
   history: ChatMessage[],
   userMessage: string,
-  options?: { city?: string; channel?: "whatsapp" | "web" }
+  options?: { city?: string; channel?: "whatsapp" | "web"; systemContext?: string }
 ): Promise<string> {
   const city = options?.city ?? getDefaultCity();
-  const systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
+  let systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
+  if (options?.systemContext) systemPrompt += "\n\n" + options.systemContext;
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },
@@ -163,10 +164,11 @@ export function chatStream(
 export function chatAsSamStream(
   history: ChatMessage[],
   userMessage: string,
-  options?: { city?: string; channel?: "whatsapp" | "web" }
+  options?: { city?: string; channel?: "whatsapp" | "web"; systemContext?: string }
 ) {
   const city = options?.city ?? getDefaultCity();
-  const systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
+  let systemPrompt = buildSystemPrompt(city, options?.channel) + langInstruction(userMessage);
+  if (options?.systemContext) systemPrompt += "\n\n" + options.systemContext;
   const messages: ChatMessage[] = [
     ...history,
     { role: "user", content: userMessage },

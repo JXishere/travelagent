@@ -30,14 +30,25 @@ If there are uncommitted changes:
 
 ### 3. Deploy
 
+Before deploying, confirm the target environment with the user if not already clear. Default is **production**.
+
+| Environment | Command | URL |
+|-------------|---------|-----|
+| production | `railway up --service "@sam/bot"` | `https://sambot-production-6ab1.up.railway.app` |
+| development | `railway up --service "@sam/bot" --environment development` | `https://sambot-development.up.railway.app` |
+
 Try deployment in this order:
 
 **Option A: Railway MCP** (preferred)
-- Use the Railway MCP server to deploy the service
+- Use the Railway MCP `deploy` tool with the appropriate `environment` parameter
 
 **Option B: Railway CLI** (fallback)
 ```bash
-railway up
+# Production (default)
+railway up --service "@sam/bot"
+
+# Development
+railway up --service "@sam/bot" --environment development
 ```
 
 ### 4. Verify Deployment
@@ -46,7 +57,10 @@ After deployment completes:
 - Check the deployment status via Railway MCP or `railway status`
 - Hit the `/health` endpoint to verify the server is responding:
 ```bash
-curl -s https://<your-railway-domain>/health
+# Production
+curl -s https://sambot-production-6ab1.up.railway.app/health
+# Development
+curl -s https://sambot-development.up.railway.app/health
 ```
 - Report the deployment URL and status
 

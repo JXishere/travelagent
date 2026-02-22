@@ -3,7 +3,7 @@
 
 import express from "express";
 import { parseWebhook, sendMessage, showTyping } from "./whatsapp.js";
-import { chatAsSam, classifyIntent, extractJSON, startUsageTracking, flushUsage } from "./llm.js";
+import { chatAsSam, classifyIntent, extractJSON, startUsageTracking, flushUsage, samSays } from "./llm.js";
 import {
   getOrCreateConversation,
   updateConversation,
@@ -14,6 +14,10 @@ import {
   trackEvent,
   getOrCreateTraveler,
   getSpotsByIds,
+  getPendingCorrections,
+  adminApproveCorrection,
+  adminRejectCorrection,
+  findSpotByName,
 } from "./database.js";
 import { getDefaultCity } from "./utils/city-defaults.js";
 import { handleContribution } from "./handlers/contribution.js";
@@ -216,6 +220,61 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     return;
   }
 
+  // Admin correction commands: /approve, /reject, /corrections
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/approve ")) {
+    const spotName = text.slice("/approve ".length).trim();
+    const spot = await findSpotByName(spotName);
+    if (!spot) {
+      await sendMessage(from, `Couldn't find a spot matching "${spotName}".`);
+      return;
+    }
+    await adminApproveCorrection(spot.id);
+    const response = `${spot.name} marked as closed and hidden from recommendations.`;
+    await appendMessages(from, [{ role: "user", content: text }, { role: "assistant", content: response }]);
+    await sendMessage(from, response);
+    return;
+  }
+
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/reject ")) {
+    const spotName = text.slice("/reject ".length).trim();
+    const spot = await findSpotByName(spotName);
+    if (!spot) {
+      await sendMessage(from, `Couldn't find a spot matching "${spotName}".`);
+      return;
+    }
+    await adminRejectCorrection(spot.id);
+    const response = `Correction dismissed. ${spot.name} restored to verified.`;
+    await appendMessages(from, [{ role: "user", content: text }, { role: "assistant", content: response }]);
+    await sendMessage(from, response);
+    return;
+  }
+
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.trim() === "/corrections") {
+    const pending = await getPendingCorrections();
+    let response: string;
+    if (pending.length === 0) {
+      response = "No pending corrections.";
+    } else {
+      // Group by spot to show one entry per spot with a report count
+      const bySpot = new Map<string, { name: string; area: string | null; types: Set<string>; count: number }>();
+      for (const c of pending) {
+        const entry = bySpot.get(c.spot_id) ?? { name: c.spot_name, area: c.spot_area, types: new Set(), count: 0 };
+        entry.types.add(c.correction_type);
+        entry.count++;
+        bySpot.set(c.spot_id, entry);
+      }
+      const lines = [...bySpot.values()].map((s, i) => {
+        const loc = s.area ? ` (${s.area})` : "";
+        const types = [...s.types].join(", ");
+        return `${i + 1}. ${s.name}${loc} — ${types} — ${s.count} report${s.count !== 1 ? "s" : ""}`;
+      });
+      response = `Pending corrections (${bySpot.size}):\n${lines.join("\n")}`;
+    }
+    await appendMessages(from, [{ role: "user", content: text }, { role: "assistant", content: response }]);
+    await sendMessage(from, response);
+    return;
+  }
+
   // Admin /generate command: "/generate bangsar dinner"
   if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/generate")) {
     const args = text.slice("/generate".length).trim();
@@ -281,26 +340,40 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       break;
 
     case "weather": {
-      // Weather-aware response — route through handleHungry with weather context injected
       const { getCurrentWeather } = await import("./weather.js");
-      const weather = await getCurrentWeather();
-      const weatherSummary = weather
-        ? `Current weather in ${getDefaultCity()}: ${weather.summary}${weather.is_raining ? " (raining)" : ""}`
-        : "";
-      const recentCtxForWeather = conversation.messages
-        .slice(-6)
-        .map((m) => `${m.role}: ${m.content}`)
-        .join("\n");
-      response = await handleHungry(
-        from,
-        weatherSummary ? `${text}\n\n[Context: ${weatherSummary}]` : text,
-        {
-          ...details,
-          ...(weather?.is_raining ? { mood: "indoor" } : {}),
-        },
-        recentCtxForWeather,
-        { channel: "whatsapp" }
-      );
+      // Phase 1a: use traveler's city, not the global default
+      const travelerForWeather = await getOrCreateTraveler(from);
+      const weather = await getCurrentWeather(travelerForWeather.current_city);
+      const cityName = travelerForWeather.current_city ?? getDefaultCity();
+
+      // Phase 1c: pure weather question → respond directly; hybrid → route to food handler
+      const hasFoodIntent = !!(details.meal_type || details.cuisine || details.area);
+      if (!hasFoodIntent && weather) {
+        // Standalone weather response — Sam-voiced, no spot recommendations
+        response = await samSays(
+          `Respond with today's weather in ${cityName}: ${weather.summary} One or two casual sentences. Don't recommend any spots.`,
+          cityName
+        );
+      } else {
+        // Hybrid query: weather context injected into food recommendation
+        const weatherSummary = weather
+          ? `Current weather in ${cityName}: ${weather.summary}`
+          : "";
+        const recentCtxForWeather = conversation.messages
+          .slice(-6)
+          .map((m) => `${m.role}: ${m.content}`)
+          .join("\n");
+        response = await handleHungry(
+          from,
+          weatherSummary ? `${text}\n\n[Context: ${weatherSummary}]` : text,
+          {
+            ...details,
+            ...(weather?.is_raining ? { mood: "indoor" } : {}),
+          },
+          recentCtxForWeather,
+          { channel: "whatsapp" }
+        );
+      }
       break;
     }
 

@@ -1,7 +1,3 @@
-# Archive
-
-Pre-rebrand historical documents from the "Paul" era. Preserved as-is for reference — do not update names or content.
-
 fix the confidence scoring
 
 each spot should be able to hold multiple categories. (store as a list)
@@ -31,3 +27,5 @@ think about "secret rooms", "magic locks"
 
 
 alot people havent explored many places
+
+think about Sam's gaps on day planning.

@@ -227,8 +227,21 @@ async function sendProactiveMessage(
   }
 
   // LLM-generated message
-  const weather = await getCurrentWeather(traveler.current_city).catch(() => null);
-  const weatherLine = weather ? `\nWeather: ${weather.summary}` : "";
+  // MORNING_NUDGE: use forecast so Sam can hint at afternoon weather
+  let weatherLine = "";
+  if (result.type === "MORNING_NUDGE") {
+    const { getDayForecast } = await import("./weather.js");
+    const forecast = await getDayForecast(traveler.current_city).catch(() => null);
+    if (forecast) {
+      weatherLine = `\nWeather today: ${forecast.summary} Best outdoor window: ${forecast.best_window}.`;
+    } else {
+      const weather = await getCurrentWeather(traveler.current_city).catch(() => null);
+      if (weather) weatherLine = `\nWeather: ${weather.summary}`;
+    }
+  } else {
+    const weather = await getCurrentWeather(traveler.current_city).catch(() => null);
+    if (weather) weatherLine = `\nWeather: ${weather.summary}`;
+  }
 
   const prompt = PROACTIVE_PROMPT
     .replace("{{MESSAGE_TYPE}}", result.type)

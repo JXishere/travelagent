@@ -54,7 +54,6 @@ SELECT
   COUNT(CASE WHEN verified = false AND must_go = false THEN 1 END) as tier3_unverified,
   COUNT(CASE WHEN embedding IS NOT NULL THEN 1 END) as with_embeddings,
   COUNT(CASE WHEN last_verified > NOW() - INTERVAL '180 days' THEN 1 END) as recently_verified,
-  COUNT(CASE WHEN opening_hours IS NOT NULL THEN 1 END) as with_hours,
   COUNT(CASE WHEN price_range IS NOT NULL THEN 1 END) as with_price_range,
   COUNT(CASE WHEN latitude IS NOT NULL THEN 1 END) as with_coordinates
 FROM spots
@@ -71,15 +70,14 @@ Category Coverage:
   cafe: 91       |  activity: 45  |  nightlife: 28  |  market: 12
 
 Quality:
-  Tier 1 (must-go): 89   Tier 2 (verified): 301   Tier 3 (unverified): 114
-  With embeddings: 87%   Recently verified: 34%
-  With hours: 62%        With price range: 71%     With coordinates: 78%
+  Must-go: 89    Verified: 301    Unverified: 114
+  With embeddings: 87%
+  With price range: 71%    With coordinates: 78%
 ```
 
 3. Flag gaps (warn if any of these are true):
    - Any category has < 5 spots → "⚠ Low coverage: market (12 spots)"
    - Embeddings < 70% → "⚠ Run backfill-embeddings to improve semantic search"
-   - Recently verified < 30% → "⚠ Many spots may be stale — consider a verification pass"
 
 ---
 

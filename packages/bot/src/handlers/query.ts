@@ -31,8 +31,8 @@ export async function handleQuery(
   const categories = resolveCategories(effectiveMealType, details.time_of_day);
   const isDishQuery = categories === null;
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const weather = await getCurrentWeather();
   const city = traveler.current_city ?? getDefaultCity();
+  const weather = await getCurrentWeather(traveler.current_city);
 
   // Gracefully handle unsupported cities — track for product signal, respond honestly
   if (traveler.current_city && !isSupportedCity(city)) {
@@ -100,6 +100,7 @@ export async function handleQuery(
       areas: areaList,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+      exclude_weather_dependent: weather?.is_raining ?? false,
       priceRange,
       limit: 5,
     });
@@ -111,6 +112,7 @@ export async function handleQuery(
         cities: queryCities,
         categories,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
+        exclude_weather_dependent: weather?.is_raining ?? false,
         limit: 20, // fetch larger pool so proximity filter has something to work with
       });
       // Proximity filter: keep only spots within 3km of the user's area centroid.
@@ -174,6 +176,15 @@ export async function handleQuery(
       ],
       { maxTokens: 512, model: HAIKU }
     );
+  }
+
+  // Weather × time-of-day: deprioritize outdoor evening spots when raining
+  if (weather?.is_raining && spots.length > 1) {
+    spots.sort((a, b) => {
+      const aRisky = a.indoor_outdoor === "outdoor" && (a.best_time_of_day === "evening" || a.best_time_of_day === "night");
+      const bRisky = b.indoor_outdoor === "outdoor" && (b.best_time_of_day === "evening" || b.best_time_of_day === "night");
+      return (aRisky ? 1 : 0) - (bRisky ? 1 : 0);
+    });
   }
 
   // Track usage and mark as visited

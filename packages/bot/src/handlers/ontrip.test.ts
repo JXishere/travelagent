@@ -23,6 +23,7 @@ vi.mock("../database.js", () => ({
   markSpotsRecommended: vi.fn().mockResolvedValue(undefined),
   getDistinctAreas: vi.fn().mockResolvedValue([]),
   getAreaCentroid: vi.fn().mockResolvedValue(undefined),
+  trackEvent: vi.fn(),
 }));
 vi.mock("../weather.js", () => ({
   getCurrentWeather: vi.fn().mockResolvedValue(null),

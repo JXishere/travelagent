@@ -100,6 +100,7 @@ export interface Spot {
   input_method?: string;
   embedding?: number[];
   created_at?: string;
+  is_closed?: boolean;
   isStale?: boolean; // computed at query time — not a DB column
 }
 
@@ -121,6 +122,7 @@ export async function querySpots(filters: {
   let query = supabase
     .from("spots")
     .select("*")
+    .not("is_closed", "eq", true)
     .order("must_go", { ascending: false })
     .order("verified", { ascending: false });
 
@@ -357,11 +359,53 @@ export async function getSpotById(spotId: string): Promise<Spot | null> {
   return (data as Spot) ?? null;
 }
 
+export async function getSpotsByIds(ids: string[]): Promise<Pick<Spot, "id" | "name" | "area">[]> {
+  if (ids.length === 0) return [];
+  const { data } = await supabase.from("spots").select("id, name, area").in("id", ids);
+  return (data ?? []) as Pick<Spot, "id" | "name" | "area">[];
+}
+
 export async function updateSpot(spotId: string, updates: Partial<Spot>): Promise<void> {
   await supabase
     .from("spots")
     .update(updates)
     .eq("id", spotId);
+}
+
+// ============================================
+// SPOT CORRECTIONS
+// ============================================
+
+export interface CorrectionDelta {
+  is_closed?: boolean;
+  area?: string;
+  address?: string;
+  opening_hours_note?: string;
+  correction_type: "closed" | "moved" | "wrong_info" | "other";
+  correction_summary: string;
+}
+
+/** Apply a structured correction delta to a spot and record attribution */
+export async function applySpotCorrection(
+  spotId: string,
+  reporterId: string,
+  delta: CorrectionDelta
+): Promise<void> {
+  const updates: Partial<Spot> = { verified: false };
+
+  if (delta.is_closed) updates.is_closed = true;
+  if (delta.area) updates.area = delta.area;
+  if (delta.address) updates.address = delta.address;
+
+  await supabase.from("spots").update(updates).eq("id", spotId);
+
+  await supabase.from("spot_corrections").insert({
+    spot_id: spotId,
+    reporter_id: reporterId,
+    correction_type: delta.correction_type,
+    correction_note: delta.correction_summary,
+    delta,
+  });
 }
 
 /** Semantic similarity search using pgvector embeddings */
@@ -632,10 +676,20 @@ export async function insertFeedback(
 
     if (ratings && ratings.length > 0) {
       const avg = ratings.reduce((sum, r) => sum + (r.rating as number), 0) / ratings.length;
+      const rounded = Math.round(avg * 100) / 100;
       await supabase
         .from("spots")
-        .update({ avg_rating: Math.round(avg * 100) / 100 })
+        .update({ avg_rating: rounded })
         .eq("id", feedback.spot_id);
+
+      // Auto-demote spots with consistently poor ratings — persistent signal survives query logic changes
+      if (avg < 2.5) {
+        await supabase
+          .from("spots")
+          .update({ verified: false, must_go: false })
+          .eq("id", feedback.spot_id);
+        console.log(`[auto-demotion] spot ${feedback.spot_id} demoted to unverified (avg_rating=${rounded})`);
+      }
     }
   }
 

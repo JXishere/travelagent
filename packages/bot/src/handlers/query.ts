@@ -349,6 +349,8 @@ export function formatSpotsForLLM(spots: Spot[], distanceFromArea?: Map<string, 
         lines.push(`   Tips: ${s.pro_tips.join(" | ")}`);
       if (s.vibe) lines.push(`   Vibe: ${s.vibe}`);
       if (s.indoor_outdoor) lines.push(`   Setting: ${s.indoor_outdoor}`);
+      if (s.latitude != null && s.longitude != null)
+        lines.push(`   Maps: https://maps.google.com/?q=${s.latitude},${s.longitude}`);
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
       const takeLabel = s.must_go

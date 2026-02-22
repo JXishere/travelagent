@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
         break;
 
       case "spot_correction":
-        response = await handleSpotCorrection(sessionId, message, details, { channel: "web" });
+        response = await handleSpotCorrection(sessionId, message, details, { channel: "web", conversation });
         break;
 
       default:
@@ -260,6 +260,9 @@ async function routeToFlow(
 
     case "feedback":
       return handleFeedback(sessionId, message, conversation, { channel: "web" });
+
+    case "spot_correction":
+      return handleSpotCorrection(sessionId, message, {}, { channel: "web", conversation });
 
     case "query_clarifying": {
       const { pending_query, pending_details } = conversation.flow_state;

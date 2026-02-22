@@ -368,14 +368,19 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
                     : null
                 }
               />
-              <DetailRow
-                label="Lat/Lng"
-                value={
-                  spot.latitude && spot.longitude
-                    ? `${spot.latitude}, ${spot.longitude}`
-                    : null
-                }
-              />
+              {spot.latitude && spot.longitude ? (
+                <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.8rem", marginBottom: "0.25rem" }}>
+                  <span style={{ color: "var(--muted)", minWidth: "5rem" }}>Maps</span>
+                  <a
+                    href={`https://maps.google.com/?q=${spot.latitude},${spot.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--accent, #4a9eff)" }}
+                  >
+                    Open in Maps
+                  </a>
+                </div>
+              ) : null}
 
               {spot.what_to_order && spot.what_to_order.length > 0 && (
                 <div style={{ marginTop: "0.5rem" }}>

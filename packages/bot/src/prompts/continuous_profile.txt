@@ -20,7 +20,7 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 - cuisine_preferences (string[]) — "malay", "chinese", "indian", "japanese", "western", "street food", etc.
 - specific_requests (string[]) — concrete asks like "rooftop bar", "best nasi lemak", "kid-friendly spots"
 - first_time_visitor (boolean) — whether this is their first time in {{CITY}}
-- current_city (string) — city they are currently visiting or planning to visit next (e.g. "Bali", "Bangkok", "Tokyo"); only set if they explicitly name a city other than {{CITY}}
+- current_city (string) — city they are CURRENTLY IN or actively traveling to (e.g. "Bali", "Bangkok", "Tokyo"); only set if they explicitly name a city other than {{CITY}} as their current location. DO NOT set this for statements like "I'm from X", "I'm originally from X", or "I live in X" — those indicate home city, not travel destination.
 
 ## Rules
 

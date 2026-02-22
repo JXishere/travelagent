@@ -49,7 +49,15 @@ export async function handleQuery(
   const weather = await getCurrentWeather(traveler.current_city);
 
   // Gracefully handle unsupported cities — track for product signal, respond honestly
-  if (traveler.current_city && !isSupportedCity(city)) {
+  // Bypass if the query's explicit area resolves to a supported city — the user may be asking
+  // about a supported city while their stored current_city is stale (e.g. they said "I'm from
+  // Bangkok" earlier, poisoning current_city, but now they're asking for Petaling Jaya options).
+  const queryAreaCity = details.area
+    ? resolveCityFromArea(details.area) ?? details.area
+    : null;
+  const queryAreaIsSupported = queryAreaCity ? isSupportedCity(queryAreaCity) : false;
+
+  if (traveler.current_city && !isSupportedCity(city) && !queryAreaIsSupported) {
     trackEvent(phoneNumber, channel, "unsupported_city_request", { city });
     const supportedList = getSupportedCities().join(", ");
     return samSays(

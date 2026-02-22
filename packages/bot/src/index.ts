@@ -18,8 +18,9 @@ import {
   adminApproveCorrection,
   adminRejectCorrection,
   findSpotByName,
+  updateSpot,
 } from "./database.js";
-import { getDefaultCity } from "./utils/city-defaults.js";
+import { getDefaultCity, isSupportedCity, getSupportedCities } from "./utils/city-defaults.js";
 import { handleContribution } from "./handlers/contribution.js";
 import { handleQuery } from "./handlers/query.js";
 import { handleProfile, startProfileLearning } from "./handlers/profile.js";
@@ -29,6 +30,7 @@ import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js"
 import { handleSpotCorrection } from "./handlers/spot-correction.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
 import { maybeExtractProfile } from "./handlers/continuous-profile.js";
+import { handleSpotVerification } from "./handlers/spot-verification.js";
 import { startScheduler } from "./scheduler.js";
 
 const app = express();
@@ -275,6 +277,21 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     return;
   }
 
+  // Admin /publish command: "/publish <spot name>" — approve spot from review queue
+  if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/publish ")) {
+    const spotName = text.slice("/publish ".length).trim();
+    const spot = await findSpotByName(spotName);
+    if (!spot) {
+      await sendMessage(from, `Couldn't find a spot matching "${spotName}".`);
+      return;
+    }
+    await updateSpot(spot.id, { needs_review: false });
+    const response = `${spot.name} published — now live in recommendations.`;
+    await appendMessages(from, [{ role: "user", content: text }, { role: "assistant", content: response }]);
+    await sendMessage(from, response);
+    return;
+  }
+
   // Admin /generate command: "/generate bangsar dinner"
   if (ADMIN_PHONE && from === ADMIN_PHONE && text.startsWith("/generate")) {
     const args = text.slice("/generate".length).trim();
@@ -343,8 +360,19 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       const { getCurrentWeather } = await import("./weather.js");
       // Phase 1a: use traveler's city, not the global default
       const travelerForWeather = await getOrCreateTraveler(from);
-      const weather = await getCurrentWeather(travelerForWeather.current_city);
       const cityName = travelerForWeather.current_city ?? getDefaultCity();
+
+      // Unsupported city: don't silently fall back to KL weather — be honest
+      if (travelerForWeather.current_city && !isSupportedCity(travelerForWeather.current_city)) {
+        const supported = getSupportedCities().join(", ");
+        response = await samSays(
+          `Respond honestly and warmly: you don't have coverage in ${travelerForWeather.current_city} yet, but you're great for ${supported}. One to two sentences. Do not give weather data for the wrong city.`,
+          getDefaultCity()
+        );
+        break;
+      }
+
+      const weather = await getCurrentWeather(travelerForWeather.current_city);
 
       // Phase 1c: pure weather question → respond directly; hybrid → route to food handler
       const hasFoodIntent = !!(details.meal_type || details.cuisine || details.area);
@@ -483,6 +511,9 @@ async function routeToCurrentFlow(
 
     case "generate":
       return handleGenerate(phoneNumber, text, conversation);
+
+    case "spot_verification":
+      return handleSpotVerification(phoneNumber, text, conversation);
 
     case "query_clarifying": {
       const { pending_query, pending_details } = conversation.flow_state;

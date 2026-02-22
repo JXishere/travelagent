@@ -358,10 +358,27 @@ async function streamHandlerResponse(
       // route to the food handler with weather context injected — same logic as WhatsApp index.ts
       const hasFoodIntent = !!(details.meal_type || details.cuisine || details.area);
       const { getCurrentWeather } = await import("@sam/bot/weather");
-      const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
+      const { getDefaultCity, isSupportedCity, getSupportedCities } = await import("@sam/bot/utils/city-defaults");
       const { chat, buildSystemPrompt } = await import("@sam/bot/llm");
       const travelerForWeather = await getOrCreateTraveler(sessionId);
       const weatherCity = travelerForWeather.current_city ?? getDefaultCity();
+
+      // Unsupported city: don't silently fall back to KL weather — be honest
+      if (travelerForWeather.current_city && !isSupportedCity(travelerForWeather.current_city)) {
+        const supported = getSupportedCities().join(", ");
+        const noCoverageResponse = await chat(
+          buildSystemPrompt(getDefaultCity(), "web"),
+          [{ role: "user", content: `User asks about weather in ${travelerForWeather.current_city}. Be honest and warm: you don't have coverage there yet, but you're great for ${supported}. One to two sentences. Do not give weather data for the wrong city.` }],
+          { maxTokens: 100 }
+        );
+        await appendMessages(sessionId, [
+          { role: "user", content: message },
+          { role: "assistant", content: noCoverageResponse },
+        ]);
+        flushAndTrackUsage(sessionId, "weather");
+        return sseTextResponse(noCoverageResponse, rateLimitRemaining);
+      }
+
       const weather = await getCurrentWeather(weatherCity);
 
       if (hasFoodIntent) {

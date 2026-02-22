@@ -2,7 +2,6 @@
 
 import { getCityDefaults } from "./utils/city-defaults.js";
 
-const API_KEY = process.env.OPENWEATHER_API_KEY;
 const BASE_URL = "https://api.openweathermap.org/data/2.5";
 
 export type RainSeverity = "none" | "light" | "moderate" | "heavy";
@@ -71,6 +70,7 @@ function buildWeatherSummary(
 }
 
 export async function getCurrentWeather(city?: string): Promise<WeatherInfo | null> {
+  const API_KEY = process.env.OPENWEATHER_API_KEY;
   const defaults = getCityDefaults(city);
   const lat = defaults.latitude;
   const lon = defaults.longitude;
@@ -145,6 +145,7 @@ function buildBestWindow(periods: ForecastPeriod[]): string {
 
 /** Get today's weather forecast (3-hour intervals) for the given city */
 export async function getDayForecast(city?: string): Promise<DayForecast | null> {
+  const API_KEY = process.env.OPENWEATHER_API_KEY;
   const defaults = getCityDefaults(city);
   const lat = defaults.latitude;
   const lon = defaults.longitude;

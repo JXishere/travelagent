@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../database.js", () => ({
   findSpotByName: vi.fn(),
-  applySpotCorrection: vi.fn().mockResolvedValue(undefined),
+  applySpotCorrection: vi.fn().mockResolvedValue({ hardClosed: false, reportCount: 1 }),
   updateConversation: vi.fn().mockResolvedValue(undefined),
   trackEvent: vi.fn(),
+}));
+vi.mock("../whatsapp.js", () => ({
+  sendMessage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../llm.js", () => ({
   chat: vi.fn(),

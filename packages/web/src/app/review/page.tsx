@@ -133,6 +133,16 @@ export default function ReviewPage() {
     );
   }
 
+  // Deduplicate corrections by spot for the approve/reject handlers (one action per spot)
+  const correctionsBySpot = useMemo(() => {
+    const seen = new Set<string>();
+    return corrections.filter((c) => {
+      if (seen.has(c.spot_id)) return false;
+      seen.add(c.spot_id);
+      return true;
+    });
+  }, [corrections]);
+
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem" }}>
       <h1 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>
@@ -146,39 +156,149 @@ export default function ReviewPage() {
           .join(" · ")}
       </p>
 
-      <SpotFilters
-        categories={categories}
-        areas={areas}
-        sources={sources}
-        filters={filters}
-        onChange={setFilters}
-        totalCount={stats.total}
-        filteredCount={filtered.length}
-      />
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {filtered.map((spot) => (
-          <SpotCard
-            key={spot.id}
-            spot={spot}
-            onApprove={handleApprove}
-            onMustGo={handleMustGo}
-            onDelete={handleDelete}
-            onSave={handleSave}
-          />
-        ))}
-      </div>
-
-      {filtered.length === 0 && (
-        <div
+      {/* Tab toggle */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+        <button
+          onClick={() => setShowCorrections(false)}
           style={{
-            textAlign: "center",
-            color: "var(--muted)",
-            padding: "3rem",
+            padding: "0.3rem 0.8rem",
+            fontSize: "0.8rem",
+            borderRadius: "4px",
+            border: "1px solid var(--border, #333)",
+            background: showCorrections ? "transparent" : "var(--foreground, #fff)",
+            color: showCorrections ? "var(--muted)" : "var(--background, #000)",
+            cursor: "pointer",
           }}
         >
-          No spots match filters
-        </div>
+          Spots
+        </button>
+        <button
+          onClick={() => setShowCorrections(true)}
+          style={{
+            padding: "0.3rem 0.8rem",
+            fontSize: "0.8rem",
+            borderRadius: "4px",
+            border: "1px solid var(--border, #333)",
+            background: showCorrections ? "var(--foreground, #fff)" : "transparent",
+            color: showCorrections ? "var(--background, #000)" : "var(--muted)",
+            cursor: "pointer",
+          }}
+        >
+          Corrections{corrections.length > 0 ? ` (${corrections.length})` : ""}
+        </button>
+      </div>
+
+      {showCorrections ? (
+        <>
+          {correctionsBySpot.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: "3rem" }}>
+              No pending corrections
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {corrections.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    border: "1px solid var(--border, #333)",
+                    borderRadius: "6px",
+                    padding: "0.75rem 1rem",
+                    fontSize: "0.85rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <strong>{c.spot_name}</strong>
+                      {c.spot_area && <span style={{ color: "var(--muted)" }}> · {c.spot_area}</span>}
+                      <span
+                        style={{
+                          marginLeft: "0.5rem",
+                          padding: "0.1rem 0.4rem",
+                          background: "var(--border, #333)",
+                          borderRadius: "3px",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {c.correction_type}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+                      <button
+                        onClick={() => handleApproveCorrection(c.spot_id)}
+                        style={{
+                          padding: "0.2rem 0.6rem",
+                          fontSize: "0.75rem",
+                          borderRadius: "4px",
+                          border: "1px solid #c00",
+                          background: "transparent",
+                          color: "#c00",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Approve (close)
+                      </button>
+                      <button
+                        onClick={() => handleRejectCorrection(c.spot_id)}
+                        style={{
+                          padding: "0.2rem 0.6rem",
+                          fontSize: "0.75rem",
+                          borderRadius: "4px",
+                          border: "1px solid var(--border, #333)",
+                          background: "transparent",
+                          color: "var(--muted)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                  {c.correction_note && (
+                    <div style={{ color: "var(--muted)", fontSize: "0.8rem" }}>{c.correction_note}</div>
+                  )}
+                  <div style={{ color: "var(--muted)", fontSize: "0.75rem" }}>
+                    Reporter: ...{c.reporter_id.slice(-4)} &middot;{" "}
+                    {new Date(c.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <SpotFilters
+            categories={categories}
+            areas={areas}
+            sources={sources}
+            filters={filters}
+            onChange={setFilters}
+            totalCount={stats.total}
+            filteredCount={filtered.length}
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {filtered.map((spot) => (
+              <SpotCard
+                key={spot.id}
+                spot={spot}
+                onApprove={handleApprove}
+                onMustGo={handleMustGo}
+                onDelete={handleDelete}
+                onSave={handleSave}
+              />
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: "3rem" }}>
+              No spots match filters
+            </div>
+          )}
+        </>
       )}
 
       <footer className="py-6 text-center text-xs" style={{ color: "var(--muted)" }}>

@@ -120,7 +120,7 @@ export async function startFeedbackCollection(
         flow_state: {},
       });
       return samSays(
-        `Respond warmly: the user said "${userMessage}" — they're sharing feedback about a spot. Acknowledge their experience enthusiastically, thank them for sharing, and encourage them to keep sending spots or tips. Two sentences max.`
+        `The user said: "${userMessage}" — they visited a spot and want to share feedback. Respond in 2 sentences: (1) acknowledge their experience warmly by name-dropping the place if mentioned, (2) ask them to rate it 1–5 and share one tip for the next person heading there.`
       );
     }
     await updateConversation(phoneNumber, {

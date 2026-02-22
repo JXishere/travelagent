@@ -15,7 +15,35 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
 import { scenarios, ConversationScenario } from "./conversation-scenarios";
+
+// ─── Supabase spot lookup ─────────────────────────────────────────────────────
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_KEY!
+);
+
+async function fetchSpotsForJudge(spotIds: string[]): Promise<string> {
+  if (spotIds.length === 0) return "";
+  const { data, error } = await supabase
+    .from("spots")
+    .select("name, area, city, what_to_order, what_to_skip, pro_tips, payment_methods, opening_hours, price_range, vibe")
+    .in("id", spotIds);
+  if (error || !data || data.length === 0) return "";
+  return data.map(s => {
+    const parts = [`Name: ${s.name}`, `Area: ${s.area}`, `City: ${s.city}`];
+    if (s.what_to_order?.length) parts.push(`What to order: ${s.what_to_order.join(", ")}`);
+    if (s.what_to_skip?.length) parts.push(`What to skip: ${s.what_to_skip.join(", ")}`);
+    if (s.pro_tips?.length) parts.push(`Pro tips: ${s.pro_tips.join("; ")}`);
+    if (s.payment_methods?.length) parts.push(`Payment: ${s.payment_methods.join(", ")}`);
+    if (s.opening_hours) parts.push(`Hours: ${s.opening_hours}`);
+    if (s.price_range) parts.push(`Price: ${s.price_range}`);
+    if (s.vibe) parts.push(`Vibe: ${s.vibe}`);
+    return parts.join(" | ");
+  }).join("\n");
+}
 
 const WEB_URL = "http://localhost:3001/api/chat";
 const JUDGE_MODEL = "claude-sonnet-4-6";
@@ -46,7 +74,7 @@ function warn(label: string) {
 
 // ─── Web API call ─────────────────────────────────────────────────────────────
 
-async function askWeb(sessionId: string, message: string): Promise<string> {
+async function askWeb(sessionId: string, message: string): Promise<{ text: string; spotIds: string[] }> {
   const res = await fetch(WEB_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -61,6 +89,7 @@ async function askWeb(sessionId: string, message: string): Promise<string> {
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let full = "";
+  let spotIds: string[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -73,6 +102,7 @@ async function askWeb(sessionId: string, message: string): Promise<string> {
         try {
           const parsed = JSON.parse(data);
           if (parsed.text) full += parsed.text;
+          if (parsed.spotIds) spotIds = parsed.spotIds;
         } catch {
           // ignore malformed SSE chunks
         }
@@ -80,7 +110,7 @@ async function askWeb(sessionId: string, message: string): Promise<string> {
     }
   }
 
-  return full.trim();
+  return { text: full.trim(), spotIds };
 }
 
 // ─── Run one scenario through the web API ────────────────────────────────────
@@ -89,6 +119,7 @@ interface ScenarioResult {
   scenario: ConversationScenario;
   turns: Array<{ user: string; sam: string }>;
   finalResponse: string;
+  spotIds: string[];
   durationMs: number;
   error?: string;
 }
@@ -98,12 +129,14 @@ async function runScenario(
 ): Promise<ScenarioResult> {
   const sessionId = `eval-${scenario.name}-${Date.now()}`;
   const turns: Array<{ user: string; sam: string }> = [];
+  const allSpotIds: string[] = [];
   const start = Date.now();
 
   try {
     for (const message of scenario.messages) {
-      const reply = await askWeb(sessionId, message);
+      const { text: reply, spotIds } = await askWeb(sessionId, message);
       turns.push({ user: message, sam: reply });
+      allSpotIds.push(...spotIds);
       if (scenario.messages.indexOf(message) < scenario.messages.length - 1) {
         await new Promise((r) => setTimeout(r, 500));
       }
@@ -113,6 +146,7 @@ async function runScenario(
       scenario,
       turns,
       finalResponse: turns[turns.length - 1]?.sam ?? "",
+      spotIds: [...new Set(allSpotIds)],
       durationMs: Date.now() - start,
     };
   } catch (e) {
@@ -120,6 +154,7 @@ async function runScenario(
       scenario,
       turns,
       finalResponse: "",
+      spotIds: [],
       durationMs: Date.now() - start,
       error: String(e),
     };
@@ -138,17 +173,23 @@ async function judge(
   client: Anthropic,
   result: ScenarioResult
 ): Promise<Judgment> {
-  const { scenario, turns, finalResponse } = result;
+  const { scenario, turns, finalResponse, spotIds } = result;
 
   const convoText = turns
     .map((t, i) => `Turn ${i + 1}\nUser: ${t.user}\nSam: ${t.sam}`)
     .join("\n\n");
+
+  const spotData = await fetchSpotsForJudge(spotIds);
+  const groundTruthSection = spotData
+    ? `\nGROUND TRUTH — exact database records Sam was given for this response:\n${spotData}\n\nFor the hallucination check: only flag something as hallucinated if Sam stated a specific fact that is ABSENT from or CONTRADICTS the database records above. If the detail is in the DB, it is NOT hallucination. If Sam said something about a spot not listed above (i.e. not from the DB), that IS hallucination.`
+    : `\nNo database records were returned for this query. Any specific factual claims about place names, hours, prices, or operational details that Sam cannot have known from the conversation should be treated as likely hallucinated.`;
 
   const prompt = `You are evaluating Sam, a travel intelligence bot. Sam only recommends real places from a database — he must never fabricate spot names, hours, or operational details.
 
 Scenario being tested: "${scenario.description}"
 Expected intent: ${scenario.intent}
 What to look for: ${scenario.notes}
+${groundTruthSection}
 
 Full conversation:
 ${convoText}

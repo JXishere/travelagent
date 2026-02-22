@@ -30,20 +30,20 @@ Search the web for the spot's details. Look for:
 - **Best time of day** — morning, afternoon, evening, late-night
 - **Indoor/outdoor** — indoor, outdoor, both
 - **Weather dependent** — true/false
-- **Tier** — 1 (must-do), 2 (should-do), 3 (nice-to-have/hidden gem)
+- **Must-go** — true (best-in-class, can't miss), false (solid, worth a visit)
 
 Use multiple sources: Google reviews, food blogs, TripAdvisor, local KL food sites (KL Foodie, TimeOut KL, Zomato).
 
 ### 2. Check for Duplicates
 
 Query existing spots to check if this place is already in the database:
-- Use the Supabase MCP to run: `SELECT name, area, category FROM spots WHERE name ILIKE '%<name>%'`
+- Use the Supabase MCP to run: `SELECT name, area, categories FROM spots WHERE name ILIKE '%<name>%'`
 - If MCP is unavailable, query via the Supabase JS client:
 ```bash
 npx tsx --env-file .env.local -e "
 import { createClient } from '@supabase/supabase-js';
 const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
-const { data } = await sb.from('spots').select('name, area, category').ilike('name', '%SPOT_NAME%');
+const { data } = await sb.from('spots').select('name, area, categories').ilike('name', '%SPOT_NAME%');
 console.log(JSON.stringify(data, null, 2));
 "
 ```
@@ -58,8 +58,8 @@ Format the researched data to match the spots schema:
   name: "Full Spot Name",
   city: "Kuala Lumpur",  // or Penang, Petaling Jaya, etc.
   area: "Bangsar",           // KL area
-  category: "lunch",                 // breakfast|lunch|dinner|cafe|activity|nightlife|market
-  tier: 2,                          // 1=must-do, 2=should-do, 3=hidden-gem
+  categories: ["lunch"],             // breakfast|lunch|dinner|cafe|activity|nightlife|market
+  must_go: false,                    // true = best-in-class, false = solid recommendation
   address: "Full address",
   latitude: 3.1234,                 // decimal coordinates
   longitude: 101.5678,
@@ -73,7 +73,6 @@ Format the researched data to match the spots schema:
   weather_dependent: false,
   best_time_of_day: "morning",
   indoor_outdoor: "indoor",
-  confidence_score: 0.7,            // 0-1, how confident in the data
   source: "manual"                  // seed|voice|text|llm_verified|manual
 }
 ```

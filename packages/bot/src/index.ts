@@ -164,7 +164,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     });
 
     const criticalMissing = (extracted.missing_fields ?? []).filter((f: string) =>
-      ["name", "category", "area"].includes(f)
+      ["name", "categories", "area"].includes(f)
     );
 
     if (criticalMissing.length > 0) {
@@ -176,7 +176,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       const question = criticalMissing
         .map((f: string) => {
           if (f === "name") return "Name?";
-          if (f === "category") return "Category? (breakfast/lunch/dinner/cafe/activity/nightlife/market)";
+          if (f === "categories") return "Category? (breakfast/lunch/dinner/cafe/activity/nightlife/market)";
           if (f === "area") return "Area?";
           return f + "?";
         })

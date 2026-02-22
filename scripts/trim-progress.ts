@@ -3,11 +3,11 @@ import { readFileSync, writeFileSync } from "fs";
 
 async function main() {
 const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
-const { data } = await sb.from("spots").select("name, area, category, city").in("city", ["Kuala Lumpur", "Petaling Jaya"]);
+const { data } = await sb.from("spots").select("name, area, categories, city").in("city", ["Kuala Lumpur", "Petaling Jaya"]);
 
 const existing: Record<string, number> = {};
 for (const s of data!) {
-  const k = `${s.area}::${s.category}`;
+  const k = `${s.area}::${s.categories?.[0]}`;
   existing[k] = (existing[k] || 0) + 1;
 }
 

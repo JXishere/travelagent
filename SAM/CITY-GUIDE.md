@@ -64,7 +64,7 @@ export const spots = [
     country: "Thailand",
     area: "Samran Rat",
     categories: ["dinner"],
-    tier: 1,
+    must_go: true,
     address: "327 Maha Chai Rd, Samran Rat, Phra Nakhon",
     latitude: 13.7534,
     longitude: 100.5013,
@@ -88,22 +88,20 @@ export const spots = [
     weather_dependent: false,
     best_time_of_day: "evening",
     indoor_outdoor: "indoor",
-    confidence_score: 0.95,
     source: "seed",
   },
   // ...
 ];
 ```
 
-**Tier guide:**
-- `1` — Must-do, category-defining. If you visit the city, you go here.
-- `2` — Solid, reliable, worth visiting. The bulk of the DB.
-- `3` — Nice-to-have or hidden gem. Low-key, hard to find, or niche.
+**Quality guide:**
+- `must_go: true` — Best-in-class, category-defining. If you visit the city, you go here.
+- `must_go: false` (default) — Solid, reliable, worth visiting. The bulk of the DB.
+- `verified: true` — Data has been confirmed accurate by a contributor or admin.
 
 **Minimum viable spot** (if you're adding a placeholder):
-- `name`, `city`, `area`, `categories[]`, `tier` are required
+- `name`, `city`, `area`, `categories[]` are required
 - `what_to_order[]` should have at least one item
-- `confidence_score: 0.5` signals it needs verification
 
 ---
 
@@ -159,7 +157,7 @@ npx tsx --env-file .env.local -e "
 import { createClient } from '@supabase/supabase-js';
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 const { data } = await sb.from('spots')
-  .select('category, tier')
+  .select('categories, must_go, verified')
   .eq('city', 'Bangkok');
 const byCategory = {};
 for (const s of data) {
@@ -174,7 +172,7 @@ console.log(byCategory);
 **Coverage targets before going live with a city:**
 - At least 20 spots total
 - Breakfast, lunch, dinner, cafe all represented
-- At least 5 tier-1 spots
+- At least 5 must_go spots
 - Embeddings backfilled
 
 ---

@@ -154,7 +154,7 @@ const anthropic = new Anthropic();
 interface ExistingSpot {
   name: string;
   area: string;
-  category: string;
+  categories: string[];
   city: string;
 }
 
@@ -169,8 +169,7 @@ interface EnrichedSpot {
   name: string;
   city: string;
   area: string;
-  category: Category;
-  tier: number;
+  categories: string[];
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -183,7 +182,7 @@ interface EnrichedSpot {
   best_time_of_day?: string;
   indoor_outdoor?: string;
   weather_dependent?: boolean;
-  confidence_score: number;
+  must_go?: boolean;
   source: "llm_research";
 }
 
@@ -209,7 +208,7 @@ interface Progress {
 async function loadExistingSpots(): Promise<ExistingSpot[]> {
   const { data, error } = await supabase
     .from("spots")
-    .select("name, area, category, city")
+    .select("name, area, categories, city")
     .in("city", ["Kuala Lumpur", "Petaling Jaya"]);
 
   if (error) throw new Error(`Failed to load spots: ${error.message}`);
@@ -236,7 +235,8 @@ function buildCoverageMatrix(
   for (const s of spots) {
     const area = s.area || "unknown";
     if (!matrix[area]) matrix[area] = {};
-    matrix[area][s.category] = (matrix[area][s.category] || 0) + 1;
+    const cat0 = s.categories?.[0] ?? "unknown";
+    matrix[area][cat0] = (matrix[area][cat0] || 0) + 1;
     areaCities[area] = s.city;
   }
 
@@ -383,7 +383,7 @@ function printMatrix(
 
 const STYLE_GUIDE = `
 CONTRIBUTOR STYLE PATTERNS (match these):
-- Tier distribution: 73% tier 2 (should-do), 17% tier 1 (must-do), 10% tier 3 (hidden gem)
+- Quality: ~17% must_go spots (genuinely best-in-class), the rest are solid recommendations worth visiting
 - Vibes: local (31%), casual (26%), chill (23%), upscale (10%), chaotic (8%), touristy (2%)
 - Price: $$ (45%), $ (40%), $$$ (14%)
 - Pro tips should be operational and opinionated: "Cash only", "Sells out by 1pm", "Go before 9am on weekends", "Non-halal"
@@ -483,7 +483,7 @@ Return a JSON object with these fields (omit any you can't verify):
   "address": "street address",
   "latitude": 3.xxxx,
   "longitude": 101.xxxx,
-  "tier": 2,
+  "must_go": false,
   "price_range": "$$",
   "payment_methods": ["cash", "card"],
   "what_to_order": ["specific dish 1", "specific dish 2"],
@@ -498,7 +498,7 @@ Return a JSON object with these fields (omit any you can't verify):
 RULES:
 - what_to_order: Be specific — "Char kuey teow with duck egg", not "noodles"
 - pro_tips: Must be operational — payment, timing, ordering strategy, capacity. NOT generic praise.
-- tier: 1 = genuinely best-in-class destination. 2 = solid, worth a visit. 3 = hidden gem for the adventurous.
+- must_go: true = genuinely best-in-class, can't-miss spot. false = solid, worth a visit.
 - Omit fields rather than guess. No fabricated data.`;
 
   await haikuLimiter.acquire();
@@ -539,23 +539,15 @@ RULES:
       return null;
     }
 
-    // Assign confidence based on data completeness
-    let confidence = 0.5;
-    if (data.address) confidence += 0.05;
-    if (data.latitude && data.longitude) confidence += 0.05;
-    if (data.what_to_order?.length >= 2) confidence += 0.05;
-    if (data.pro_tips?.length >= 2) confidence += 0.05;
-    confidence = Math.min(0.7, confidence);
-
     const enriched: EnrichedSpot = {
       name: data.name || spot.name,
       city: spot.city,
       area: spot.area,
-      category: spot.category,
-      tier: [1, 2, 3].includes(data.tier) ? data.tier : 2,
-      confidence_score: confidence,
+      categories: [spot.category],
       source: "llm_research",
     };
+
+    if (data.must_go === true) enriched.must_go = true;
 
     // Copy optional fields only if present
     if (data.address) enriched.address = data.address;
@@ -605,8 +597,9 @@ function generateSeedFile(spots: EnrichedSpot[], comment: string): string {
   // Group by category
   const byCategory: Record<string, EnrichedSpot[]> = {};
   for (const s of spots) {
-    if (!byCategory[s.category]) byCategory[s.category] = [];
-    byCategory[s.category].push(s);
+    const cat0 = s.categories?.[0] ?? "unknown";
+    if (!byCategory[cat0]) byCategory[cat0] = [];
+    byCategory[cat0].push(s);
   }
 
   // Sort categories in standard order
@@ -648,8 +641,8 @@ function formatSpotObject(s: EnrichedSpot): string {
   lines.push(`    name: ${JSON.stringify(s.name)},`);
   lines.push(`    city: ${JSON.stringify(s.city)},`);
   lines.push(`    area: ${JSON.stringify(s.area)},`);
-  lines.push(`    category: ${JSON.stringify(s.category)},`);
-  lines.push(`    tier: ${s.tier},`);
+  lines.push(`    categories: ${JSON.stringify(s.categories)},`);
+  if (s.must_go) lines.push(`    must_go: true,`);
   if (s.address) lines.push(`    address: ${JSON.stringify(s.address)},`);
   if (s.latitude != null) lines.push(`    latitude: ${s.latitude},`);
   if (s.longitude != null) lines.push(`    longitude: ${s.longitude},`);
@@ -668,7 +661,6 @@ function formatSpotObject(s: EnrichedSpot): string {
     lines.push(`    indoor_outdoor: ${JSON.stringify(s.indoor_outdoor)},`);
   if (s.weather_dependent != null)
     lines.push(`    weather_dependent: ${s.weather_dependent},`);
-  lines.push(`    confidence_score: ${s.confidence_score},`);
   lines.push(`    source: "llm_research",`);
   lines.push(`  }`);
   return lines.join("\n  ");
@@ -828,7 +820,7 @@ async function main() {
 
   // Pre-build existing name lookup
   for (const s of existing) {
-    const key = cellKey(s.area, s.category);
+    const key = cellKey(s.area, s.categories?.[0] ?? "unknown");
     if (!existingNamesByAreaCat[key]) existingNamesByAreaCat[key] = [];
     existingNamesByAreaCat[key].push(s.name);
   }

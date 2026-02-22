@@ -4,7 +4,7 @@ const sb = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_KEY!);
 async function main() {
 const { data, error } = await sb
   .from("spots")
-  .select("city, area, category, tier, source, vibe, price_range, best_time_of_day, indoor_outdoor, confidence_score")
+  .select("city, area, categories, must_go, verified, source, vibe, price_range, best_time_of_day, indoor_outdoor")
   .in("city", ["Kuala Lumpur", "Petaling Jaya"]);
 
 if (error) { console.error(error); process.exit(1); }
@@ -16,7 +16,7 @@ const allCats = new Set<string>();
 for (const r of data!) {
   const area = r.area || "unknown";
   if (!(area in matrix)) matrix[area] = {};
-  const cat = r.category || "unknown";
+  const cat = r.categories?.[0] || "unknown";
   allCats.add(cat);
   matrix[area][cat] = (matrix[area][cat] || 0) + 1;
 }
@@ -45,11 +45,15 @@ const prices: Record<string, number> = {};
 for (const r of data!) { const p = r.price_range || "null"; prices[p] = (prices[p] || 0) + 1; }
 console.table(prices);
 
-// Tier distribution
-console.log("\n=== TIER ===");
-const tiers: Record<string, number> = {};
-for (const r of data!) { const t = String(r.tier ?? "null"); tiers[t] = (tiers[t] || 0) + 1; }
-console.table(tiers);
+// Quality distribution
+console.log("\n=== QUALITY (must_go / verified) ===");
+const quality: Record<string, number> = { must_go: 0, verified: 0, standard: 0 };
+for (const r of data!) {
+  if (r.must_go) quality.must_go++;
+  else if (r.verified) quality.verified++;
+  else quality.standard++;
+}
+console.table(quality);
 
 // Source x City
 console.log("\n=== SOURCE x CITY ===");
@@ -66,17 +70,17 @@ const btod: Record<string, number> = {};
 for (const r of data!) { const b = r.best_time_of_day || "null"; btod[b] = (btod[b] || 0) + 1; }
 console.table(btod);
 
-// Category x tier cross
-console.log("\n=== CATEGORY x TIER ===");
-const catTier: Record<string, Record<string, number>> = {};
+// Category x quality cross
+console.log("\n=== CATEGORY x QUALITY ===");
+const catQuality: Record<string, Record<string, number>> = {};
 for (const r of data!) {
-  const cat = r.category || "unknown";
-  const tier = String(r.tier ?? "null");
-  if (!(cat in catTier)) catTier[cat] = {};
-  catTier[cat][tier] = (catTier[cat][tier] || 0) + 1;
+  const cat = r.categories?.[0] || "unknown";
+  if (!(cat in catQuality)) catQuality[cat] = {};
+  const q = r.must_go ? "must_go" : (r.verified ? "verified" : "standard");
+  catQuality[cat][q] = (catQuality[cat][q] || 0) + 1;
 }
-for (const [cat, tierMap] of Object.entries(catTier).sort()) {
-  const parts = Object.entries(tierMap).sort().map(([t, c]) => `T${t}=${c}`).join(", ");
+for (const [cat, qualMap] of Object.entries(catQuality).sort()) {
+  const parts = Object.entries(qualMap).sort().map(([q, c]) => `${q}=${c}`).join(", ");
   console.log(`  ${cat}: ${parts}`);
 }
 

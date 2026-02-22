@@ -14,7 +14,7 @@ export default function ReviewPage() {
     must_go: false,
     verified: false,
     thin_only: false,
-    source: "",
+    input_method: "",
     search: "",
   });
 
@@ -34,7 +34,7 @@ export default function ReviewPage() {
     [spots]
   );
   const sources = useMemo(
-    () => [...new Set(spots.map((s) => s.source).filter(Boolean))].sort() as string[],
+    () => [...new Set(spots.map((s) => s.input_method).filter(Boolean))].sort() as string[],
     [spots]
   );
 
@@ -46,11 +46,10 @@ export default function ReviewPage() {
       if (filters.verified && !s.verified) return false;
       if (filters.thin_only) {
         const noOrder = !s.what_to_order || s.what_to_order.length === 0;
-        const noHours = !s.opening_hours;
         const noTips  = !s.pro_tips || s.pro_tips.length === 0;
-        if (!(noOrder && noHours && noTips)) return false;
+        if (!(noOrder && noTips)) return false;
       }
-      if (filters.source && s.source !== filters.source) return false;
+      if (filters.input_method && s.input_method !== filters.input_method) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
         if (
@@ -68,9 +67,8 @@ export default function ReviewPage() {
     const approved = spots.filter((s) => s.verified).length;
     const thinCount = spots.filter((s) => {
       const noOrder = !s.what_to_order || s.what_to_order.length === 0;
-      const noHours = !s.opening_hours;
       const noTips  = !s.pro_tips || s.pro_tips.length === 0;
-      return noOrder && noHours && noTips;
+      return noOrder && noTips;
     }).length;
     for (const s of spots) {
       for (const cat of s.categories ?? []) {

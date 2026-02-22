@@ -10,7 +10,7 @@ interface SpotFiltersProps {
     must_go: boolean;
     verified: boolean;
     thin_only: boolean;
-    source: string;
+    input_method: string;
     search: string;
   };
   onChange: (filters: SpotFiltersProps["filters"]) => void;
@@ -114,8 +114,8 @@ export function SpotFilters({
       </label>
 
       <select
-        value={filters.source}
-        onChange={(e) => set("source", e.target.value)}
+        value={filters.input_method}
+        onChange={(e) => set("input_method", e.target.value)}
         style={selectStyle}
       >
         <option value="">All sources</option>

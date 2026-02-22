@@ -39,13 +39,11 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
     pro_tips: (spot.pro_tips ?? []).join("\n"),
     address: spot.address ?? "",
     price_range: spot.price_range ?? "",
-    payment_methods: (spot.payment_methods ?? []).join(", "),
   });
 
   const approved = spot.verified;
 
   const isThin = (!spot.what_to_order || spot.what_to_order.length === 0)
-    && !spot.opening_hours
     && (!spot.pro_tips || spot.pro_tips.length === 0);
 
   const handleParseAndSave = async () => {
@@ -75,13 +73,6 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
       if (parsed.what_to_skip?.length) {
         updates.what_to_skip = [
           ...new Set([...(spot.what_to_skip ?? []), ...parsed.what_to_skip]),
-        ];
-      }
-      if (parsed.payment_methods?.length) {
-        const existing = new Set(spot.payment_methods ?? []);
-        updates.payment_methods = [
-          ...(spot.payment_methods ?? []),
-          ...parsed.payment_methods.filter((v: string) => !existing.has(v)),
         ];
       }
       // Scalars: only fill if currently empty
@@ -123,13 +114,9 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
         pro_tips:        prev.pro_tips        || (suggestions.pro_tips       ?? []).join("\n"),
         address:         prev.address         || suggestions.address         || "",
         price_range:     prev.price_range     || suggestions.price_range     || "",
-        payment_methods: prev.payment_methods || (suggestions.payment_methods ?? []).join(", "),
         vibe:            prev.vibe            || suggestions.vibe            || "",
       }));
 
-      if (suggestions.opening_hours && !spot.opening_hours) {
-        setSuggestedHours(suggestions.opening_hours);
-      }
       setEditing(true);
     } catch {
       alert("Web search failed — try adding notes manually.");
@@ -157,14 +144,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
         .filter(Boolean),
       address: draft.address || null,
       price_range: draft.price_range || null,
-      payment_methods: draft.payment_methods
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
     };
-    if (suggestedHours && !spot.opening_hours) {
-      updates.opening_hours = suggestedHours;
-    }
     onSave(spot.id, updates);
     setSuggestedHours(null);
     setEditing(false);
@@ -214,7 +194,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
           {spot.contribution_count ? `${spot.contribution_count}c` : "—"}
         </span>
         <span style={{ color: "var(--muted)", fontSize: "0.7rem" }}>
-          {spot.source ?? "—"}
+          {spot.input_method ?? "—"}
         </span>
         {approved && (
           <span style={{ color: "var(--green)", fontSize: "0.8rem" }}>✓</span>
@@ -326,16 +306,6 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
                   style={{ ...inputStyle, resize: "vertical" }}
                 />
               </label>
-              <label style={labelStyle}>
-                Payment methods (comma-separated, e.g. cash, card, QR)
-                <input
-                  value={draft.payment_methods}
-                  onChange={(e) =>
-                    setDraft({ ...draft, payment_methods: e.target.value })
-                  }
-                  style={inputStyle}
-                />
-              </label>
               {suggestedHours && (
                 <p style={{ fontSize: "0.78rem", color: "var(--muted)", marginTop: "0.25rem" }}>
                   Hours pre-filled from web — verify before saving.
@@ -358,16 +328,6 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
               <DetailRow label="Vibe" value={spot.vibe} />
               <DetailRow label="Best time" value={spot.best_time_of_day} />
               <DetailRow label="Indoor/outdoor" value={spot.indoor_outdoor} />
-              <DetailRow
-                label="Hours"
-                value={
-                  spot.opening_hours
-                    ? Object.entries(spot.opening_hours)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(" | ")
-                    : null
-                }
-              />
               {spot.latitude && spot.longitude ? (
                 <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.8rem", marginBottom: "0.25rem" }}>
                   <span style={{ color: "var(--muted)", minWidth: "5rem" }}>Maps</span>

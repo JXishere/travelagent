@@ -72,7 +72,7 @@ describe("handleFeedback", () => {
         spot_id: "spot-1",
         traveler_id: "t1",
         rating: 5,
-        did_they_go: true,
+        visited: true,
       })
     );
     expect(result).toContain("Village Park");

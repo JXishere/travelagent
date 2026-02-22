@@ -13,7 +13,7 @@ create table contributors (
   whatsapp_number text unique not null,
   name text,
   cities_contributed text[] default '{}',
-  spots_contributed integer default 0,
+  contribution_count integer default 0,
   created_at timestamp with time zone default now()
 );
 
@@ -52,8 +52,8 @@ create table spots (
   -- Metadata
   contributor_id uuid references contributors(id),
   confidence_score decimal default 0.7,
-  use_count integer default 0,
-  source text default 'manual', -- seed, voice, text, llm_verified, manual
+  recommendation_count integer default 0,
+  input_method text default 'manual', -- seed, voice, text, generate, manual
   last_verified timestamp with time zone default now(),
   created_at timestamp with time zone default now()
 );
@@ -83,7 +83,7 @@ create table travelers (
   first_time_visitor boolean default true,
 
   -- History
-  spots_visited uuid[] default '{}',
+  spots_recommended uuid[] default '{}',
   spots_liked uuid[] default '{}',
   spots_disliked uuid[] default '{}',
   trips_taken integer default 0,
@@ -125,7 +125,7 @@ create table feedback (
   spot_id uuid references spots(id),
   traveler_id uuid references travelers(id),
   rating integer check (rating >= 1 and rating <= 5),
-  did_they_go boolean,
+  visited boolean,
   comments text,
   user_tips text[],
   created_at timestamp with time zone default now()

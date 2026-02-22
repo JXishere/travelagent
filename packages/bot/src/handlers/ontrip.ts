@@ -6,8 +6,8 @@ import {
   semanticSearchSpots,
   findSpotByName,
   getOrCreateTraveler,
-  incrementSpotUseCount,
-  markSpotsVisited,
+  incrementRecommendationCount,
+  markSpotsRecommended,
   getAreaCentroid,
   getDistinctAreas,
   type Spot,
@@ -221,7 +221,7 @@ export async function buildHungryPrompt(
   let toRecommend: Spot[];
   if (traveler.user_type !== "local") {
     const unvisited = spots.filter(
-      (s) => !traveler.spots_visited?.includes(s.id)
+      (s) => !traveler.spots_recommended?.includes(s.id)
     );
     toRecommend = unvisited.length > 0 ? unvisited.slice(0, 3) : spots.slice(0, 3);
   } else {
@@ -233,9 +233,9 @@ export async function buildHungryPrompt(
   }
 
   for (const spot of toRecommend) {
-    incrementSpotUseCount(spot.id);
+    incrementRecommendationCount(spot.id);
   }
-  await markSpotsVisited(phoneNumber, toRecommend.map(s => s.id));
+  await markSpotsRecommended(phoneNumber, toRecommend.map(s => s.id));
 
   // No spots in DB — be honest
   if (toRecommend.length === 0) {
@@ -439,8 +439,8 @@ export async function buildDayPlanPrompt(
     : "";
   const spotsContext = formatSpotsForLLM(allDaySpots);
 
-  // Mark all recommended spots as visited
-  await markSpotsVisited(phoneNumber, allDaySpots.map(s => s.id));
+  // Mark all recommended spots
+  await markSpotsRecommended(phoneNumber, allDaySpots.map(s => s.id));
 
   const prefContext = buildPrefContext(traveler);
 
@@ -455,7 +455,7 @@ ${weather ? `Weather: ${weather.summary}` : ""}
 ${details.area ? `Area focus: ${details.area}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
 ${prefContext}
-Spots they've already visited: ${traveler.spots_visited?.length ?? 0}
+Spots they've already seen: ${traveler.spots_recommended?.length ?? 0}
 
 Available spots for building a day plan:
 
@@ -573,11 +573,11 @@ export async function buildNearbyPrompt(
 
   const spotsContext = formatSpotsForLLM(spots, distanceFromArea);
 
-  // Track usage and mark as visited
+  // Track usage and mark as recommended
   for (const spot of spots) {
-    incrementSpotUseCount(spot.id);
+    incrementRecommendationCount(spot.id);
   }
-  await markSpotsVisited(phoneNumber, spots.map(s => s.id));
+  await markSpotsRecommended(phoneNumber, spots.map(s => s.id));
 
   const prefContext = buildPrefContext(traveler);
 

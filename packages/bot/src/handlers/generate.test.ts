@@ -183,7 +183,7 @@ describe("handleGenerate", () => {
         categories: ["dinner"],
         price_range: "$$",
         vibe: "casual",
-        source: "llm_verified",
+        input_method: "generate",
       })
     );
     expect(result).toContain("Saved");

@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
 import { chat, buildSystemPrompt, HAIKU, langInstruction, langUserNote, samSays } from "../llm.js";
-import { querySpots, semanticSearchSpots, incrementSpotUseCount, markSpotsVisited, getOrCreateTraveler, getSpotContributions, trackEvent, getAreaCentroid, getDistinctAreas, type Spot, type SpotContribution } from "../database.js";
+import { querySpots, semanticSearchSpots, incrementRecommendationCount, markSpotsRecommended, getOrCreateTraveler, getSpotContributions, trackEvent, getAreaCentroid, getDistinctAreas, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getDefaultCity, getCityDefaults, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
@@ -195,9 +195,9 @@ export async function handleQuery(
   }
 
   for (const spot of topSpots) {
-    incrementSpotUseCount(spot.id);
+    incrementRecommendationCount(spot.id);
   }
-  await markSpotsVisited(phoneNumber, topSpots.map(s => s.id));
+  await markSpotsRecommended(phoneNumber, topSpots.map(s => s.id));
   trackEvent(phoneNumber, channel, "recommendation", {
     spot_ids: topSpots.map(s => s.id),
     spot_names: topSpots.map(s => s.name),
@@ -265,12 +265,13 @@ export function formatOpeningHours(hours: Record<string, string>): string {
     .join(", ");
 }
 
-export function sourceLabel(source: string | undefined): string {
-  switch (source) {
+export function sourceLabel(inputMethod: string | undefined): string {
+  switch (inputMethod) {
     case "voice": return "local contributor (voice note)";
     case "text": return "local contributor";
     case "seed":
     case "manual":
+    case "generate":
     default: return "curated by Sam";
   }
 }
@@ -351,9 +352,9 @@ export function formatSpotsForLLM(spots: Spot[], distanceFromArea?: Map<string, 
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
       const takeLabel = s.must_go
-        ? `must-go (${sourceLabel(s.source)})`
+        ? `must-go (${sourceLabel(s.input_method)})`
         : s.verified
-          ? `verified (${sourceLabel(s.source)})`
+          ? `verified (${sourceLabel(s.input_method)})`
           : `unverified — treat as a lead, not a guarantee`;
       lines.push(`   Sam's take: ${takeLabel}`);
       if (s.avg_rating != null)

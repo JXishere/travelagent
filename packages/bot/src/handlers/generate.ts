@@ -124,7 +124,7 @@ export async function handleGenerate(
 
   await insertSpot({
     ...merged,
-    source: "llm_verified",
+    input_method: "generate",
   } as any);
 
   const savedMsg = `Saved *${merged.name}* to the graph.`;

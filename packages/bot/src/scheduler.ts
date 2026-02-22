@@ -44,7 +44,7 @@ interface CandidateInfo {
   last_proactive_at?: string;
   last_user_message_at?: string;
   current_flow: string;
-  spots_visited: string[];
+  spots_recommended: string[];
   spots_feedback_asked: string[];
   dietary_restrictions?: string[];
   travel_party?: string;
@@ -143,8 +143,8 @@ export function evaluateCandidate(
 
   // Priority 2: FEEDBACK_CHECK — has unasked spots, during check windows
   const hasUnaskedSpots =
-    (candidate.spots_visited?.length ?? 0) > 0 &&
-    candidate.spots_visited.some(
+    (candidate.spots_recommended?.length ?? 0) > 0 &&
+    candidate.spots_recommended.some(
       (id) => !(candidate.spots_feedback_asked ?? []).includes(id)
     );
   if (hasUnaskedSpots && ((klHour >= 10 && klHour < 12) || (klHour >= 19 && klHour < 21))) {

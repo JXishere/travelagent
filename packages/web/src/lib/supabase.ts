@@ -20,8 +20,8 @@ export interface Spot {
   best_time_of_day: string | null;
   indoor_outdoor: string | null;
   weather_dependent: boolean | null;
-  source: string | null;
-  use_count: number | null;
+  input_method: string | null;
+  recommendation_count: number | null;
   contribution_count: number | null;
   created_at: string;
 }

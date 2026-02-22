@@ -17,7 +17,7 @@ const baseTraveler: Traveler = {
   home_areas: [],
   preferences: {},
   dietary_restrictions: [],
-  spots_visited: [],
+  spots_recommended: [],
   spots_liked: [],
   spots_disliked: [],
   spots_feedback_asked: [],

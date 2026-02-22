@@ -6,7 +6,7 @@ vi.mock("../database.js", () => ({
   insertSpot: vi.fn().mockResolvedValue({ id: "spot-1", name: "Test Spot" }),
   updateSpot: vi.fn().mockResolvedValue(undefined),
   findDuplicateSpot: vi.fn().mockResolvedValue(null),
-  getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", spots_contributed: 1 }),
+  getOrCreateContributor: vi.fn().mockResolvedValue({ id: "c1", contribution_count: 1 }),
   incrementContributorCount: vi.fn().mockResolvedValue(undefined),
   incrementSpotContributionCount: vi.fn().mockResolvedValue(undefined),
   insertSpotContribution: vi.fn().mockResolvedValue(undefined),
@@ -530,7 +530,7 @@ beforeEach(() => {
   mockedWebSearch.mockResolvedValue({});
   mockedClassify.mockResolvedValue("confirm");
   mockedFindDuplicate.mockResolvedValue(null);
-  mockedGetContributor.mockResolvedValue({ id: "c1", spots_contributed: 1 } as any);
+  mockedGetContributor.mockResolvedValue({ id: "c1", contribution_count: 1 } as any);
 });
 
 describe("handleContribution — first message (no stage)", () => {
@@ -691,7 +691,7 @@ describe("handleContribution — confirming stage", () => {
     expect(mockedInsertSpot).toHaveBeenCalledWith(expect.objectContaining({
       name: "Fatty Crab",
       contributor_id: "c1",
-      source: "text",
+      input_method: "text",
     }));
     expect(mockedIncrementCount).toHaveBeenCalled();
     expect(mockedSamSays).toHaveBeenCalledWith(

@@ -19,8 +19,8 @@ vi.mock("../database.js", () => ({
     user_type: "traveler",
     preferences: {},
   }),
-  incrementSpotUseCount: vi.fn(),
-  markSpotsVisited: vi.fn().mockResolvedValue(undefined),
+  incrementRecommendationCount: vi.fn(),
+  markSpotsRecommended: vi.fn().mockResolvedValue(undefined),
   getDistinctAreas: vi.fn().mockResolvedValue([]),
   getAreaCentroid: vi.fn().mockResolvedValue(undefined),
 }));

@@ -119,7 +119,7 @@ describe("formatSpotsForLLM", () => {
   });
 
   it("includes source in Sam's take line for verified spots", () => {
-    const spot: Spot = { ...baseSpot, source: "voice", verified: true };
+    const spot: Spot = { ...baseSpot, input_method: "voice", verified: true };
     const result = formatSpotsForLLM([spot]);
     expect(result).toContain("Sam's take: verified (local contributor (voice note))");
   });

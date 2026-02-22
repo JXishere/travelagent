@@ -666,7 +666,7 @@ async function saveSpot(
       what_to_skip: spotData.what_to_skip?.length ? spotData.what_to_skip : undefined,
       pro_tips: spotData.pro_tips?.length ? spotData.pro_tips : undefined,
       vibe: spotData.vibe,
-      is_must_go: isMustGo,
+      must_go: isMustGo,
     }).catch(err => console.error("[attribution] Failed to save contribution:", err));
     incrementSpotContributionCount(duplicate.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
@@ -697,7 +697,7 @@ async function saveSpot(
   const newSpot = await insertSpot({
     ...spotData,
     contributor_id: contributor.id,
-    source,
+    input_method: source,
     verified: true,
     must_go: isMustGo ?? false,
   });
@@ -710,7 +710,7 @@ async function saveSpot(
     what_to_skip: spotData.what_to_skip,
     pro_tips: spotData.pro_tips,
     vibe: spotData.vibe,
-    is_must_go: isMustGo,
+    must_go: isMustGo,
   }).catch(err => console.error("[attribution] Failed to save contribution:", err));
   incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
@@ -728,5 +728,5 @@ async function saveSpot(
     source,
   });
 
-  return samSays(`Respond to confirm you just saved "${data.name}" to your knowledge graph. The contributor has now added ${updated.spots_contributed} spot(s) total. Confirm it's saved, thank them warmly, mention the spot name. One sentence.`);
+  return samSays(`Respond to confirm you just saved "${data.name}" to your knowledge graph. The contributor has now added ${updated.contribution_count} spot(s) total. Confirm it's saved, thank them warmly, mention the spot name. One sentence.`);
 }

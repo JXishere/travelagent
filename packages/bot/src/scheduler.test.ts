@@ -30,7 +30,7 @@ const baseCandidate = {
   last_proactive_at: undefined as string | undefined,
   last_user_message_at: undefined as string | undefined,
   current_flow: "general",
-  spots_visited: [] as string[],
+  spots_recommended: [] as string[],
   spots_feedback_asked: [] as string[],
   dietary_restrictions: [] as string[],
   travel_party: "solo",
@@ -122,7 +122,7 @@ describe("evaluateCandidate", () => {
       ...baseCandidate,
       last_user_message_at: recentMsg,
       last_proactive_at: oldProactive,
-      spots_visited: ["spot-1", "spot-2"],
+      spots_recommended: ["spot-1", "spot-2"],
       spots_feedback_asked: ["spot-1"],
     }, now);
     expect(result).not.toBeNull();
@@ -137,7 +137,7 @@ describe("evaluateCandidate", () => {
       ...baseCandidate,
       last_user_message_at: recentMsg,
       last_proactive_at: oldProactive,
-      spots_visited: ["spot-1"],
+      spots_recommended: ["spot-1"],
       spots_feedback_asked: [],
     }, now);
     expect(result).not.toBeNull();

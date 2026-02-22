@@ -89,14 +89,15 @@ export interface Spot {
   what_to_skip?: string[];
   pro_tips?: string[];
   vibe?: string;
+  payment_methods?: string[];
+  opening_hours?: Record<string, string>;
   weather_dependent?: boolean;
   best_time_of_day?: string;
   indoor_outdoor?: string;
   contributor_id?: string;
-  use_count?: number;
-  contribution_count?: number;
+  recommendation_count?: number;
   avg_rating?: number;
-  source?: string;
+  input_method?: string;
   embedding?: number[];
   created_at?: string;
   isStale?: boolean; // computed at query time — not a DB column
@@ -385,9 +386,9 @@ export async function semanticSearchSpots(
   return (data ?? []) as Spot[];
 }
 
-export async function incrementSpotUseCount(spotId: string): Promise<void> {
+export async function incrementRecommendationCount(spotId: string): Promise<void> {
   // Atomic increment via RPC — avoids SELECT → UPDATE race condition under concurrent recommendations
-  await supabase.rpc("increment_spot_use_count", { p_spot_id: spotId });
+  await supabase.rpc("increment_recommendation_count", { p_spot_id: spotId });
 }
 
 export async function incrementSpotContributionCount(spotId: string): Promise<void> {
@@ -411,7 +412,7 @@ export interface Traveler {
   trip_dates?: { start: string; end: string };
   travel_party?: string;
   first_time_visitor?: boolean;
-  spots_visited: string[];
+  spots_recommended: string[];
   spots_liked: string[];
   spots_disliked: string[];
   last_proactive_at?: string;
@@ -449,24 +450,24 @@ export async function updateTraveler(
     .eq("whatsapp_number", phoneNumber);
 }
 
-export async function markSpotVisited(
+export async function markSpotRecommended(
   phoneNumber: string,
   spotId: string
 ): Promise<void> {
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const existing = new Set(traveler.spots_visited ?? []);
+  const existing = new Set(traveler.spots_recommended ?? []);
   existing.add(spotId);
-  await updateTraveler(phoneNumber, { spots_visited: [...existing] });
+  await updateTraveler(phoneNumber, { spots_recommended: [...existing] });
 }
 
-export async function markSpotsVisited(
+export async function markSpotsRecommended(
   phoneNumber: string,
   spotIds: string[]
 ): Promise<void> {
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const existing = new Set(traveler.spots_visited ?? []);
+  const existing = new Set(traveler.spots_recommended ?? []);
   for (const id of spotIds) existing.add(id);
-  await updateTraveler(phoneNumber, { spots_visited: [...existing] });
+  await updateTraveler(phoneNumber, { spots_recommended: [...existing] });
 }
 
 // ============================================
@@ -477,7 +478,7 @@ export interface Contributor {
   id: string;
   whatsapp_number: string;
   name?: string;
-  spots_contributed: number;
+  contribution_count: number;
   cities_contributed?: string[];
   created_at?: string;
 }
@@ -513,7 +514,7 @@ export async function incrementContributorCount(
   await supabase
     .from("contributors")
     .update({
-      spots_contributed: contributor.spots_contributed + 1,
+      contribution_count: contributor.contribution_count + 1,
       cities_contributed: cities,
     })
     .eq("whatsapp_number", phoneNumber);
@@ -582,15 +583,15 @@ export async function markFeedbackAsked(
   await updateTraveler(phoneNumber, { spots_feedback_asked: [...existing] });
 }
 
-/** Get spots from spots_visited that haven't been asked about in feedback yet */
+/** Get spots from spots_recommended that haven't been asked about in feedback yet */
 export async function getSpotsNeedingFeedback(
   phoneNumber: string
 ): Promise<Spot[]> {
   const traveler = await getOrCreateTraveler(phoneNumber);
-  if (!traveler.spots_visited?.length) return [];
+  if (!traveler.spots_recommended?.length) return [];
 
   const asked = new Set(traveler.spots_feedback_asked ?? []);
-  const needFeedback = traveler.spots_visited.filter((id) => !asked.has(id));
+  const needFeedback = traveler.spots_recommended.filter((id) => !asked.has(id));
   if (needFeedback.length === 0) return [];
 
   const { data } = await supabase
@@ -610,7 +611,7 @@ export interface Feedback {
   spot_id: string;
   traveler_id: string;
   rating: number;
-  did_they_go: boolean;
+  visited: boolean;
   comments?: string;
   user_tips?: string[];
 }
@@ -621,12 +622,12 @@ export async function insertFeedback(
   await supabase.from("feedback").insert(feedback);
 
   // After insert, recompute avg_rating from all verified visits for this spot
-  if (feedback.rating != null && feedback.did_they_go !== false) {
+  if (feedback.rating != null && feedback.visited !== false) {
     const { data: ratings } = await supabase
       .from("feedback")
       .select("rating")
       .eq("spot_id", feedback.spot_id)
-      .eq("did_they_go", true)
+      .eq("visited", true)
       .not("rating", "is", null);
 
     if (ratings && ratings.length > 0) {
@@ -687,7 +688,7 @@ export interface SpotContribution {
   what_to_skip?: string[];
   pro_tips?: string[];
   vibe?: string;
-  is_must_go?: boolean;
+  must_go?: boolean;
   created_at: string;
 }
 
@@ -698,7 +699,7 @@ export async function insertSpotContribution(contribution: {
   what_to_skip?: string[];
   pro_tips?: string[];
   vibe?: string;
-  is_must_go?: boolean;
+  must_go?: boolean;
 }): Promise<void> {
   const { error } = await supabase.from("spot_contributions").insert(contribution);
   if (error) console.error("[attribution] Failed to insert spot contribution:", error);
@@ -721,12 +722,12 @@ export async function getRecentlyRecommendedSpots(
   phoneNumber: string
 ): Promise<Spot[]> {
   const traveler = await getOrCreateTraveler(phoneNumber);
-  if (!traveler.spots_visited?.length) return [];
+  if (!traveler.spots_recommended?.length) return [];
 
   const { data } = await supabase
     .from("spots")
     .select("*")
-    .in("id", traveler.spots_visited.slice(-5));
+    .in("id", traveler.spots_recommended.slice(-5));
 
   return (data ?? []) as Spot[];
 }

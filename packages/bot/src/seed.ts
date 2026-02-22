@@ -35,10 +35,10 @@ async function seed() {
   console.log(`Seeding ${citySpots.length} ${city} spots...`);
 
   for (const spot of citySpots) {
-    // Try with source column first; fall back without if column doesn't exist yet
-    const source = (spot as any).source || "seed";
-    let { error } = await supabase.from("spots").insert({ ...spot, source });
-    if (error?.message?.includes("source")) {
+    // Try with input_method column first; fall back without if column doesn't exist yet
+    const input_method = (spot as any).input_method || (spot as any).source || "seed";
+    let { error } = await supabase.from("spots").insert({ ...spot, input_method });
+    if (error?.message?.includes("input_method")) {
       ({ error } = await supabase.from("spots").insert(spot));
     }
     if (error) {

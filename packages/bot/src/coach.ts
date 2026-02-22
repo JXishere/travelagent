@@ -22,7 +22,7 @@ export interface ConversationRow {
 interface FeedbackRow {
   spot_id: string;
   rating: number;
-  did_they_go: boolean;
+  visited: boolean;
   user_tips: string[];
 }
 
@@ -64,7 +64,7 @@ export async function fetchRecentConversations(limit: number): Promise<Conversat
 export async function fetchRecentFeedback(): Promise<FeedbackRow[]> {
   const { data, error } = await supabase
     .from("feedback")
-    .select("spot_id, rating, did_they_go, user_tips")
+    .select("spot_id, rating, visited, user_tips")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -133,7 +133,7 @@ export function buildAggregationPrompt(
 
   // Feedback summary
   const feedbackSummary = feedback.length > 0
-    ? `${feedback.length} feedback entries. Average rating: ${(feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1)}/5. Visited: ${feedback.filter((f) => f.did_they_go).length}/${feedback.length}.`
+    ? `${feedback.length} feedback entries. Average rating: ${(feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1)}/5. Visited: ${feedback.filter((f) => f.visited).length}/${feedback.length}.`
     : "No feedback data available.";
 
   // Recommendation diversity

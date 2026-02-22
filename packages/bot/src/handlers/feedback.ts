@@ -47,7 +47,7 @@ export async function handleFeedback(
         spot_id: state.spot_id,
         traveler_id: traveler.id,
         rating: fb.rating,
-        did_they_go: fb.did_they_go ?? true,
+        visited: fb.did_they_go ?? true,
         comments: fb.comments,
         user_tips: fb.tips,
       });

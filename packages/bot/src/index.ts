@@ -204,7 +204,7 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
       return;
     }
 
-    await insertSpot({ ...spotData, source: "text" });
+    await insertSpot({ ...spotData, input_method: "text" });
     const response = `Added *${extracted.name}* (${extracted.area}, ${(extracted.categories ?? []).join("/")}) to the graph.`;
     await appendMessages(from, [
       { role: "user", content: text },

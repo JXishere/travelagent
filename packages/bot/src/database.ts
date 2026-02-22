@@ -84,9 +84,6 @@ export interface Spot {
   address?: string;
   latitude?: number;
   longitude?: number;
-  google_pin_accurate?: boolean;
-  payment_methods?: string[];
-  opening_hours?: Record<string, string>;
   price_range?: string;
   what_to_order?: string[];
   what_to_skip?: string[];
@@ -101,7 +98,6 @@ export interface Spot {
   avg_rating?: number;
   source?: string;
   embedding?: number[];
-  last_verified?: string;
   created_at?: string;
   isStale?: boolean; // computed at query time — not a DB column
 }
@@ -154,11 +150,11 @@ export async function querySpots(filters: {
   if (error) throw error;
   const pool = (data ?? []) as Spot[];
 
-  // Compute staleness: no last_verified, or last_verified older than 180 days
+  // Compute staleness: no created_at, or created_at older than 180 days
   const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
   const withStaleness = pool.map(s => ({
     ...s,
-    isStale: !s.last_verified || s.last_verified < staleThreshold,
+    isStale: !s.created_at || s.created_at < staleThreshold,
   }));
 
   // Spots with avg_rating < 2.5 are demoted to rest tier (poor traveler experience signals)
@@ -169,7 +165,14 @@ export async function querySpots(filters: {
   const mustGo = withStaleness.filter(s => s.must_go && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
   const verified = withStaleness.filter(s => !s.must_go && s.verified && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
   const rest = withStaleness.filter(s => (!s.must_go && !s.verified) || isPoorlyRated(s)).sort(() => Math.random() - 0.5);
-  return [...mustGo, ...verified, ...rest].slice(0, requestedLimit);
+  const isThinSpot = (s: typeof withStaleness[0]) =>
+    (!s.what_to_order || s.what_to_order.length === 0) &&
+    (!s.pro_tips || s.pro_tips.length === 0);
+
+  const sorted = [...mustGo, ...verified, ...rest];
+  const thick  = sorted.filter(s => !isThinSpot(s));
+  const thin   = sorted.filter(s =>  isThinSpot(s));
+  return (thick.length > 0 ? thick : thin).slice(0, requestedLimit);
 }
 
 // In-process cache so repeated widening queries for the same area don't hit the DB twice
@@ -412,7 +415,6 @@ export interface Traveler {
   spots_liked: string[];
   spots_disliked: string[];
   last_proactive_at?: string;
-  trips_taken?: number;
   spots_feedback_asked: string[];
 }
 

@@ -198,7 +198,7 @@ function loadPrompt(name: string): string {
 - `classifyConfirmation()` classifies user response during contribution save confirmation
 - `setPromptsDir()` — lets the web package override the prompts directory path (needed because Next.js resolves from a different root)
 - `samSays()` — quick 100-token Sam-voiced one-liner (convenience wrapper around `chatAsSam()`)
-- `webSearchSpot()` — fetches real-world spot details (hours, payment, address) via Claude's web search tool; used by the contribution flow's `enrichFromWeb()` stage
+- `webSearchSpot()` — fetches real-world spot details (hours, payment, address) via Claude's web search tool; used by the contribution flow's `enrichFromWeb()` stage and by the spot info handler when the DB spot is missing hours or payment fields
 - `chat()` — low-level Claude API wrapper (underlies all the above)
 
 ## Flow Architecture

@@ -27,6 +27,9 @@ export async function getCurrentWeather(city?: string): Promise<WeatherInfo | nu
     );
     const data = await res.json();
 
+    // API error (e.g. 401 invalid key, 404 city not found)
+    if (!res.ok || data.cod !== 200) return null;
+
     const weather = data.weather?.[0];
     const main = data.main;
     const wind = data.wind;

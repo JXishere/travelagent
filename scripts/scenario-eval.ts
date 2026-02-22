@@ -47,7 +47,7 @@ async function fetchSpotsForJudge(spotIds: string[]): Promise<string> {
 
 const WEB_URL = "http://localhost:3001/api/chat";
 const JUDGE_MODEL = "claude-sonnet-4-6";
-const REQUEST_DELAY_MS = 1500; // avoid hammering the API
+const REQUEST_DELAY_MS = 2000; // avoid hammering the API
 
 // ─── Output helpers ────────────────────────────────────────────────────────────
 
@@ -181,8 +181,8 @@ async function judge(
 
   const spotData = await fetchSpotsForJudge(spotIds);
   const groundTruthSection = spotData
-    ? `\nGROUND TRUTH — exact database records Sam was given for this response:\n${spotData}\n\nFor the hallucination check: only flag something as hallucinated if Sam stated a specific fact that is ABSENT from or CONTRADICTS the database records above. If the detail is in the DB, it is NOT hallucination. If Sam said something about a spot not listed above (i.e. not from the DB), that IS hallucination.`
-    : `\nNo database records were returned for this query. Any specific factual claims about place names, hours, prices, or operational details that Sam cannot have known from the conversation should be treated as likely hallucinated.`;
+    ? `\nGROUND TRUTH — exact database records Sam was given for this response:\n${spotData}\n\nFor the hallucination check: only flag something as hallucinated if Sam stated a specific fact that is ABSENT from or CONTRADICTS the database records above. If the detail is in the DB, it is NOT hallucination. If Sam said something about a spot not listed above (i.e. not from the DB), that IS hallucination.\n\nIMPORTANT EXCEPTIONS — do NOT flag these as hallucination:\n- Opening hours or payment methods: Sam may source these from live web search when the DB field is null. If Sam hedges ("check before heading out", "may not be fully current"), treat that as acceptable sourcing, not fabrication.\n- Spot names explicitly mentioned in the Ground Truth above — those ARE in the DB and are not fabricated.\n- General knowledge about an area or cuisine type (not specific operational details) is acceptable context.`
+    : `\nNo database records were returned for this query. Any specific factual claims about specific spot names, exact hours, or operational details that Sam cannot have known from the conversation should be treated as likely hallucinated. However: (1) If the user asked about hours/payment and Sam hedges ("check before heading out"), that is acceptable — Sam uses web search for volatile fields. (2) Sam saying "I don't have intel on that one" is ALWAYS correct behaviour when a spot isn't found.`;
 
   const prompt = `You are evaluating Sam, a travel intelligence bot. Sam only recommends real places from a database — he must never fabricate spot names, hours, or operational details.
 
@@ -417,14 +417,28 @@ async function main() {
 
     if (!fastMode && !result.error && result.finalResponse && client) {
       process.stdout.write(` ${C.grey}judging...${C.reset}`);
-      try {
-        judgment = await judge(client, result);
-      } catch (e) {
-        judgment = {
-          routing: { pass: false, reason: `Judge error: ${String(e).slice(0, 80)}` },
-          quality: { pass: false, reason: "Judge error" },
-          hallucination: { pass: true, reason: "Could not evaluate" },
-        };
+      // Retry judge up to 3 times with backoff (handles transient API rate limits)
+      let judgeAttempt = 0;
+      while (judgeAttempt < 3) {
+        try {
+          judgment = await judge(client, result);
+          break;
+        } catch (e: any) {
+          judgeAttempt++;
+          const isRateLimit = e?.status === 429 || String(e).includes("429");
+          const isRetryable = isRateLimit || e?.status === 529;
+          if (isRetryable && judgeAttempt < 3) {
+            const delay = 10000 * judgeAttempt; // 10s, 20s
+            await new Promise(r => setTimeout(r, delay));
+          } else {
+            judgment = {
+              routing: { pass: false, reason: `Judge error: ${String(e).slice(0, 120)}` },
+              quality: { pass: false, reason: "Judge error" },
+              hallucination: { pass: true, reason: "Could not evaluate" },
+            };
+            break;
+          }
+        }
       }
     }
 

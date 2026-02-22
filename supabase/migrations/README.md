@@ -40,3 +40,5 @@ npm run migrate
 | `20260220_010000_atomic_helpers.sql` | Atomic RPC helpers: append_conversation_messages (row-locked append), increment_spot_use_count, increment_spot_contribution_count — eliminates read-modify-write race conditions | applied via MCP |
 | `20260220_200000_category_text_to_categories_array.sql` | Migrate spots.category (text) → categories (text[]); split 4 pipe-hacked rows on \|; update match_spots RPC to filter with array overlap (&&) | applied via MCP |
 | `20260221_000000_add_avg_rating_to_spots.sql` | Add avg_rating (numeric 3,2) to spots; index; backfill from existing feedback | applied via MCP |
+| `20260222_000000_backfill_spot_coordinates_from_area_centroid.sql` | Backfill lat/lng for 42 spots missing coordinates using area-centroid averages — reduced null count from 42 to 19 (spots in areas with no geocoded peers remain null) | applied via MCP |
+| `20260222_010000_drop_dead_columns.sql` | Drop 5 dead columns: spots.payment_methods, spots.opening_hours (both always NULL since 20260220 clear), spots.google_pin_accurate (never used), spots.last_verified (replaced by created_at for staleness), travelers.trips_taken (never used) | pending |

@@ -13,6 +13,7 @@ export default function ReviewPage() {
     area: "",
     must_go: false,
     verified: false,
+    thin_only: false,
     source: "",
     search: "",
   });
@@ -43,6 +44,12 @@ export default function ReviewPage() {
       if (filters.area && s.area !== filters.area) return false;
       if (filters.must_go && !s.must_go) return false;
       if (filters.verified && !s.verified) return false;
+      if (filters.thin_only) {
+        const noOrder = !s.what_to_order || s.what_to_order.length === 0;
+        const noHours = !s.opening_hours;
+        const noTips  = !s.pro_tips || s.pro_tips.length === 0;
+        if (!(noOrder && noHours && noTips)) return false;
+      }
       if (filters.source && s.source !== filters.source) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
@@ -59,12 +66,18 @@ export default function ReviewPage() {
   const stats = useMemo(() => {
     const byCat: Record<string, number> = {};
     const approved = spots.filter((s) => s.verified).length;
+    const thinCount = spots.filter((s) => {
+      const noOrder = !s.what_to_order || s.what_to_order.length === 0;
+      const noHours = !s.opening_hours;
+      const noTips  = !s.pro_tips || s.pro_tips.length === 0;
+      return noOrder && noHours && noTips;
+    }).length;
     for (const s of spots) {
       for (const cat of s.categories ?? []) {
         byCat[cat] = (byCat[cat] ?? 0) + 1;
       }
     }
-    return { byCat, approved, total: spots.length };
+    return { byCat, approved, thinCount, total: spots.length };
   }, [spots]);
 
   const handleApprove = useCallback(async (id: string) => {
@@ -115,7 +128,7 @@ export default function ReviewPage() {
         spot review
       </h1>
       <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        {stats.total} total &middot; {stats.approved} approved &middot;{" "}
+        {stats.total} total &middot; {stats.approved} approved &middot; {stats.thinCount} thin &middot;{" "}
         {Object.entries(stats.byCat)
           .sort(([, a], [, b]) => b - a)
           .map(([cat, n]) => `${cat} ${n}`)

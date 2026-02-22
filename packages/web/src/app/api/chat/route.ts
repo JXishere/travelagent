@@ -17,6 +17,7 @@ import {
 } from "@sam/bot/database";
 import {
   classifyIntent,
+  chat,
   chatAsSamStream,
   chatStream,
   startUsageTracking,
@@ -28,7 +29,7 @@ import { handleProfile, startProfileLearning } from "@sam/bot/handlers/profile";
 import { handleStrategic } from "@sam/bot/handlers/strategic";
 import {
   handleHungry, handleDayPlan, handleNearby, handleSpotInfo,
-  buildHungryPrompt, buildDayPlanPrompt, buildNearbyPrompt,
+  buildHungryPrompt, buildDayPlanPrompt, buildNearbyPrompt, buildSpotInfoPayload,
   isVagueQuery, getClarifyingQuestion,
   isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION,
 } from "@sam/bot/handlers/ontrip";
@@ -373,14 +374,15 @@ async function streamHandlerResponse(
       const spotName = details.spot_name ?? message;
       const travelerForSpot = await getOrCreateTraveler(sessionId);
       const city = travelerForSpot.current_city ?? getDefaultCity();
-      const response = await handleSpotInfo(sessionId, message, spotName, city, { channel: "web" });
+      const payload = await buildSpotInfoPayload(sessionId, message, spotName, city, { channel: "web" });
+      const response = await chat(payload.systemPrompt, [{ role: "user", content: payload.userPrompt }], { maxTokens: payload.maxTokens });
       await appendMessages(sessionId, [
         { role: "user", content: message },
         { role: "assistant", content: response },
       ]);
       maybeExtractProfile(sessionId, [{ role: "user", content: message }, { role: "assistant", content: response }], intent).catch(() => {});
       flushAndTrackUsage(sessionId, intent);
-      return sseTextResponse(response, rateLimitRemaining);
+      return sseTextResponse(response, rateLimitRemaining, payload.spotIds);
     }
     case "general":
     default: {
@@ -509,12 +511,15 @@ function streamSSE(
   return new Response(readable, { headers });
 }
 
-/** Send a complete text response as a single SSE chunk */
-function sseTextResponse(text: string, rateLimitRemaining?: number): Response {
+/** Send a complete text response as a single SSE chunk, optionally with spotIds */
+function sseTextResponse(text: string, rateLimitRemaining?: number, spotIds?: string[]): Response {
   const encoder = new TextEncoder();
-  const body = encoder.encode(
-    `data: ${JSON.stringify({ text })}\n\ndata: [DONE]\n\n`
-  );
+  const parts = [`data: ${JSON.stringify({ text })}\n\n`];
+  if (spotIds && spotIds.length > 0) {
+    parts.push(`data: ${JSON.stringify({ spotIds })}\n\n`);
+  }
+  parts.push("data: [DONE]\n\n");
+  const body = encoder.encode(parts.join(""));
 
   const headers: Record<string, string> = {
     "Content-Type": "text/event-stream",

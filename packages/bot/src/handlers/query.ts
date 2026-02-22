@@ -179,15 +179,12 @@ export async function handleQuery(
   // Track usage and mark as visited
   const topSpots = spots.slice(0, 3);
 
-  // Build distance labels for spots not in one of the requested sub-areas.
-  // Only annotate when we have a centroid reference AND the spot has coordinates.
+  // Build distance labels for all spots that have coordinates, relative to the requested area centroid.
+  // For nearby queries, showing "~0.3km from KLCC" confirms proximity even for same-area spots.
   const distanceFromArea = new Map<string, string>();
   if (areaCentroid && primaryArea) {
     for (const spot of topSpots) {
-      const inRequestedArea = subAreas.some(a =>
-        spot.area?.toLowerCase().includes(a.toLowerCase())
-      );
-      if (!inRequestedArea && spot.latitude != null && spot.longitude != null) {
+      if (spot.latitude != null && spot.longitude != null) {
         const km = haversineKm(areaCentroid.lat, areaCentroid.lng, spot.latitude, spot.longitude);
         const label = km < 1
           ? `~${Math.round(km * 1000)}m from ${primaryArea}`
@@ -249,10 +246,11 @@ ${weatherContext}
 Here are the matching spots from your knowledge graph. Format each spot as two lines: "Name (Area)" on line 1, then what to order and one key tip on line 2. Blank line between spots. Max 3 spots. No intros. Lead with your strongest pick.
 
 STRICT DATA RULES — these override everything else:
-- ONLY mention details explicitly listed in the spot data below. If Order/Tips/Hours/Price fields are absent, say NOTHING about them.
-- Do NOT invent dishes, pro tips, hours, prices, payment methods, or any other operational detail.
-- NEVER mention distance, travel time, or proximity ("10 minutes away", "a short drive") unless a Distance field is present in the spot data. If no Distance field, do not say how far anything is.
-- If a spot has no Order or Tips data, use: "I know the spot but don't have deep intel on it yet."
+- ONLY state details found in the labeled fields below (Order, Tips, Hours, Price, Payment, Distance, Address). Nothing else.
+- NEVER state addresses, awards, accolades, prices, hours, or payment details unless they appear explicitly in a labeled field in the data below.
+- NEVER cross-attribute: a detail from spot #2 must not be stated about spot #1.
+- If Order or Tips fields are absent for a spot, say: "I know the spot but don't have deep intel on it yet."
+- If Distance field is absent, do NOT say how far anything is.
 ${areaNote}${timingNote}${vibeNote}${budgetNote}
 ${spotContext}${perspectivesContext}${langUserNote(message)}`;
 

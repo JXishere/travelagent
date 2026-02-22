@@ -45,7 +45,7 @@ Spots are added by local contributors via voice notes or text, verified by admin
 ### What Sam does NOT do
 
 - **No bookings or reservations** — Sam tells you where to go, not how to book
-- **No real-time info** — hours and prices are from the knowledge graph, not live
+- **No real-time bookings or reservations** — Sam tells you where to go, not how to secure a table. Hours and prices come from the knowledge graph; volatile fields (hours, payment) may be supplemented by live web search, but Sam always flags these as worth confirming.
 - **No image understanding** — photos get a polite "I can't process images yet"
 - **No group coordination** — one traveler, one conversation
 - **No fabrication** — if a spot isn't in the database, Sam says so

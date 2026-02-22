@@ -9,6 +9,7 @@ interface SpotFiltersProps {
     area: string;
     must_go: boolean;
     verified: boolean;
+    thin_only: boolean;
     source: string;
     search: string;
   };
@@ -101,6 +102,15 @@ export function SpotFilters({
           onChange={(e) => set("verified", e.target.checked)}
         />
         Verified only
+      </label>
+
+      <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.85rem", cursor: "pointer", color: "var(--fg)" }}>
+        <input
+          type="checkbox"
+          checked={filters.thin_only}
+          onChange={(e) => set("thin_only", e.target.checked)}
+        />
+        Thin spots only
       </label>
 
       <select

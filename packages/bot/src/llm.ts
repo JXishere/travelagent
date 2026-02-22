@@ -309,15 +309,15 @@ export async function classifyIntent(
 Classify the user's message into exactly one intent:
 
 - "spot_correction": They are reporting that a specific spot has incorrect or outdated information — it closed, moved, changed, is wrong, or no longer exists. Triggers: "that place closed", "it's closed now", "they moved", "wrong address", "that's outdated", "doesn't exist anymore", "shut down", "not there anymore", "[place] closed down". Extract the place name into spot_name and the correction detail into correction. Do NOT confuse with negative feedback about a visit ("it was bad") — that's "feedback".
-- "spot_info": They are asking about a specific, named place — hours, address, payment, what to order, or want more detail about a place. Triggers: "is [place] open", "address for [place]", "cash only at [place]", "tell me more about [place]", "what's [place] like", "does [place] take card". Extract the place name into spot_name. PRIORITY: Use this when a specific venue name is present in the question.
+- "spot_info": They are asking about a specific, named place — hours, address, payment, what to order, or want more detail about a place. Also covers comparisons between two named places ("which is better, X or Y", "X vs Y for dinner"). Triggers: "is [place] open", "address for [place]", "cash only at [place]", "tell me more about [place]", "what's [place] like", "does [place] take card", "which is better". Extract the place name(s) into spot_name. For comparisons, extract as "X or Y" (both names). PRIORITY: Use this when a specific venue name is present in the question.
 - "hungry": They want food, drink, or dining recommendations. Triggers include:
   - Direct: hungry, eat, eating, food, restaurant, cafe, bar, breakfast, lunch, dinner, supper, brunch
   - Cuisine types: japanese, korean, chinese, thai, indian, malay, italian, western, mexican, vietnamese, sushi, ramen, noodles, curry, pizza, burger, seafood, bbq, steak, dessert, pastry, coffee, cocktail
   - Phrases: "place to eat", "place to go" (when food/dining context), "grab some", "birthday dinner", "birthday lunch", "want to try", "looking for a spot", "looking for food", "where to eat", "recommend me", "any good", "chill dinner", "nice place for"
   - ANY message that implies wanting a specific food recommendation, even if wrapped in context like occasions, moods, or companions
-- "day_plan": They want help planning their day or activities ("what should I do", "plan my day", "what's good today")
+- "day_plan": They want help planning their day, activities, or a multi-meal food itinerary. Use this when: they want a SEQUENCE of spots across the day (not just one meal), OR they say "plan my day", "what should I do today", "plan my whole day", "eat all day", "food tour", "plan my meals", "full day of eating", "3-day food plan", "a day out", "day out with kids/family", "what should we do", "things to do today", OR they want multiple meal slots (breakfast + lunch + dinner together). EXCEPTION: if they ask for just one specific meal category in one context (e.g. "dinner in Bangsar" or "coffee in KL") → hungry, not day_plan.
 - "nearby": They want to know what's near a specific location ("I'm near", "what's around", "close to")
-- "weather": They're asking about weather or it's affecting their plans ("raining", "hot", "weather")
+- "weather": They're asking about current weather conditions or forecasts. Triggers: "what's the weather", "is it raining", "how hot is it", "weather today", "will it rain", "temperature in". Examples: "what's the weather like in KL today?" → weather. "is it raining outside?" → weather. "how's the weather?" → weather.
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
 - "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message. "looking for new spots", "looking for hidden gems", "want something different", "recommend me something" are ALL food requests → hungry.
 - "feedback": They're giving feedback about a SPECIFIC SPOT they visited ("it was great", "didn't like it", rating). ONLY use this when they reference a specific place they went to. General frustration with Sam ("this is useless", "you don't know KL", "this doesn't work") is "general", NOT feedback.
@@ -330,7 +330,8 @@ Examples of "spot_correction":
 - "that address for Dewakan is wrong" → spot_correction, spot_name: "Dewakan"
 
 PRIORITY RULES:
-1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". Profile facts are captured automatically in the background.
+0. "day_plan" OVERRIDES "hungry" when the request is for a MULTI-MEAL day or a multi-day food itinerary. Signals: "eat all day", "food tour", "plan my whole day", "plan it out" (for a full day), "3 days of eating", "full day of food". A single meal request ("dinner in Bangsar") is still hungry.
+1. If a message contains ANY food/dining request — even alongside profile info, occasions, or companions — classify as "hungry". EXCEPTION: see rule 0 above.
 2. CONTINUATION: If the recent conversation shows the user asked about food/dining and Sam responded with a clarifying question (e.g., "what area?", "where are you?", "where are you based?", "what part of KL?"), then the user's answer is a CONTINUATION of the food request — classify as "hungry". This applies even if the user's reply is just a location name like "PJ" or "Bangsar" or "maybe KL".
 3. ALTERNATIVES: If the user is asking for more options or alternatives to what Sam already recommended (e.g. "other choices?", "other options?", "anything else?", "what else?", "what else you got?", "not feeling that", "something different?", "any other spots?", "got more?", "how about something different?", "other recs?", "give me more"), classify as "hungry". Look at the most recent food query in the conversation history and copy its area, cuisine, and meal_type into details — do NOT return empty details if context is available.
 4. REFINEMENTS: If the user is adding constraints to a prior food request — timing ("open after 9pm"), occasion ("first date"), vibe ("something light", "not heavy"), dietary, etc. — WITHOUT specifying a new area, classify as "hungry" and carry forward the area from the most recent food query in the conversation history into details.area.
@@ -338,17 +339,26 @@ PRIORITY RULES:
 5. "nearby" is ONLY for when the user says they are physically AT a location and want to see what's around them (e.g., "I'm near KLCC", "what's around Bukit Bintang"). Do NOT use "nearby" for follow-up answers to food questions.
 
 Examples:
+- "what's the weather like in KL today?" → weather
+- "is it raining outside?" → weather
 - "is Village Park open for lunch?" → spot_info, spot_name: "Village Park"
 - "what's the address for Fatty Crab?" → spot_info, spot_name: "Fatty Crab"
 - "does Ilham take cash?" → spot_info, spot_name: "Ilham"
 - "tell me more about Nasi Kandar Pelita" → spot_info, spot_name: "Nasi Kandar Pelita"
 - "what should I order at Bijan?" → spot_info, spot_name: "Bijan"
+- "which is better, Bijan or Sao Nam for a date night?" → spot_info, spot_name: "Bijan or Sao Nam"
+- "Bijan vs Sao Nam — which for a special dinner?" → spot_info, spot_name: "Bijan or Sao Nam"
 - "i need a place to go for my birthday, thinking some place chill, japanese food with my close friend" → hungry (birthday dinner + japanese food)
 - "this is useless" → general (frustration with the service, not feedback about a visited spot)
 - "you don't actually know KL" → general (challenge/frustration, not spot feedback)
 - "i went to one of your spots and it was terrible" → feedback (they visited a specific spot and had a bad experience)
 - "grab some ramen tonight" → hungry
 - "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
+- "I just want to eat all day in KL, plan it out" → day_plan (multi-meal day plan, rule 0 applies)
+- "take me on a food tour of KL" → day_plan (multi-meal tour)
+- "plan my 3 days of eating in KL" → day_plan (multi-day, multi-meal)
+- "what should I eat for breakfast, lunch, and dinner today?" → day_plan (multiple meal slots requested together)
+- "planning a day out with kids in KL, what should we do?" → day_plan (activity request + day planning)
 - "planning a trip to KL next week" → profile (no food/activity request)
 - "PJ/KL" (after Sam asked "what area?" about food) → hungry (continuation)
 - "maybe around PJ or KL" (after Sam asked "where are you?" about food) → hungry (continuation — extract area)

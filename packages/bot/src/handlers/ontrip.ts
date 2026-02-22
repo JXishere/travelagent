@@ -409,13 +409,34 @@ export async function buildDayPlanPrompt(
 
   const dislikedIds = traveler.spots_disliked ?? [];
 
-  // Get a mix of spots for the day
-  const breakfastSpots = await querySpots({ city, cities, categories: ["breakfast", "cafe"], excludeIds: dislikedIds, limit: 3 });
-  const lunchSpots = await querySpots({ city, cities, categories: ["lunch"], excludeIds: dislikedIds, limit: 3 });
-  const activitySpots = await querySpots({ city, cities, categories: ["activity", "market"], excludeIds: dislikedIds, limit: 3 });
-  const dinnerSpots = await querySpots({ city, cities, categories: ["dinner"], excludeIds: dislikedIds, limit: 3 });
+  // Detect family/kids context to filter out chaotic/adult vibes and evening-only spots
+  const isFamilyContext = /\b(kids?|children|family|toddler|baby|babies|child)\b/i.test(message);
+  const vibeExclude = isFamilyContext ? ["chaotic", "nightlife"] : [];
+  const timeExclude = isFamilyContext ? ["evening", "late-night"] : [];
 
-  const allDaySpots = [...breakfastSpots, ...lunchSpots, ...activitySpots, ...dinnerSpots];
+  // Get a mix of spots for the day
+  const [breakfastSpots, lunchSpots, activitySpots, dinnerSpots] = await Promise.all([
+    querySpots({ city, cities, categories: ["breakfast", "cafe"], excludeIds: dislikedIds, limit: 3 }),
+    querySpots({ city, cities, categories: ["lunch"], excludeIds: dislikedIds, limit: 3 }),
+    querySpots({ city, cities, categories: ["activity", "market"], excludeIds: dislikedIds, limit: 3 }),
+    querySpots({ city, cities, categories: ["dinner"], excludeIds: dislikedIds, limit: 3 }),
+  ]);
+
+  // Filter out family-unfriendly vibes and evening-only spots for family context
+  const filterFamilyVibes = (spots: Spot[]) =>
+    isFamilyContext
+      ? spots.filter(s => !vibeExclude.includes(s.vibe ?? "") && !timeExclude.includes(s.best_time_of_day ?? ""))
+      : spots;
+
+  const allDaySpots = [
+    ...filterFamilyVibes(breakfastSpots),
+    ...filterFamilyVibes(lunchSpots),
+    ...filterFamilyVibes(activitySpots),
+    ...filterFamilyVibes(dinnerSpots),
+  ];
+  const familyNote = isFamilyContext
+    ? "\nThis is a family day with kids — only include spots that are child-friendly. No chaotic hawker markets, loud spots, or adult-only venues."
+    : "";
   const spotsContext = formatSpotsForLLM(allDaySpots);
 
   // Mark all recommended spots as visited
@@ -440,11 +461,19 @@ Available spots for building a day plan:
 
 ${spotsContext}
 
+${familyNote}
 If the user is specifically asking about non-food activities (things to do, sightseeing, etc.), be honest that your strength is food and dining. You can mention any activity spots you have, but flag that you don't have full activities coverage and they should check elsewhere for that.
 
 STRICT DATA RULE: Only mention details explicitly listed for each spot in the data above (Order, Tips, Hours, Price, Vibe). If a spot has no Order or Tips data, say "I know this place but don't have deep intel" — never invent dishes, hours, prices, or travel times. Never estimate how long it takes to get from one spot to another.
 
-Build a loose, conversational day structure — "here's a nice flow for today." Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect their dietary restrictions. For an "eat all day" or food-focused request, cover breakfast/morning, lunch, afternoon, and dinner — aim for 4-5 stops across the day. End with something casual like "text me when you're hungry or want to switch things up."${langUserNote(message)}`,
+Build a loose, conversational day structure — "here's a nice flow for today." Only mention spots from the data above — never invent activities, attractions, or places not in your knowledge. Respect dietary restrictions. End with something casual like "text me when you're hungry or want to switch things up."
+
+FORMAT OVERRIDE FOR DAY PLAN: This is a day itinerary. The 3-spot system rule DOES NOT apply here.
+- For "eat all day", "food tour", or food-focused day requests: include breakfast/morning, lunch, afternoon, and dinner — 4 stops minimum across the full day. Do not give only 3 stops.
+- For multi-day requests (2-day, 3-day): structure by day with at least 2-3 meals per day.
+- For culture + food: when the user says "cultural", they mean museums, temples, galleries, or heritage areas (Batu Caves, Thean Hou Temple, Ilham Gallery, Kampung Baru walking tour) — NOT markets or hawker centers. Lead with the cultural venue first, then food stops.
+- For family/kids: only include child-friendly spots (check the Vibe field — avoid "chaotic").
+Format: Name (Area) on line 1, what to order + one tip on line 2. Blank line between stops.${langUserNote(message)}`,
     spotIds: allDaySpots.map(s => s.id),
     maxTokens: 1024,
   };
@@ -525,7 +554,24 @@ export async function buildNearbyPrompt(
     });
   }
 
-  const spotsContext = formatSpotsForLLM(spots);
+  // Build distance labels using area centroid for text-based area search
+  const distanceFromArea = new Map<string, string>();
+  if (!coords && area) {
+    const areaCentroid = await getAreaCentroid(area);
+    if (areaCentroid) {
+      for (const spot of spots) {
+        if (spot.latitude != null && spot.longitude != null) {
+          const km = haversineKm(areaCentroid.lat, areaCentroid.lng, spot.latitude, spot.longitude);
+          const label = km < 1
+            ? `~${Math.round(km * 1000)}m from ${area}`
+            : `~${km.toFixed(1)}km from ${area}`;
+          distanceFromArea.set(spot.id, label);
+        }
+      }
+    }
+  }
+
+  const spotsContext = formatSpotsForLLM(spots, distanceFromArea);
 
   // Track usage and mark as visited
   for (const spot of spots) {
@@ -541,14 +587,19 @@ export async function buildNearbyPrompt(
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${weather ? `Weather: ${weather.summary}` : ""}
 ${area ? `They're near: ${area}` : coords ? `They shared coordinates: ${coords.lat}, ${coords.lng}` : ""}
-${distanceContext ? `\nDistances:\n${distanceContext}` : ""}
 ${prefContext}
 
-Nearby spots from knowledge graph:
+STRICT DATA RULES — these override everything else:
+- ONLY state details found in labeled fields (Order, Tips, Hours, Price, Payment, Distance, Address) in the knowledge graph below.
+- NEVER state addresses, awards, accolades, prices, or hours unless they appear as a labeled field in the spot data.
+- NEVER cross-attribute: a detail from one spot must not be stated about a different spot.
+${distanceContext ? "- Include the approximate distance for each spot (use the Distances list)." : distanceFromArea.size > 0 ? "- Mention the Distance field value when present to confirm proximity." : "- Do NOT estimate walking times or distances — no GPS data available."}
 
+Nearby spots from knowledge graph:
+${distanceContext ? `\nDistance reference:\n${distanceContext}` : ""}
 ${spotsContext}
 
-Give them a quick, varied list of what's nearby — mix food and activities. Respect their dietary restrictions.${distanceContext ? " Include the approximate distance for each spot (use the Distances list above)." : " Do NOT estimate walking times or distances — you don't have GPS data."} Keep it casual.${langUserNote(message)}`,
+Give them a focused list of what's nearby. Respect dietary restrictions.${langUserNote(message)}`,
     spotIds: spots.map(s => s.id),
     maxTokens: 512,
   };
@@ -568,31 +619,81 @@ export async function handleNearby(
   });
 }
 
+/** Format a spot's DB record into a data block string for LLM prompts */
+function buildSpotDataBlock(spot: Spot): string {
+  return [
+    spot.name && `Name: ${spot.name}`,
+    spot.area && `Area: ${spot.area}`,
+    (spot as any).address && `Address: ${(spot as any).address}`,
+    (spot as any).categories?.length && `Category: ${(spot as any).categories.join(", ")}`,
+    spot.price_range && `Price: ${spot.price_range}`,
+    spot.payment_methods?.length && `Payment: ${spot.payment_methods.join(", ")}`,
+    spot.opening_hours && `Hours: ${JSON.stringify(spot.opening_hours)}`,
+    spot.what_to_order?.length && `Order: ${spot.what_to_order.join(", ")}`,
+    spot.what_to_skip?.length && `Skip: ${spot.what_to_skip.join(", ")}`,
+    spot.pro_tips?.length && `Tips: ${spot.pro_tips.join(" | ")}`,
+    spot.vibe && `Vibe: ${spot.vibe}`,
+    spot.indoor_outdoor && `Setting: ${spot.indoor_outdoor}`,
+    spot.best_time_of_day && `Best time: ${spot.best_time_of_day}`,
+  ].filter(Boolean).join("\n");
+}
+
 /**
- * Spot info handler — answers specific questions about a named place.
- * DB record + web search run in parallel; DB wins where data exists,
- * web fills the blanks. Always has something to say.
+ * Build the spot info prompt payload — DB lookup + optional web enrichment.
+ * Returns PromptPayload so the web route can emit spotIds for eval ground truth.
  */
-export async function handleSpotInfo(
-  phoneNumber: string,
+export async function buildSpotInfoPayload(
+  _phoneNumber: string,
   userMessage: string,
   spotName: string,
   city: string,
   options?: { channel?: "whatsapp" | "web" }
-): Promise<string> {
+): Promise<PromptPayload> {
   const systemPrompt = buildSystemPrompt(city, options?.channel);
 
-  // Step 1: fetch DB record first
+  // Step 1: detect comparison queries ("Bijan or Sao Nam", "X vs Y")
+  // The intent classifier may lump both names into one spot_name string.
+  const comparisonMatch = spotName.match(/^(.+?)\s+(?:or|vs\.?)\s+(.+?)(?:\s+for\s+|$)/i);
+  if (comparisonMatch) {
+    const [, nameA, nameB] = comparisonMatch;
+    const [spotA, spotB] = await Promise.all([
+      findSpotByName(nameA.trim(), city),
+      findSpotByName(nameB.trim(), city),
+    ]);
+    if (spotA || spotB) {
+      const blocks: string[] = [];
+      if (spotA) {
+        const aBlock = buildSpotDataBlock(spotA);
+        blocks.push(`=== ${spotA.name} ===\n${aBlock}`);
+      } else {
+        blocks.push(`=== ${nameA.trim()} ===\n(Not in knowledge graph — no intel yet)`);
+      }
+      if (spotB) {
+        const bBlock = buildSpotDataBlock(spotB);
+        blocks.push(`=== ${spotB.name} ===\n${bBlock}`);
+      } else {
+        blocks.push(`=== ${nameB.trim()} ===\n(Not in knowledge graph — no intel yet)`);
+      }
+      return {
+        systemPrompt,
+        userPrompt: `Spot data for comparison:\n\n${blocks.join("\n\n")}\n\nUser question: ${userMessage}\n\nGive an opinionated comparison. Answer directly with your pick and why. 3-4 sentences. Only reference facts from the data above.`,
+        spotIds: [spotA?.id, spotB?.id].filter(Boolean) as string[],
+        maxTokens: 300,
+      };
+    }
+  }
+
+  // Step 2: fetch DB record first
   const dbSpot = await findSpotByName(spotName, city);
 
   // No DB record — don't answer from web data alone (hallucination risk).
-  // Web search may find real info but we can't verify it matches Sam's knowledge graph.
   if (!dbSpot) {
-    return chat(
+    return {
       systemPrompt,
-      [{ role: "user", content: `User asked: "${userMessage}". You have no record of "${spotName}" in your knowledge graph. Be honest that you don't have intel on it yet, then offer to show what you do know in ${city} — ask if there's a specific area or type of food they want. Two sentences max.` }],
-      { maxTokens: 150 }
-    );
+      userPrompt: `User asked: "${userMessage}". You have no record of "${spotName}" in your knowledge graph. Be honest that you don't have intel on it yet, then offer to show what you do know in ${city} — ask if there's a specific area or type of food they want. Two sentences max.`,
+      spotIds: [],
+      maxTokens: 150,
+    };
   }
 
   // Step 2: decide if web search adds value
@@ -640,13 +741,30 @@ export async function handleSpotInfo(
     merged.best_time_of_day && `Best time: ${merged.best_time_of_day}`,
   ].filter(Boolean).join("\n");
 
-  return chat(
+  return {
     systemPrompt,
-    [{
-      role: "user",
-      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.${hoursFromWeb ? " Hours may not be fully current — mention they should confirm before heading out." : ""}`,
-    }],
-    { maxTokens: 200 }
+    userPrompt: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using ONLY the spot data above. Be specific and direct. 2-3 sentences max.${hoursFromWeb ? "\nMANDATORY: Hours above came from live web search, not contributor-verified data. You MUST include a caveat like 'worth confirming before you go' or 'check before heading out'." : ""}`,
+    spotIds: [dbSpot.id],
+    maxTokens: 200,
+  };
+}
+
+/**
+ * Spot info handler — answers specific questions about a named place.
+ * DB record + optional web enrichment. Always has something to say.
+ */
+export async function handleSpotInfo(
+  phoneNumber: string,
+  userMessage: string,
+  spotName: string,
+  city: string,
+  options?: { channel?: "whatsapp" | "web" }
+): Promise<string> {
+  const payload = await buildSpotInfoPayload(phoneNumber, userMessage, spotName, city, options);
+  return chat(
+    payload.systemPrompt,
+    [{ role: "user", content: payload.userPrompt }],
+    { maxTokens: payload.maxTokens }
   );
 }
 

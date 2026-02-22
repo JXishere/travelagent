@@ -28,6 +28,8 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notes, setNotes] = useState("");
   const [parsing, setParsing] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestedHours, setSuggestedHours] = useState<Record<string, string> | null>(null);
   const [draft, setDraft] = useState({
     must_go: spot.must_go,
     categories: spot.categories ?? [],
@@ -41,6 +43,10 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
   });
 
   const approved = spot.verified;
+
+  const isThin = (!spot.what_to_order || spot.what_to_order.length === 0)
+    && !spot.opening_hours
+    && (!spot.pro_tips || spot.pro_tips.length === 0);
 
   const handleParseAndSave = async () => {
     if (!notes.trim()) return;
@@ -100,8 +106,40 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
     }
   };
 
+  const handleSuggestIntel = async () => {
+    setSuggesting(true);
+    try {
+      const res = await fetch("/api/enrich-spot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spotName: spot.name, city: spot.city }),
+      });
+      if (!res.ok) throw new Error();
+      const { suggestions } = await res.json();
+
+      setDraft(prev => ({
+        ...prev,
+        what_to_order:   prev.what_to_order   || (suggestions.what_to_order  ?? []).join("\n"),
+        pro_tips:        prev.pro_tips        || (suggestions.pro_tips       ?? []).join("\n"),
+        address:         prev.address         || suggestions.address         || "",
+        price_range:     prev.price_range     || suggestions.price_range     || "",
+        payment_methods: prev.payment_methods || (suggestions.payment_methods ?? []).join(", "),
+        vibe:            prev.vibe            || suggestions.vibe            || "",
+      }));
+
+      if (suggestions.opening_hours && !spot.opening_hours) {
+        setSuggestedHours(suggestions.opening_hours);
+      }
+      setEditing(true);
+    } catch {
+      alert("Web search failed — try adding notes manually.");
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const handleSave = () => {
-    onSave(spot.id, {
+    const updates: Partial<Spot> = {
       must_go: draft.must_go,
       categories: draft.categories,
       vibe: draft.vibe || null,
@@ -123,7 +161,12 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
-    });
+    };
+    if (suggestedHours && !spot.opening_hours) {
+      updates.opening_hours = suggestedHours;
+    }
+    onSave(spot.id, updates);
+    setSuggestedHours(null);
     setEditing(false);
   };
 
@@ -293,6 +336,11 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
                   style={inputStyle}
                 />
               </label>
+              {suggestedHours && (
+                <p style={{ fontSize: "0.78rem", color: "var(--muted)", marginTop: "0.25rem" }}>
+                  Hours pre-filled from web — verify before saving.
+                </p>
+              )}
               <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
                 <button onClick={handleSave} style={btnGreen}>
                   Save
@@ -400,6 +448,11 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave }: SpotCa
                 <button onClick={() => setEditing(true)} style={btnMuted}>
                   Edit
                 </button>
+                {isThin && (
+                  <button onClick={handleSuggestIntel} disabled={suggesting} style={btnMuted}>
+                    {suggesting ? "Searching..." : "Suggest intel"}
+                  </button>
+                )}
                 {confirmDelete ? (
                   <>
                     <button

@@ -33,7 +33,7 @@ RUN npm ci --omit=dev
 
 # Copy built output and prompts
 COPY --from=builder /app/packages/bot/dist packages/bot/dist
-COPY packages/bot/src/prompts packages/bot/src/prompts
+COPY packages/bot/src/prompts packages/bot/dist/prompts
 
 EXPOSE 3000
 

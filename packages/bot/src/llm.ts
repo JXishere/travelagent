@@ -7,7 +7,7 @@ import { getDefaultCity } from "./utils/city-defaults.js";
 
 const client = new Anthropic(); // uses ANTHROPIC_API_KEY env var
 
-export const SONNET = "claude-sonnet-4-5-20250929";
+export const SONNET = "claude-sonnet-4-6";
 export const HAIKU = "claude-haiku-4-5-20251001";
 
 /** Detect if a message is primarily Malay — checks for common Malay function words */
@@ -319,7 +319,7 @@ Classify the user's message into exactly one intent:
 - "nearby": They want to know what's near a specific location ("I'm near", "what's around", "close to")
 - "weather": They're asking about weather or it's affecting their plans ("raining", "hot", "weather")
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
-- "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message.
+- "profile": ONLY when the message is purely about trip planning or self-identification with NO food/activity request ("planning a trip", "going to ${cityName} next week", "I live here", "I'm local"). Do NOT classify as profile if there is any food, dining, or activity request in the message. "looking for new spots", "looking for hidden gems", "want something different", "recommend me something" are ALL food requests → hungry.
 - "feedback": They're giving feedback about a SPECIFIC SPOT they visited ("it was great", "didn't like it", rating). ONLY use this when they reference a specific place they went to. General frustration with Sam ("this is useless", "you don't know KL", "this doesn't work") is "general", NOT feedback.
 - "general": General conversation, greetings, questions about Sam, off-topic
 
@@ -354,6 +354,9 @@ Examples:
 - "maybe around PJ or KL" (after Sam asked "where are you?" about food) → hungry (continuation — extract area)
 - "Bangsar" (after Sam asked "where are you heading?") → hungry (continuation)
 - "I like spicy food and street markets" → profile (preferences, no specific request)
+- "I live in Bangsar, been here 3 years, looking for new spots" → hungry, area: "Bangsar" (has "looking for new spots" = food request)
+- "I've been to KL twice before and done all the usual stuff. Want something different this time" → hungry (wants recommendations, not just sharing info)
+- "birthday dinner tonight, want somewhere special" → hungry, mood: "celebratory", budget: "splurge"
 - "other choices?" (after nasi lemak recs in PJ) → hungry, area: "PJ", cuisine: "nasi lemak"
 - "anything else nearby?" (after dinner recs in Bangsar) → hungry, area: "Bangsar", meal_type: "dinner"
 - "what else you got?" (after cafe recs) → hungry, meal_type: "cafe"

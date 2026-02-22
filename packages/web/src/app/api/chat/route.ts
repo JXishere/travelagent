@@ -305,7 +305,9 @@ async function streamHandlerResponse(
       const { isSupportedCity } = await import("@sam/bot/utils/city-defaults");
       const travelerForCity = await getOrCreateTraveler(sessionId);
       const inUnsupportedCity = !!(travelerForCity.current_city && !isSupportedCity(travelerForCity.current_city));
-      if (!inUnsupportedCity && !alreadyAsked && !isImpatient && (isVagueQuery(details) || isUnclearQuery(details, recentHistory, message))) {
+      // In multi-turn conversations Sam has enough context to make a recommendation — don't ask again
+      const hasConversationContext = recentHistory.trim().length > 0;
+      if (!inUnsupportedCity && !alreadyAsked && !isImpatient && !hasConversationContext && (isVagueQuery(details) || isUnclearQuery(details, recentHistory, message))) {
         const question = isVagueQuery(details)
           ? getClarifyingQuestion(details)
           : UNCLEAR_CLARIFYING_QUESTION;
@@ -327,7 +329,7 @@ async function streamHandlerResponse(
         [{ role: "user", content: payload.userPrompt }],
         { maxTokens: payload.maxTokens }
       );
-      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining, payload.spotIds);
     }
     case "day_plan": {
       const payload = await buildDayPlanPrompt(sessionId, message, details, recentHistory, { channel: "web" });
@@ -336,7 +338,7 @@ async function streamHandlerResponse(
         [{ role: "user", content: payload.userPrompt }],
         { maxTokens: payload.maxTokens }
       );
-      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining, payload.spotIds);
     }
     case "nearby": {
       const payload = await buildNearbyPrompt(sessionId, message, details, recentHistory, { channel: "web" });
@@ -345,7 +347,7 @@ async function streamHandlerResponse(
         [{ role: "user", content: payload.userPrompt }],
         { maxTokens: payload.maxTokens }
       );
-      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining, payload.spotIds);
     }
     case "weather": {
       // Return actual weather data — not a food recommendation
@@ -369,7 +371,8 @@ async function streamHandlerResponse(
     case "spot_info": {
       const { getDefaultCity } = await import("@sam/bot/utils/city-defaults");
       const spotName = details.spot_name ?? message;
-      const city = getDefaultCity();
+      const travelerForSpot = await getOrCreateTraveler(sessionId);
+      const city = travelerForSpot.current_city ?? getDefaultCity();
       const response = await handleSpotInfo(sessionId, message, spotName, city, { channel: "web" });
       await appendMessages(sessionId, [
         { role: "user", content: message },
@@ -433,7 +436,8 @@ function streamSSE(
   sessionId: string,
   message: string,
   intent: string,
-  rateLimitRemaining?: number
+  rateLimitRemaining?: number,
+  spotIds?: string[]
 ): Response {
   const encoder = new TextEncoder();
   let fullResponse = "";
@@ -462,6 +466,13 @@ function streamSSE(
           { role: "user", content: message },
           { role: "assistant", content: fullResponse },
         ]);
+
+        // Emit spot IDs so eval clients can query DB for ground-truth hallucination checking
+        if (spotIds && spotIds.length > 0) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ spotIds })}\n\n`)
+          );
+        }
 
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();

@@ -35,7 +35,8 @@ const VAGUE_MEAL_TYPES = new Set(["cafe", "coffee", "drinks", "dessert", "bar", 
 /** True when the query has no mood/vibe signal to differentiate use-case */
 export function isVagueQuery(details: IntentDetails): boolean {
   const meal = (details.meal_type || "").toLowerCase();
-  return VAGUE_MEAL_TYPES.has(meal) && !details.mood;
+  // If an area is present, we have enough signal to recommend — don't ask for more
+  return VAGUE_MEAL_TYPES.has(meal) && !details.mood && !details.area;
 }
 
 /**
@@ -121,7 +122,7 @@ export async function buildHungryPrompt(
   }
 
   const cityDefaults = getCityDefaults(traveler.current_city);
-  const hour = new Date().getUTCHours() + cityDefaults.utcOffset;
+  const hour = (new Date().getUTCHours() + cityDefaults.utcOffset) % 24;
   const timeOfDay =
     details.time_of_day ??
     (hour < 11 ? "morning" : hour < 15 ? "afternoon" : hour < 20 ? "evening" : "late-night");
@@ -145,8 +146,12 @@ export async function buildHungryPrompt(
   // Use area-resolved cities if available, otherwise default city
   const queryCities = areaCities.length > 0 ? areaCities : undefined;
   const queryCity = queryCities ? undefined : cityDefaults.name;
-  // Don't filter by area if it resolved to city names (e.g. "PJ" or "PJ or KL")
-  const areaFilter = areaCities.length > 0 ? undefined : details.area;
+  // Parse sub-areas — preserves neighbourhood filters ("Bangsar", "SS2") while
+  // discarding city-level aliases ("PJ", "KL") that have already resolved to queryCities.
+  const dbAreas = await getDistinctAreas();
+  const rawAreas = details.area ? parseAreas(details.area, dbAreas, AREA_CITY_MAP_KEYS) : [];
+  const subAreas = rawAreas.filter(a => !CITY_LEVEL_ALIASES.has(a.toLowerCase()));
+  const areaList = subAreas.length > 0 ? subAreas : undefined;
 
   let spots: Spot[];
   let areaWidened = false;
@@ -165,14 +170,14 @@ export async function buildHungryPrompt(
       spots = await querySpots({
         city: queryCity,
         cities: queryCities,
-        area: areaFilter,
+        areas: areaList,
         categories: DEFAULT_CATEGORIES,
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         excludeIds: dislikedIds,
         limit: 5,
       });
       // If still empty and area was filtered, retry without area constraint
-      if (spots.length === 0 && areaFilter) {
+      if (spots.length === 0 && areaList) {
         areaWidened = true;
         spots = await querySpots({
           city: queryCity,
@@ -189,14 +194,14 @@ export async function buildHungryPrompt(
     spots = await querySpots({
       city: queryCity,
       cities: queryCities,
-      area: areaFilter,
+      areas: areaList,
       categories,
       indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
       excludeIds: dislikedIds,
       limit: 5,
     });
     // If empty and area was filtered, retry without area constraint
-    if (spots.length === 0 && areaFilter) {
+    if (spots.length === 0 && areaList) {
       areaWidened = true;
       spots = await querySpots({
         city: queryCity,
@@ -246,14 +251,9 @@ You have NO spots in your knowledge graph yet for this query. Do NOT make up or 
 
   // Build distance labels for spots not in the requested sub-area.
   // Mirrors the same logic in handleQuery so distance annotations appear consistently.
-  // We use details.area here (not areaFilter) because areaFilter is cleared when the
-  // area resolves to a city alias (e.g. "SS2" → Petaling Jaya), but we still want
-  // the centroid from the user's actual requested area for distance annotations.
+  // subAreas is already computed above from parseAreas — reuse it here.
   const distanceFromArea = new Map<string, string>();
-  if (details.area) {
-    const dbAreas = await getDistinctAreas();
-    const rawAreas = parseAreas(details.area, dbAreas, AREA_CITY_MAP_KEYS);
-    const subAreas = rawAreas.filter(a => !CITY_LEVEL_ALIASES.has(a.toLowerCase()));
+  if (subAreas.length > 0) {
     const primaryArea = subAreas[0];
     if (primaryArea) {
       const areaCentroid = await getAreaCentroid(primaryArea);
@@ -334,11 +334,12 @@ Here are spots from your knowledge graph:
 
 ${spotsContext}
 
-STRICT DATA RULE — overrides everything:
-- ONLY mention details explicitly listed in the spot data above (Order, Tips, Hours, Price, Payment, Vibe, Setting, Distance).
-- If Order or Tips are absent for a spot, do NOT invent them. Use: "I know this spot but don't have deep intel yet."
-- NEVER mention distance or travel time unless a Distance field is present in the spot data. If no Distance field, do not say how far anything is.
-- NEVER add sell-out times, operating hours, or payment methods unless they appear in the data above.
+STRICT DATA RULE — do not add information beyond what's in the data:
+- The spot data above (Order, Tips, Hours, Price, Payment, Vibe, Setting, Distance) is your verified knowledge — report it confidently.
+- Only say "I don't have that detail" when a field is literally absent from the data. If Hours, Payment, or Price ARE in the data, state them directly.
+- If Order or Tips are absent for a spot, say "I know this spot but don't have deep intel yet" — but STILL recommend the spot with its name, area, and vibe. Never refuse to include a spot just because intel is thin.
+- NEVER mention distance or travel time unless a Distance field is present in the spot data.
+- NEVER add sell-out times or operating hours from your training knowledge — only use what's in the data above.
 
 RESPONSE FORMAT — follow exactly:
 - Start your response with the spot name. No intro sentence. No "If you want..." opener.
@@ -630,7 +631,7 @@ export async function handleSpotInfo(
     merged.categories?.length && `Category: ${merged.categories.join(", ")}`,
     merged.price_range && `Price: ${merged.price_range}`,
     merged.payment_methods?.length && `Payment: ${(merged.payment_methods as string[]).join(", ")}`,
-    merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}${hoursFromWeb ? " (from web — may be outdated)" : ""}`,
+    merged.opening_hours && `Hours: ${JSON.stringify(merged.opening_hours)}`,
     merged.what_to_order?.length && `Order: ${(merged.what_to_order as string[]).join(", ")}`,
     merged.what_to_skip?.length && `Skip: ${(merged.what_to_skip as string[]).join(", ")}`,
     merged.pro_tips?.length && `Tips: ${(merged.pro_tips as string[]).join(" | ")}`,
@@ -643,7 +644,7 @@ export async function handleSpotInfo(
     systemPrompt,
     [{
       role: "user",
-      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.${hoursFromWeb ? " Hours are from the web — tell them to confirm before visiting." : ""}`,
+      content: `Spot data:\n${dataBlock}\n\nUser question: ${userMessage}\n\nAnswer the user's question using the spot data above. Be specific and direct. 2-3 sentences max.${hoursFromWeb ? " Hours may not be fully current — mention they should confirm before heading out." : ""}`,
     }],
     { maxTokens: 200 }
   );

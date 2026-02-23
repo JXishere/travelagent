@@ -1,6 +1,6 @@
 # SAM — Capabilities Reference
 
-**Last updated:** 2026-02-21
+**Last updated:** 2026-02-23
 **Status:** Production (KL full coverage, PJ / Penang live, Taipei seeded)
 
 Sam is a travel intelligence assistant powered by a proprietary knowledge graph built by local contributors. He is not a search engine. He gives you the answer a well-connected local friend would give — specific, opinionated, operationally complete.
@@ -32,7 +32,7 @@ Sam is a travel intelligence assistant powered by a proprietary knowledge graph 
 - Multi-turn sessions: full conversation history persisted in `conversations.messages[]` (capped at 40 messages)
 - Supports: text, voice notes (transcribed via OpenAI Whisper), location pins, image captions
 - Typing indicator shown while Sam processes
-- Proactive outbound messages (see §9)
+- Proactive outbound messages (see §10)
 
 ### Web Chat (`/chat`)
 - UUID session stored in `localStorage` — no persistent identity across browsers or devices
@@ -45,12 +45,13 @@ Sam is a travel intelligence assistant powered by a proprietary knowledge graph 
 
 ## 3. Intent Routing
 
-Sam classifies every incoming message into one of 10 intents before routing to a handler. Classification uses Claude Haiku with the last 6 messages as context.
+Sam classifies every incoming message into one of 11 intents before routing to a handler. Classification uses Claude Haiku with the last 6 messages as context.
 
 | Intent | Triggers | Resolves via |
 |--------|----------|-------------|
 | `hungry` | "I'm hungry", "where to eat", cuisine/meal requests, continuation/refinement of previous recs | `handleHungry()` → structured DB query + LLM format |
-| `day_plan` | "plan my day", "what should I do today", full itinerary requests | `handleDayPlan()` → multi-category DB query, area-aware |
+| `day_plan` | "plan my day", "what should I do today", full itinerary requests. Also triggers when asking about events AND food in the same message | `handleDayPlan()` → multi-category DB query, area-aware |
+| `happenings` | "what's on", "any events", "any festivals", "what's happening", "anything on this weekend", "any markets on", "any pop-ups". Exception: if asking about events AND food → `day_plan` instead | `handleHappenings()` → DB 7-day lookahead + web search |
 | `nearby` | "what's near me", "spots around X area", text-based proximity, location pin | `handleNearby()` → Haversine filter on coordinates |
 | `spot_info` | "tell me more about Y", "what's Z like", named venue questions | `handleSpotInfo()` → DB lookup by name |
 | `spot_correction` | "that place closed", "wrong address", "Y moved" | `handleSpotCorrection()` → marks spot `verified=false`, tracks event |
@@ -116,7 +117,54 @@ The LLM is explicitly instructed: "ONLY mention details that appear in the spot 
 
 ---
 
-## 5. Contribution Flow
+## 5. Happenings Handler
+
+Handles the `happenings` intent — temporal events such as festivals, markets, pop-ups, and weekend activities.
+
+### Trigger
+
+`happenings` intent. If the user asks about events AND food in the same message, the classifier routes to `day_plan` instead.
+
+### Data sources (run in parallel)
+
+1. **DB query** (`queryHappenings(city, today, 7)`): returns happenings with `start_date` within the next 7 days (or recurring events that overlap the window).
+2. **Web search** (`webSearchHappenings(city, todayDate)`): fetches current what's-on results via Claude's web search tool.
+
+### De-duplication
+
+Web results whose `name` (case-insensitive) matches a DB entry are dropped — DB entry takes precedence.
+
+### Formatting
+
+- DB entries are verified facts — presented as confirmed.
+- Web entries are annotated `(from web, unverified)`.
+- If both sources return nothing, Sam defers explicitly to Time Out KL / KLUE — no fabrication.
+
+### Response construction
+
+`buildHappeningsPayload()` is shared between WhatsApp and web channels, returning the same structured content. WhatsApp formats concisely; web may render with more detail.
+
+### `happenings` table schema
+
+| Column | Purpose |
+|--------|---------|
+| `id` | UUID primary key |
+| `name` | Event name |
+| `city`, `country` | Location scope |
+| `area` | Neighbourhood / venue |
+| `description` | What it is |
+| `start_date`, `end_date` | Date range |
+| `recurring` | Boolean — weekly market, annual festival, etc. |
+| `recurrence_rule` | iCal RRULE string (e.g. `FREQ=WEEKLY;BYDAY=SA`) |
+| `categories` | Array of tags (e.g. `["market", "food", "music"]`) |
+| `source_url` | Origin link for web-sourced entries |
+| `input_method` | `seed`, `manual`, `web` |
+
+**Distinct from `spots`**: happenings are temporal events (festivals, markets, pop-ups), not permanent venues. They live in a separate table and are never mixed into spot recommendation results.
+
+---
+
+## 6. Contribution Flow
 
 Two-stage flow for capturing new spots from local contributors.
 
@@ -168,7 +216,7 @@ Web-sourced fields are stripped before `insertSpot()` / `updateSpot()`. Only con
 
 ---
 
-## 6. Profile System
+## 7. Profile System
 
 ### Continuous extraction (background, every message)
 
@@ -205,7 +253,7 @@ Generated by Sonnet when a traveler completes their profile. Covers:
 
 ---
 
-## 7. Personalization Summary
+## 8. Personalization Summary
 
 | Signal | Source | Applied at |
 |--------|---------|-----------|
@@ -220,7 +268,7 @@ Generated by Sonnet when a traveler completes their profile. Covers:
 
 ---
 
-## 8. Geographic Intelligence
+## 9. Geographic Intelligence
 
 ### Supported cities (`city-defaults.ts`)
 
@@ -259,7 +307,7 @@ Location pins (WhatsApp) and text coordinates ("3.139,101.687") both route to `h
 
 ---
 
-## 9. Proactive Messaging (WhatsApp only)
+## 10. Proactive Messaging (WhatsApp only)
 
 The scheduler (`scheduler.ts`) runs on a **5-minute interval**. On each tick, it queries active travelers and determines which, if any, should receive a message.
 
@@ -281,9 +329,18 @@ The scheduler (`scheduler.ts`) runs on a **5-minute interval**. On each tick, it
 
 Weather context is injected into nudge messages when available.
 
+### Background Scheduler Jobs
+
+In addition to per-user proactive messages, the scheduler runs two background jobs on each tick:
+
+| Job | Time (KL) | What it does |
+|-----|-----------|-------------|
+| **Daily digest** | 9:00–9:05am | Counts messages, new spots, and cost for the day. Sends summary to Slack via `SLACK_WEBHOOK_URL`. No-op if env var not set. Tracked as `daily_digest` event. |
+| **Staleness check** | 10am–12pm | Finds up to 5 spots not verified in 180+ days. Pings the original contributor via WhatsApp: "Still accurate?" Sets `current_flow = "spot_verification"`. Response is handled by `spot-verification.ts`. |
+
 ---
 
-## 10. Language Support
+## 11. Language Support
 
 ### Malay
 
@@ -301,7 +358,7 @@ No other languages are explicitly supported. English is the default. The LLM may
 
 ---
 
-## 11. Analytics Events
+## 12. Analytics Events
 
 All events tracked via `trackEvent()` in `database.ts` — fire-and-forget, never blocks the user. Stored in the `events` table.
 
@@ -316,29 +373,22 @@ All events tracked via `trackEvent()` in `database.ts` — fire-and-forget, neve
 
 ---
 
-## 12. Admin Features
+## 13. Admin Features
 
-Both features gated behind `ADMIN_PHONE_NUMBER` environment variable (WhatsApp only).
+All features gated behind `ADMIN_PHONE_NUMBER` environment variable (WhatsApp only).
 
-### `add:` prefix — rapid spot ingestion
-
-```
-add: Fatty Crab, Taman Megah, dinner. Cash only. Must order: chilli crab.
-```
-
-Extracts structured spot data using the `extraction.txt` prompt. If critical fields (name, category, area) are missing, asks one clarifying question. Runs duplicate check. Inserts on confirmation. No web enrichment, no two-stage flow.
-
-### `/generate` command — LLM content generation
-
-```
-/generate bangsar dinner
-```
-
-Generates spot descriptions, what_to_order, and pro_tips for a city+category via Sonnet. Used for seeding content when contributor data is sparse.
+| Command | What it does |
+|---------|-------------|
+| `add: <spot details>` | Rapid spot ingestion via text: `add: Fatty Crab, Taman Megah, dinner. Cash only. Must order: chilli crab.` Extracts structured data using `extraction.txt`. Asks one clarifying question if name/category/area missing. Runs duplicate check. Inserts on confirmation. No web enrichment, no two-stage flow. |
+| `/generate <city> <category>` | Generates spot descriptions, `what_to_order`, and `pro_tips` for a city+category via Sonnet. Used for seeding content when contributor data is sparse. |
+| `/approve <spot name>` | Approves a pending spot correction — applies the reported change to the spot. |
+| `/reject <spot name>` | Dismisses a correction report without applying it. |
+| `/corrections` | Lists all pending spot corrections grouped by spot. |
+| `/publish <spot name>` | Moves a spot from the review queue to live recommendations (`needs_review = false`). |
 
 ---
 
-## 13. What Sam Cannot Do
+## 14. What Sam Cannot Do
 
 ### Hard limits (by design or absent infrastructure)
 
@@ -383,7 +433,7 @@ Generates spot descriptions, what_to_order, and pro_tips for a city+category via
 
 ---
 
-## 14. Data Quality Signals
+## 15. Data Quality Signals
 
 | Signal | Column | How set | How used |
 |--------|--------|---------|---------|
@@ -398,21 +448,54 @@ Generates spot descriptions, what_to_order, and pro_tips for a city+category via
 
 ## Appendix: Key Files
 
+### Handlers
+
 | File | Purpose |
 |------|---------|
 | `packages/bot/src/index.ts` | Flow router, intent dispatch, admin commands |
-| `packages/bot/src/database.ts` | All DB operations including `querySpots()`, `appendMessages()`, `trackEvent()` |
+| `packages/bot/src/database.ts` | All DB operations including `querySpots()`, `queryHappenings()`, `appendMessages()`, `trackEvent()` |
 | `packages/bot/src/llm.ts` | Claude API wrapper, language detection, prompt loading |
 | `packages/bot/src/handlers/query.ts` | Core recommendation engine, `formatSpotsForLLM()` |
 | `packages/bot/src/handlers/ontrip.ts` | `handleHungry()`, `handleDayPlan()`, `handleNearby()`, `handleSpotInfo()` |
+| `packages/bot/src/handlers/happenings.ts` | Happenings intent handler — `handleHappenings()`, `buildHappeningsPayload()`, `webSearchHappenings()` |
 | `packages/bot/src/handlers/contribution.ts` | Two-stage contribution flow, `enrichFromWeb()`, dedup + merge |
 | `packages/bot/src/handlers/spot-correction.ts` | Spot correction handler |
+| `packages/bot/src/handlers/spot-verification.ts` | Staleness verification response handler (set by scheduler's staleness-check job) |
 | `packages/bot/src/handlers/continuous-profile.ts` | Background profile extraction, `mergeArray()` with `!` removal |
 | `packages/bot/src/handlers/profile.ts` | Explicit profile interview flow |
 | `packages/bot/src/handlers/strategic.ts` | Pre-trip strategic planning (Sonnet) |
 | `packages/bot/src/handlers/feedback.ts` | Post-trip rating flow |
-| `packages/bot/src/scheduler.ts` | Proactive message engine |
+| `packages/bot/src/scheduler.ts` | Proactive message engine + background jobs (daily digest, staleness check) |
 | `packages/bot/src/utils/city-defaults.ts` | City coordinates, area-to-city mappings |
 | `packages/bot/src/utils/area-extractor.ts` | Longest-match area parser |
 | `packages/bot/src/utils/geo.ts` | Haversine distance, proximity filter |
-| `packages/bot/src/prompts/` | All LLM prompt files |
+
+### Prompt Files (`packages/bot/src/prompts/`)
+
+| File | Purpose |
+|------|---------|
+| `system.txt` | Sam's core personality and rules (default: used by `chatAsSam()`) |
+| `system-mini.txt` | Lightweight Sam voice — used by `samSays()` for one-liner responses |
+| `system-web.txt` | Web-channel personality addendum (overlaid on `system.txt` for web sessions) |
+| `system-whatsapp.txt` | WhatsApp-channel personality addendum |
+| `extraction.txt` | Voice note / text → structured spot JSON |
+| `profile.txt` | Conversational profile interview |
+| `continuous_profile.txt` | Background profile extraction rules |
+| `strategic.txt` | Strategic pre-trip planning format |
+| `proactive.txt` | Proactive message voice and style |
+| `feedback.txt` | Feedback response parsing |
+| `generate.txt` | Spot content generation (used by `/generate` admin command) |
+| `coach.txt` | Coaching evaluation prompt |
+
+### DB Tables
+
+| Table | Purpose | Key columns |
+|-------|---------|-------------|
+| `spots` | Knowledge graph of permanent venues | name, city, area, categories[], must_go, verified, what_to_order[], pro_tips[], embedding |
+| `happenings` | Temporal events and what's-on intel | name, city, area, description, start_date, end_date, recurring, recurrence_rule, categories |
+| `spot_contributions` | Per-contributor attribution | spot_id, contributor_id, what_to_order[], pro_tips[], vibe, must_go |
+| `contributors` | Who added knowledge | whatsapp_number, name, cities_contributed[], contribution_count |
+| `travelers` | User profiles | whatsapp_number, preferences, dietary_restrictions[], trip_dates, user_type |
+| `conversations` | Session state management | whatsapp_number, current_flow, flow_state(jsonb), messages(jsonb[]) |
+| `feedback` | Post-trip spot ratings | spot_id, traveler_id, rating(1-5), visited, user_tips[] |
+| `events` | Analytics and usage tracking | session_id, channel, event_type, event_data(jsonb), created_at |

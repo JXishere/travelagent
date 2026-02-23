@@ -173,16 +173,21 @@ export function mergeProfileDelta(
 
   for (const [key, value] of Object.entries(delta)) {
     if (key === "_no_changes") continue;
-    if (value === null || value === undefined) continue;
+    if (value === undefined) continue;
 
     if (key === "trip_dates") {
       // Overwrite as a unit
       updates.trip_dates = value;
     } else if (SCALAR_FIELDS.has(key)) {
-      if (TOP_LEVEL_FIELDS.has(key)) {
-        updates[key] = value;
-      } else {
-        prefUpdates[key] = value;
+      if (value === null && TOP_LEVEL_FIELDS.has(key)) {
+        // Deliberate clear (e.g. retraction of current_city)
+        updates[key] = null;
+      } else if (value !== null) {
+        if (TOP_LEVEL_FIELDS.has(key)) {
+          updates[key] = value;
+        } else {
+          prefUpdates[key] = value;
+        }
       }
     } else if (ARRAY_FIELDS.has(key) && Array.isArray(value)) {
       const existingArr = getExistingArray(existing, key);

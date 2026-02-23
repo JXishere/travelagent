@@ -87,8 +87,14 @@ describe("mergeProfileDelta", () => {
     expect(result.preferences).toEqual({ budget: "budget", pace: "fast" });
   });
 
-  it("ignores null values", () => {
-    const result = mergeProfileDelta(baseTraveler, { name: null as any });
+  it("ignores undefined values", () => {
+    const result = mergeProfileDelta(baseTraveler, { name: undefined as any });
     expect(Object.keys(result)).toHaveLength(0);
+  });
+
+  it("clears top-level scalar field when null (retraction)", () => {
+    const traveler = { ...baseTraveler, current_city: "Bangkok" };
+    const result = mergeProfileDelta(traveler, { current_city: null as any });
+    expect(result).toHaveProperty("current_city", null);
   });
 });

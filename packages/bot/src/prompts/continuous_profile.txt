@@ -20,7 +20,10 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 - cuisine_preferences (string[]) — "malay", "chinese", "indian", "japanese", "western", "street food", etc.
 - specific_requests (string[]) — concrete asks like "rooftop bar", "best nasi lemak", "kid-friendly spots"
 - first_time_visitor (boolean) — whether this is their first time in {{CITY}}
-- current_city (string) — city they are CURRENTLY IN or actively traveling to (e.g. "Bali", "Bangkok", "Tokyo"); only set if they explicitly name a city other than {{CITY}} as their current location. DO NOT set this for statements like "I'm from X", "I'm originally from X", or "I live in X" — those indicate home city, not travel destination.
+- current_city (string or null) — city they are CURRENTLY IN or actively traveling to RIGHT NOW.
+  Only set if they say things like "I'm in Bangkok", "heading to Tokyo", "currently in Bali", "I'm traveling to X".
+  DO NOT set for: "I'm from X", "I'm originally from X", "I live in X", "I'm Thai", "I'm visiting from X" — those are home/origin statements, NOT current location.
+  Return null to CLEAR this field if the user retracts or contradicts a city statement.
 
 ## Rules
 
@@ -33,12 +36,18 @@ Your job: detect NEW profile facts revealed in this exchange and return a JSON d
 7. For arrays, only include NEW items not already in the profile
 8. Use "!" prefix to REMOVE items from arrays: "!vegetarian" means they're no longer vegetarian
 9. If trip_dates change, return the full { start, end } object (it's replaced as a unit)
+10. RETRACTION: If the user says "just kidding", "I was joking", "never mind", "not true", or directly contradicts a statement from this exchange, return null for the retracted field. Example: user said "I'm in Bangkok" then "just kidding" → return { "current_city": null }.
 
 ## Response format
 
 If new facts were found, return ONLY the changed fields as JSON:
 ```json
 { "name": "Sarah", "dietary_restrictions": ["no pork"] }
+```
+
+To CLEAR a field (e.g. retraction), return null for that field:
+```json
+{ "current_city": null }
 ```
 
 If nothing new was learned, return:

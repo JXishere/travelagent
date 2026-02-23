@@ -57,7 +57,20 @@ export async function handleQuery(
     : null;
   const queryAreaIsSupported = queryAreaCity ? isSupportedCity(queryAreaCity) : false;
 
-  if (traveler.current_city && !isSupportedCity(city) && !queryAreaIsSupported) {
+  // Fallback: if the classifier didn't extract a supported area from details,
+  // scan the raw message text for known supported city/area names. This prevents
+  // a stale current_city (e.g. Bangkok from a joke) from blocking queries that
+  // explicitly name a supported city like "petaling jaya" or "kl".
+  let messageAreaIsSupported = false;
+  if (!queryAreaIsSupported) {
+    const msgLower = message.toLowerCase();
+    messageAreaIsSupported = AREA_CITY_MAP_KEYS.some(key => {
+      const cityForKey = resolveCityFromArea(key);
+      return cityForKey && isSupportedCity(cityForKey) && msgLower.includes(key);
+    });
+  }
+
+  if (traveler.current_city && !isSupportedCity(city) && !queryAreaIsSupported && !messageAreaIsSupported) {
     trackEvent(phoneNumber, channel, "unsupported_city_request", { city });
     const supportedList = getSupportedCities().join(", ");
     return samSays(
@@ -188,12 +201,15 @@ export async function handleQuery(
 
   if (spots.length === 0) {
     console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
+    if (effectiveArea) {
+      trackEvent(phoneNumber, channel, "unsupported_area_request", { area: effectiveArea, city: queryCity ?? city });
+    }
     return await chat(
       buildSystemPrompt(city, options?.channel) + langInstruction(message),
       [
         {
           role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${effectiveArea ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places.${effectiveArea ? ` Be honest that you don't have coverage in ${effectiveArea} yet — name it specifically — then offer to check nearby areas.` : " Be honest that you don't have intel on this yet."} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking.`,
         },
       ],
       { maxTokens: 512, model: HAIKU }

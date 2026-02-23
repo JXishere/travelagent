@@ -286,6 +286,74 @@ Return ONLY the JSON object, no markdown fences or extra text.`;
   }
 }
 
+export interface WebHappening {
+  name: string;
+  area?: string;
+  description?: string;
+  date_range?: string;       // e.g. "23–25 Feb 2026" or "every Saturday"
+  recurring?: boolean;
+  recurrence_rule?: string;  // e.g. "every Wednesday evening"
+  categories?: string[];
+  source?: string;           // URL or publication name
+}
+
+/**
+ * Search the web for events and happenings in a city on or around a given date.
+ * Returns structured data annotated as web-sourced (unverified).
+ */
+export async function webSearchHappenings(
+  city: string,
+  date: string  // YYYY-MM-DD
+): Promise<WebHappening[]> {
+  const dateObj = new Date(date + "T00:00:00Z");
+  const dayName = dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  const systemPrompt = `You are a local events researcher. Search for events, festivals, markets, and happenings in ${city} around ${dayName}. Focus on food events, markets, cultural events, and things a traveler would enjoy.
+
+Return a JSON array of events you find. Use this shape (omit fields you can't find):
+
+[
+  {
+    "name": "event name",
+    "area": "neighbourhood or venue",
+    "description": "1-2 sentences on what it is",
+    "date_range": "human-readable date or recurrence like 'every Saturday'",
+    "recurring": true or false,
+    "recurrence_rule": "every Wednesday evening",
+    "categories": ["market", "food", "festival", "cultural"],
+    "source": "URL or source name"
+  }
+]
+
+Return ONLY the JSON array. If you find no events, return []. Do not make up events — only include ones you can verify from search results.`;
+
+  try {
+    const response = await client.messages.create({
+      model: HAIKU,
+      max_tokens: 1024,
+      temperature: 0.2,
+      system: systemPrompt,
+      messages: [{ role: "user", content: `What events and happenings are on in ${city} around ${dayName}?` }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+    });
+
+    recordUsage(HAIKU, response.usage);
+
+    const textBlocks = response.content.filter((b) => b.type === "text");
+    const textBlock = textBlocks[textBlocks.length - 1];
+    if (!textBlock || textBlock.type !== "text") return [];
+
+    const fenceMatch = textBlock.text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const bareMatch = textBlock.text.match(/\[[\s\S]*\]/);
+    const jsonStr = fenceMatch ? fenceMatch[1].trim() : bareMatch ? bareMatch[0] : textBlock.text.trim();
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("webSearchHappenings failed:", error);
+    return [];
+  }
+}
+
 /** Classify user intent */
 export async function classifyIntent(
   message: string,
@@ -296,6 +364,7 @@ export async function classifyIntent(
     | "hungry"
     | "day_plan"
     | "nearby"
+    | "happenings"
     | "weather"
     | "contribute"
     | "profile"
@@ -317,7 +386,8 @@ Classify the user's message into exactly one intent:
   - Cuisine types: japanese, korean, chinese, thai, indian, malay, italian, western, mexican, vietnamese, sushi, ramen, noodles, curry, pizza, burger, seafood, bbq, steak, dessert, pastry, coffee, cocktail
   - Phrases: "place to eat", "place to go" (when food/dining context), "grab some", "birthday dinner", "birthday lunch", "want to try", "looking for a spot", "looking for food", "where to eat", "recommend me", "any good", "chill dinner", "nice place for"
   - ANY message that implies wanting a specific food recommendation, even if wrapped in context like occasions, moods, or companions
-- "day_plan": They want help planning their day, activities, a multi-meal food itinerary, OR want to know what events/happenings are on. Use this when: they want a SEQUENCE of spots across the day (not just one meal), OR they say "plan my day", "what should I do today", "plan my whole day", "eat all day", "food tour", "plan my meals", "full day of eating", "3-day food plan", "a day out", "day out with kids/family", "what should we do", "things to do today", OR they want multiple meal slots (breakfast + lunch + dinner together), OR they ask "what's on", "any events", "what's happening", "anything on this weekend", "what events are on". EXCEPTION: if they ask for just one specific meal category in one context (e.g. "dinner in Bangsar" or "coffee in KL") → hungry, not day_plan.
+- "day_plan": They want help planning their day or a multi-meal food itinerary. Use this when: they want a SEQUENCE of spots across the day (not just one meal), OR they say "plan my day", "what should I do today", "plan my whole day", "eat all day", "food tour", "plan my meals", "full day of eating", "3-day food plan", "a day out", "day out with kids/family", "what should we do", "things to do today", OR they want multiple meal slots (breakfast + lunch + dinner together). EXCEPTION: if they ask for just one specific meal category in one context (e.g. "dinner in Bangsar" or "coffee in KL") → hungry, not day_plan.
+- "happenings": They want to know about events, festivals, markets, or what's on in the city — NOT a food recommendation, NOT a day plan. Triggers: "what's on", "any events", "any festivals", "what's happening", "anything on this weekend", "what events are on", "any markets on", "what's going on in KL", "anything happening", "what's on this Saturday", "any pop-ups", "anything on tonight". EXCEPTION: if they're asking about events AND food in the same message (e.g. "what's on and where to eat after?") → day_plan.
 - "nearby": They want to know what's near a specific location ("I'm near", "what's around", "close to")
 - "weather": They're asking about current weather conditions or forecasts. Triggers: "what's the weather", "is it raining", "how hot is it", "weather today", "will it rain", "temperature in". Examples: "what's the weather like in KL today?" → weather. "is it raining outside?" → weather. "how's the weather?" → weather.
 - "contribute": They want to add a spot or share knowledge ("add a spot", "I know a place", "want to contribute")
@@ -359,6 +429,12 @@ Examples:
 - "I just want to eat all day in KL, plan it out" → day_plan (multi-meal day plan, rule 0 applies)
 - "take me on a food tour of KL" → day_plan (multi-meal tour)
 - "plan my 3 days of eating in KL" → day_plan (multi-day, multi-meal)
+- "what's on this weekend in KL?" → happenings
+- "any events happening?" → happenings
+- "any festivals on?" → happenings
+- "what's happening in KL tonight?" → happenings
+- "any markets on this Saturday?" → happenings
+- "anything on this weekend?" → happenings
 - "what should I eat for breakfast, lunch, and dinner today?" → day_plan (multiple meal slots requested together)
 - "planning a day out with kids in KL, what should we do?" → day_plan (activity request + day planning)
 - "planning a trip to KL next week" → profile (no food/activity request)

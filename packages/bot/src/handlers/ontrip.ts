@@ -583,10 +583,10 @@ export async function buildDayPlanPrompt(
   // Use the resolved city name (first from cities, or defaultCity) for the system prompt
   const systemCity = (cities?.[0]) ?? defaultCity;
 
-  // ── Phase 4b: Happenings — what's on today ──────────────────────
-  const happenings = await queryHappenings(systemCity).catch(() => [] as Happening[]);
-  const happeningsContext = happenings.length > 0
-    ? happenings.map(h => {
+  // ── Phase 4b: Happenings — what's on today (DB only; web search lives in happenings intent) ──
+  const dbHappenings = await queryHappenings(systemCity).catch(() => [] as Happening[]);
+  const happeningsContext = dbHappenings.length > 0
+    ? dbHappenings.map(h => {
         const lines = [`Event: ${h.name}`];
         if (h.area) lines.push(`  Area: ${h.area}`);
         if (h.description) lines.push(`  Info: ${h.description}`);

@@ -20,6 +20,7 @@ import {
 import { getDefaultCity, isKnownArea } from "../utils/city-defaults.js";
 import { geocodeAddress } from "../utils/geocoding.js";
 import { handleQuery } from "./query.js";
+import { notifyNewSpot, notifyMergedSpot } from "../slack.js";
 
 /** Only these fields may be filled from web search — everything else must come from the contributor.
  *  Deliberately excludes:
@@ -828,6 +829,14 @@ async function saveSpot(
       source,
     });
 
+    notifyMergedSpot({
+      name: duplicate.name,
+      area: duplicate.area,
+      city: duplicate.city,
+      newFields: newInfo,
+      contributor_phone: phoneNumber,
+    });
+
     return samSays(`A contributor added intel to "${duplicate.name}" which already exists in your knowledge graph. Their new info:\n${newInfo.join("\n")}\nRespond warmly — ${duplicate.name} already exists in your graph, but their new perspective makes it richer and you've merged it in. One sentence.`);
   }
 
@@ -878,6 +887,16 @@ async function saveSpot(
   await updateConversation(phoneNumber, {
     current_flow: "general",
     flow_state: {},
+  });
+
+  notifyNewSpot({
+    name: newSpot.name,
+    area: newSpot.area,
+    city: newSpot.city,
+    categories: newSpot.categories,
+    must_go: isMustGo ?? false,
+    needs_review: needsReview,
+    contributor_phone: phoneNumber,
   });
 
   trackEvent(phoneNumber, channel, "flow_complete", {

@@ -33,6 +33,7 @@ import {
   isVagueQuery, getClarifyingQuestion,
   isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION,
 } from "@sam/bot/handlers/ontrip";
+import { buildHappeningsPayload } from "@sam/bot/handlers/happenings";
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
 import { handleSpotCorrection } from "@sam/bot/handlers/spot-correction";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
@@ -169,6 +170,7 @@ export async function POST(req: NextRequest) {
       "hungry",
       "day_plan",
       "nearby",
+      "happenings",
       "weather",
       "general",
       "spot_info",
@@ -352,6 +354,15 @@ async function streamHandlerResponse(
         { maxTokens: payload.maxTokens }
       );
       return streamSSE(stream, sessionId, message, intent, rateLimitRemaining, payload.spotIds);
+    }
+    case "happenings": {
+      const payload = await buildHappeningsPayload(sessionId, message, recentHistory, { channel: "web" });
+      const stream = chatStream(
+        payload.systemPrompt,
+        [{ role: "user", content: payload.userPrompt }],
+        { maxTokens: payload.maxTokens }
+      );
+      return streamSSE(stream, sessionId, message, intent, rateLimitRemaining);
     }
     case "weather": {
       // Hybrid check: if the user also asked about food (e.g. "is it raining? where should I eat?"),

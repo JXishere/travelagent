@@ -26,6 +26,7 @@ import { handleQuery } from "./handlers/query.js";
 import { handleProfile, startProfileLearning } from "./handlers/profile.js";
 import { handleStrategic } from "./handlers/strategic.js";
 import { handleHungry, handleDayPlan, handleNearby, handleSpotInfo, isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION } from "./handlers/ontrip.js";
+import { handleHappenings } from "./handlers/happenings.js";
 import { handleFeedback, startFeedbackCollection } from "./handlers/feedback.js";
 import { handleSpotCorrection } from "./handlers/spot-correction.js";
 import { startGenerate, handleGenerate } from "./handlers/generate.js";
@@ -334,6 +335,10 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
 
     case "day_plan":
       response = await handleDayPlan(from, text, details, recentContext, { channel: "whatsapp" });
+      break;
+
+    case "happenings":
+      response = await handleHappenings(from, text, recentContext, { channel: "whatsapp" });
       break;
 
     case "nearby":

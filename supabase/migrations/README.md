@@ -47,3 +47,4 @@ npm run migrate
 | `20260222_040000_spot_review_queue.sql` | Add needs_review boolean to spots (sparse index); new contributor spots land here until admin approves | applied via MCP |
 | `20260222_050000_add_last_verified.sql` | Re-add last_verified timestamptz to spots; backfill from created_at for verified spots; sparse index for staleness queries | applied via MCP |
 | `20260223_000000_add_happenings_table.sql` | New happenings table for temporal events (festivals, pop-ups, recurring markets); date-range index + RLS | applied via MCP |
+| `20260223_010000_nullable_end_date_for_recurring_happenings.sql` | Make happenings.end_date nullable — recurring=true + end_date NULL = permanently active (e.g. weekly markets never expire) | applied via MCP |

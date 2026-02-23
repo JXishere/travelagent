@@ -143,12 +143,16 @@ async function maybeRunDailyDigest(): Promise<void> {
     ? ` — ${Object.entries(byCityMap).map(([c, n]) => `${c}: ${n}`).join(" · ")}`
     : "";
 
+  const reviewNote = data.reviewQueueCount > 0
+    ? `\nReview queue: ${data.reviewQueueCount} spot(s) pending ⚠️`
+    : "";
+
   const text = [
     `📊 Sam — ${dayName}`,
     ``,
     `Messages: ${totalMessages} (${data.waMessages} WA · ${data.webMessages} web)`,
     `Cost: ${costStr}`,
-    `New spots: ${spotCount}${spotDetail}`,
+    `New spots: ${spotCount}${spotDetail}${reviewNote}`,
   ].join("\n");
 
   await fetch(slackWebhookUrl, {

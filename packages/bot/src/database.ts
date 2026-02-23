@@ -22,6 +22,13 @@ const supabase = new Proxy({} as SupabaseClient<Database>, {
 
 const MAX_CONVERSATION_MESSAGES = 40;
 
+/**
+ * Cast a DB row (typed as its raw Supabase shape) to an app-level domain type.
+ * Using `unknown` as the parameter type means TypeScript only checks `unknown → T`
+ * (always valid), not `DBRow → T` (which TS 5.9 rejects when JSONB fields differ).
+ */
+function cast<T>(val: unknown): T { return val as T; }
+
 // ============================================
 // CONVERSATIONS
 // ============================================
@@ -45,7 +52,7 @@ export async function getOrCreateConversation(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as unknown as Conversation;
+  if (data) return cast<Conversation>(data);
 
   const { data: created, error } = await supabase
     .from("conversations")
@@ -54,7 +61,7 @@ export async function getOrCreateConversation(
     .single();
 
   if (error) throw error;
-  return created as unknown as Conversation;
+  return cast<Conversation>(created);
 }
 
 export async function updateConversation(
@@ -92,7 +99,7 @@ export interface Happening {
   area?: string;
   description?: string;
   start_date: string;
-  end_date: string;
+  end_date: string | null; // NULL = permanent recurring (no expiry)
   recurring?: boolean;
   recurrence_rule?: string;
   categories?: string[];
@@ -103,21 +110,41 @@ export interface Happening {
 }
 
 /**
- * Return happenings active on a given date (default: today) for a city.
- * Recurring events are always included when they have a recurrence_rule.
+ * Return happenings active on or starting within `lookaheadDays` of a given date.
+ *
+ * Three event types:
+ *   recurring=false, end_date set   → one-off: active between start_date and end_date
+ *   recurring=true,  end_date set   → seasonal recurring: active within date range
+ *   recurring=true,  end_date NULL  → permanent recurring: active from start_date forever
+ *
+ * lookaheadDays (default 0):
+ *   0  → today only (day plan)
+ *   2  → today + next 2 days (proactive nudge: "heads up, tomorrow...")
+ *   7  → this week (weekend / "what's on?" query)
  */
 export async function queryHappenings(
   city: string,
-  date?: string
+  date?: string,
+  lookaheadDays = 0
 ): Promise<Happening[]> {
   const targetDate = date ?? new Date().toISOString().split("T")[0];
 
+  // Compute the lookahead ceiling date
+  const ceilingDate = lookaheadDays > 0
+    ? (() => {
+        const d = new Date(targetDate + "T00:00:00Z");
+        d.setUTCDate(d.getUTCDate() + lookaheadDays);
+        return d.toISOString().split("T")[0];
+      })()
+    : targetDate;
+
+  // start_date <= ceiling AND (end_date >= today OR (recurring AND end_date IS NULL))
   const { data, error } = await supabase
     .from("happenings")
     .select("*")
     .ilike("city", `%${city}%`)
-    .lte("start_date", targetDate)
-    .gte("end_date", targetDate)
+    .lte("start_date", ceilingDate)
+    .or(`end_date.gte.${targetDate},and(recurring.eq.true,end_date.is.null)`)
     .order("start_date", { ascending: true })
     .limit(10);
 
@@ -125,7 +152,7 @@ export async function queryHappenings(
     console.error("[queryHappenings] Error:", error);
     return [];
   }
-  return (data ?? []) as unknown as Happening[];
+  return cast<Happening[]>(data ?? []);
 }
 
 // ============================================
@@ -167,9 +194,9 @@ export interface Spot {
 }
 
 /** Strip app-only fields before writing to the spots table */
-function toDbSpotRow(spot: Partial<Spot>): Database["public"]["Tables"]["spots"]["Insert"] {
+function toDbSpotRow(spot: Partial<Spot>): any {
   const { isStale, payment_methods, opening_hours, embedding, ...dbFields } = spot;
-  return dbFields as unknown as Database["public"]["Tables"]["spots"]["Insert"];
+  return dbFields;
 }
 
 export async function querySpots(filters: {
@@ -223,7 +250,7 @@ export async function querySpots(filters: {
 
   const { data, error } = await query;
   if (error) throw error;
-  const pool = (data ?? []) as unknown as Spot[];
+  const pool = cast<Spot[]>(data ?? []);
 
   // Compute staleness: no created_at, or created_at older than 180 days
   const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
@@ -354,7 +381,7 @@ export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
     .single();
   if (error) throw error;
 
-  const inserted = data as unknown as Spot;
+  const inserted = cast<Spot>(data);
 
   // Fire-and-forget: generate and store embedding for the new spot
   autoEmbedSpot(inserted).catch((err) =>
@@ -384,7 +411,7 @@ export async function findDuplicateSpot(
     let q = supabase.from("spots").select("*").ilike("name", name);
     if (area) q = q.ilike("area", `%${area}%`);
     const { data } = await q.limit(1).maybeSingle();
-    if (data) return data as unknown as Spot;
+    if (data) return cast<Spot>(data);
   }
 
   // Pass 1b: Fuzzy matching — catch partial/variant names ("Fatty Crab Restaurant", "The Fatty Crab")
@@ -443,7 +470,7 @@ export async function findSpotByName(name: string, city?: string): Promise<Spot 
     let q = supabase.from("spots").select("*").ilike("name", name);
     if (city) q = q.eq("city", city);
     const { data } = await q.limit(1).maybeSingle();
-    if (data) return data as unknown as Spot;
+    if (data) return cast<Spot>(data);
   }
 
   // Pass 2: substring match (e.g. "Village Park" → "Village Park Restaurant")
@@ -451,7 +478,7 @@ export async function findSpotByName(name: string, city?: string): Promise<Spot 
     let q = supabase.from("spots").select("*").ilike("name", `%${name}%`);
     if (city) q = q.eq("city", city);
     const { data } = await q.order("must_go", { ascending: false }).limit(1).maybeSingle();
-    if (data) return data as unknown as Spot;
+    if (data) return cast<Spot>(data);
   }
 
   return null;
@@ -463,13 +490,13 @@ export async function getSpotById(spotId: string): Promise<Spot | null> {
     .select("*")
     .eq("id", spotId)
     .single();
-  return (data as unknown as Spot) ?? null;
+  return data ? cast<Spot>(data) : null;
 }
 
 export async function getSpotsByIds(ids: string[]): Promise<Pick<Spot, "id" | "name" | "area">[]> {
   if (ids.length === 0) return [];
   const { data } = await supabase.from("spots").select("id, name, area").in("id", ids);
-  return (data ?? []) as unknown as Pick<Spot, "id" | "name" | "area">[];
+  return cast<Pick<Spot, "id" | "name" | "area">[]>(data ?? []);
 }
 
 export async function updateSpot(spotId: string, updates: Partial<Spot>): Promise<void> {
@@ -521,7 +548,7 @@ export async function applySpotCorrection(
     reporter_id: reporterId,
     correction_type: delta.correction_type,
     correction_note: delta.correction_summary,
-    delta: delta as unknown as Json,
+    delta: cast<Json>(delta),
   });
 
   return { hardClosed, reportCount: existingCount + 1 };
@@ -605,7 +632,7 @@ export async function semanticSearchSpots(
     return [];
   }
 
-  return (data ?? []) as unknown as Spot[];
+  return cast<Spot[]>(data ?? []);
 }
 
 export async function incrementRecommendationCount(spotId: string): Promise<void> {
@@ -650,7 +677,7 @@ export async function getOrCreateTraveler(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as unknown as Traveler;
+  if (data) return cast<Traveler>(data);
 
   const { data: created, error } = await supabase
     .from("travelers")
@@ -659,7 +686,7 @@ export async function getOrCreateTraveler(
     .single();
 
   if (error) throw error;
-  return created as unknown as Traveler;
+  return cast<Traveler>(created);
 }
 
 export async function updateTraveler(
@@ -714,7 +741,7 @@ export async function getOrCreateContributor(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as unknown as Contributor;
+  if (data) return cast<Contributor>(data);
 
   const { data: created, error } = await supabase
     .from("contributors")
@@ -723,7 +750,7 @@ export async function getOrCreateContributor(
     .single();
 
   if (error) throw error;
-  return created as unknown as Contributor;
+  return cast<Contributor>(created);
 }
 
 export async function incrementContributorCount(
@@ -731,7 +758,7 @@ export async function incrementContributorCount(
   city: string = getDefaultCity()
 ): Promise<void> {
   const contributor = await getOrCreateContributor(phoneNumber);
-  const existing: string[] = (contributor as any).cities_contributed ?? [];
+  const existing: string[] = contributor.cities_contributed ?? [];
   const cities = existing.includes(city) ? existing : [...existing, city];
   await supabase
     .from("contributors")
@@ -821,7 +848,7 @@ export async function getSpotsNeedingFeedback(
     .select("*")
     .in("id", needFeedback.slice(-5));
 
-  return (data ?? []) as unknown as Spot[];
+  return cast<Spot[]>(data ?? []);
 }
 
 // ============================================
@@ -961,7 +988,7 @@ export async function getRecentlyRecommendedSpots(
     .select("*")
     .in("id", traveler.spots_recommended.slice(-5));
 
-  return (data ?? []) as unknown as Spot[];
+  return cast<Spot[]>(data ?? []);
 }
 
 // ============================================
@@ -1036,7 +1063,7 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
   const topIntent = topEntry?.[0] ?? "—";
   const topIntentCount = topEntry?.[1] ?? 0;
 
-  const newSpots = (spotResult.data ?? []) as unknown as Array<{ city: string; country?: string }>;
+  const newSpots = cast<Array<{ city: string; country?: string }>>(spotResult.data ?? []);
 
   let contributions = 0;
   let feedbacks = 0;

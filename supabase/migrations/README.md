@@ -48,3 +48,5 @@ npm run migrate
 | `20260222_050000_add_last_verified.sql` | Re-add last_verified timestamptz to spots; backfill from created_at for verified spots; sparse index for staleness queries | applied via MCP |
 | `20260223_000000_add_happenings_table.sql` | New happenings table for temporal events (festivals, pop-ups, recurring markets); date-range index + RLS | applied via MCP |
 | `20260223_010000_nullable_end_date_for_recurring_happenings.sql` | Make happenings.end_date nullable — recurring=true + end_date NULL = permanently active (e.g. weekly markets never expire) | applied via MCP |
+| `20260223_020000_add_areas_contributed_to_contributors.sql` | Add areas_contributed text[] to contributors; backfill from existing spot data — area-level expansion tracking | applied via MCP |
+| `20260223_030000_category_to_categories_array.sql` | Idempotent category→categories migration + fix match_spots RPC: remove dead columns (payment_methods, opening_hours, google_pin_accurate), fix renamed columns (use_count→recommendation_count, source→input_method), add GIN index on categories | applied via MCP |

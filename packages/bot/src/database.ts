@@ -1,16 +1,17 @@
 // Supabase client — all database operations
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "./database.types.js";
 import { getDefaultCity, getCityDefaults } from "./utils/city-defaults.js";
 
 // Lazy-init: defer createClient until first use so importing this module in test
 // environments (where SUPABASE_URL / SUPABASE_KEY are unset) doesn't throw.
 // All existing `supabase.from(...)` calls work unchanged — the Proxy is transparent.
-let _supabase: ReturnType<typeof createClient> | null = null;
-const supabase = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_: ReturnType<typeof createClient>, prop: string | symbol) {
+let _supabase: SupabaseClient<Database> | null = null;
+const supabase = new Proxy({} as SupabaseClient<Database>, {
+  get(_: SupabaseClient<Database>, prop: string | symbol) {
     if (!_supabase) {
-      _supabase = createClient(
+      _supabase = createClient<Database>(
         process.env.SUPABASE_URL!,
         process.env.SUPABASE_KEY!
       );
@@ -44,7 +45,7 @@ export async function getOrCreateConversation(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as Conversation;
+  if (data) return data as unknown as Conversation;
 
   const { data: created, error } = await supabase
     .from("conversations")
@@ -53,7 +54,7 @@ export async function getOrCreateConversation(
     .single();
 
   if (error) throw error;
-  return created as Conversation;
+  return created as unknown as Conversation;
 }
 
 export async function updateConversation(
@@ -77,6 +78,54 @@ export async function appendMessages(
     p_new_messages: newMessages,
     p_max_messages: MAX_CONVERSATION_MESSAGES,
   });
+}
+
+// ============================================
+// HAPPENINGS
+// ============================================
+
+export interface Happening {
+  id: string;
+  name: string;
+  city: string;
+  country?: string;
+  area?: string;
+  description?: string;
+  start_date: string;
+  end_date: string;
+  recurring?: boolean;
+  recurrence_rule?: string;
+  categories?: string[];
+  source_url?: string;
+  input_method?: string;
+  contributor_id?: string;
+  created_at?: string;
+}
+
+/**
+ * Return happenings active on a given date (default: today) for a city.
+ * Recurring events are always included when they have a recurrence_rule.
+ */
+export async function queryHappenings(
+  city: string,
+  date?: string
+): Promise<Happening[]> {
+  const targetDate = date ?? new Date().toISOString().split("T")[0];
+
+  const { data, error } = await supabase
+    .from("happenings")
+    .select("*")
+    .ilike("city", `%${city}%`)
+    .lte("start_date", targetDate)
+    .gte("end_date", targetDate)
+    .order("start_date", { ascending: true })
+    .limit(10);
+
+  if (error) {
+    console.error("[queryHappenings] Error:", error);
+    return [];
+  }
+  return (data ?? []) as unknown as Happening[];
 }
 
 // ============================================
@@ -115,6 +164,12 @@ export interface Spot {
   needs_review?: boolean;
   last_verified?: string;
   isStale?: boolean; // computed at query time — not a DB column
+}
+
+/** Strip app-only fields before writing to the spots table */
+function toDbSpotRow(spot: Partial<Spot>): Database["public"]["Tables"]["spots"]["Insert"] {
+  const { isStale, payment_methods, opening_hours, embedding, ...dbFields } = spot;
+  return dbFields as unknown as Database["public"]["Tables"]["spots"]["Insert"];
 }
 
 export async function querySpots(filters: {
@@ -168,7 +223,7 @@ export async function querySpots(filters: {
 
   const { data, error } = await query;
   if (error) throw error;
-  const pool = (data ?? []) as Spot[];
+  const pool = (data ?? []) as unknown as Spot[];
 
   // Compute staleness: no created_at, or created_at older than 180 days
   const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
@@ -181,10 +236,27 @@ export async function querySpots(filters: {
   const isPoorlyRated = (s: typeof withStaleness[0]) =>
     s.avg_rating != null && s.avg_rating < 2.5;
 
-  // Shuffle within each tier to rotate spots, preserving must_go → verified priority
-  const mustGo = withStaleness.filter(s => s.must_go && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
-  const verified = withStaleness.filter(s => !s.must_go && s.verified && !isPoorlyRated(s)).sort(() => Math.random() - 0.5);
-  const rest = withStaleness.filter(s => (!s.must_go && !s.verified) || isPoorlyRated(s)).sort(() => Math.random() - 0.5);
+  // Compute an app-level quality score for tiebreaking within each tier.
+  // Replaces random shuffle — richer spots surface first, but randomness is still mixed in
+  // via a ±0.1 jitter so the same spots don't dominate every response.
+  const qualityScore = (s: typeof withStaleness[0]): number => {
+    let score = 0;
+    if (s.what_to_order && s.what_to_order.length > 0) score += 0.35;
+    if (s.pro_tips && s.pro_tips.length > 0) score += 0.25;
+    if (s.avg_rating != null && s.avg_rating >= 3.5) score += 0.20;
+    if (s.recommendation_count != null && s.recommendation_count >= 3) score += 0.10;
+    if (!s.isStale) score += 0.10;
+    // Jitter: ±10% random noise so high-quality spots rotate naturally
+    score += (Math.random() - 0.5) * 0.2;
+    return score;
+  };
+
+  const byQuality = (a: typeof withStaleness[0], b: typeof withStaleness[0]) =>
+    qualityScore(b) - qualityScore(a);
+
+  const mustGo = withStaleness.filter(s => s.must_go && !isPoorlyRated(s)).sort(byQuality);
+  const verified = withStaleness.filter(s => !s.must_go && s.verified && !isPoorlyRated(s)).sort(byQuality);
+  const rest = withStaleness.filter(s => (!s.must_go && !s.verified) || isPoorlyRated(s)).sort(byQuality);
   const isThinSpot = (s: typeof withStaleness[0]) =>
     (!s.what_to_order || s.what_to_order.length === 0) &&
     (!s.pro_tips || s.pro_tips.length === 0);
@@ -265,7 +337,7 @@ export async function getDistinctAreas(): Promise<string[]> {
   const seen = new Set<string>();
   const areas: string[] = [];
   for (const row of data) {
-    const a = (row as { area: string }).area;
+    const a = (row as unknown as { area: string }).area;
     if (a && !seen.has(a)) { seen.add(a); areas.push(a); }
   }
   _distinctAreasCache = areas;
@@ -277,12 +349,12 @@ export async function insertSpot(spot: Partial<Spot>): Promise<Spot> {
   const country = spot.country ?? getCityDefaults(city).country;
   const { data, error } = await supabase
     .from("spots")
-    .insert({ city, country, ...spot })
+    .insert(toDbSpotRow({ city, country, ...spot }))
     .select()
     .single();
   if (error) throw error;
 
-  const inserted = data as Spot;
+  const inserted = data as unknown as Spot;
 
   // Fire-and-forget: generate and store embedding for the new spot
   autoEmbedSpot(inserted).catch((err) =>
@@ -312,7 +384,7 @@ export async function findDuplicateSpot(
     let q = supabase.from("spots").select("*").ilike("name", name);
     if (area) q = q.ilike("area", `%${area}%`);
     const { data } = await q.limit(1).maybeSingle();
-    if (data) return data as Spot;
+    if (data) return data as unknown as Spot;
   }
 
   // Pass 1b: Fuzzy matching — catch partial/variant names ("Fatty Crab Restaurant", "The Fatty Crab")
@@ -371,7 +443,7 @@ export async function findSpotByName(name: string, city?: string): Promise<Spot 
     let q = supabase.from("spots").select("*").ilike("name", name);
     if (city) q = q.eq("city", city);
     const { data } = await q.limit(1).maybeSingle();
-    if (data) return data as Spot;
+    if (data) return data as unknown as Spot;
   }
 
   // Pass 2: substring match (e.g. "Village Park" → "Village Park Restaurant")
@@ -379,7 +451,7 @@ export async function findSpotByName(name: string, city?: string): Promise<Spot 
     let q = supabase.from("spots").select("*").ilike("name", `%${name}%`);
     if (city) q = q.eq("city", city);
     const { data } = await q.order("must_go", { ascending: false }).limit(1).maybeSingle();
-    if (data) return data as Spot;
+    if (data) return data as unknown as Spot;
   }
 
   return null;
@@ -391,19 +463,19 @@ export async function getSpotById(spotId: string): Promise<Spot | null> {
     .select("*")
     .eq("id", spotId)
     .single();
-  return (data as Spot) ?? null;
+  return (data as unknown as Spot) ?? null;
 }
 
 export async function getSpotsByIds(ids: string[]): Promise<Pick<Spot, "id" | "name" | "area">[]> {
   if (ids.length === 0) return [];
   const { data } = await supabase.from("spots").select("id, name, area").in("id", ids);
-  return (data ?? []) as Pick<Spot, "id" | "name" | "area">[];
+  return (data ?? []) as unknown as Pick<Spot, "id" | "name" | "area">[];
 }
 
 export async function updateSpot(spotId: string, updates: Partial<Spot>): Promise<void> {
   await supabase
     .from("spots")
-    .update(updates)
+    .update(toDbSpotRow(updates))
     .eq("id", spotId);
 }
 
@@ -442,14 +514,14 @@ export async function applySpotCorrection(
   if (delta.area) updates.area = delta.area;
   if (delta.address) updates.address = delta.address;
 
-  await supabase.from("spots").update(updates).eq("id", spotId);
+  await supabase.from("spots").update(toDbSpotRow(updates)).eq("id", spotId);
 
   await supabase.from("spot_corrections").insert({
     spot_id: spotId,
     reporter_id: reporterId,
     correction_type: delta.correction_type,
     correction_note: delta.correction_summary,
-    delta,
+    delta: delta as unknown as Json,
   });
 
   return { hardClosed, reportCount: existingCount + 1 };
@@ -484,7 +556,7 @@ export async function getPendingCorrections(): Promise<PendingCorrection[]> {
 
   if (!spots) return [];
 
-  const spotMap = new Map(spots.map((s: any) => [s.id as string, s]));
+  const spotMap = new Map(spots.map((s) => [s.id as string, s]));
   return corrections
     .filter((c: any) => spotMap.has(c.spot_id))
     .map((c: any) => {
@@ -523,8 +595,8 @@ export async function semanticSearchSpots(
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
   const { data, error } = await supabase.rpc("match_spots", {
     query_embedding: embeddingStr,
-    filter_city: filters?.city ?? null,
-    filter_categories: filters?.categories ?? null,
+    filter_city: filters?.city ?? undefined,
+    filter_categories: filters?.categories ?? undefined,
     match_limit: limit,
   });
 
@@ -533,7 +605,7 @@ export async function semanticSearchSpots(
     return [];
   }
 
-  return (data ?? []) as Spot[];
+  return (data ?? []) as unknown as Spot[];
 }
 
 export async function incrementRecommendationCount(spotId: string): Promise<void> {
@@ -578,7 +650,7 @@ export async function getOrCreateTraveler(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as Traveler;
+  if (data) return data as unknown as Traveler;
 
   const { data: created, error } = await supabase
     .from("travelers")
@@ -587,7 +659,7 @@ export async function getOrCreateTraveler(
     .single();
 
   if (error) throw error;
-  return created as Traveler;
+  return created as unknown as Traveler;
 }
 
 export async function updateTraveler(
@@ -642,7 +714,7 @@ export async function getOrCreateContributor(
     .eq("whatsapp_number", phoneNumber)
     .single();
 
-  if (data) return data as Contributor;
+  if (data) return data as unknown as Contributor;
 
   const { data: created, error } = await supabase
     .from("contributors")
@@ -651,7 +723,7 @@ export async function getOrCreateContributor(
     .single();
 
   if (error) throw error;
-  return created as Contributor;
+  return created as unknown as Contributor;
 }
 
 export async function incrementContributorCount(
@@ -701,7 +773,7 @@ export async function getActiveTravelers(): Promise<
     .in("whatsapp_number", phones);
 
   const convoMap = new Map(
-    (conversations ?? []).map((c: any) => [c.whatsapp_number, c])
+    (conversations ?? []).map((c) => [c.whatsapp_number, c])
   );
 
   return travelers.map((t: any) => {
@@ -749,7 +821,7 @@ export async function getSpotsNeedingFeedback(
     .select("*")
     .in("id", needFeedback.slice(-5));
 
-  return (data ?? []) as Spot[];
+  return (data ?? []) as unknown as Spot[];
 }
 
 // ============================================
@@ -889,7 +961,7 @@ export async function getRecentlyRecommendedSpots(
     .select("*")
     .in("id", traveler.spots_recommended.slice(-5));
 
-  return (data ?? []) as Spot[];
+  return (data ?? []) as unknown as Spot[];
 }
 
 // ============================================
@@ -907,6 +979,7 @@ export interface DailyDigestData {
   topIntentCount: number;
   contributions: number;
   feedbacks: number;
+  reviewQueueCount: number;
 }
 
 /** Compute KL calendar-day UTC boundaries. offsetDays=-1 = yesterday, 0 = today */
@@ -929,7 +1002,7 @@ function estimateCost(inputTokens: number, outputTokens: number): number {
 export async function getDailyDigestData(): Promise<DailyDigestData> {
   const { start, end } = getKLDayBounds(-1);
 
-  const [costResult, msgResult, spotResult, flowResult] = await Promise.all([
+  const [costResult, msgResult, spotResult, flowResult, reviewResult] = await Promise.all([
     supabase.from("events").select("event_data").eq("event_type", "llm_usage")
       .gte("created_at", start).lt("created_at", end),
     supabase.from("events").select("channel, event_data").eq("event_type", "message")
@@ -937,6 +1010,8 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
     supabase.from("spots").select("city, country").gte("created_at", start).lt("created_at", end),
     supabase.from("events").select("event_data").eq("event_type", "flow_complete")
       .gte("created_at", start).lt("created_at", end),
+    supabase.from("spots").select("*", { count: "exact", head: true })
+      .eq("needs_review", true).not("is_closed", "eq", true),
   ]);
 
   let totalInputTokens = 0;
@@ -961,7 +1036,7 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
   const topIntent = topEntry?.[0] ?? "—";
   const topIntentCount = topEntry?.[1] ?? 0;
 
-  const newSpots = (spotResult.data ?? []) as Array<{ city: string; country?: string }>;
+  const newSpots = (spotResult.data ?? []) as unknown as Array<{ city: string; country?: string }>;
 
   let contributions = 0;
   let feedbacks = 0;
@@ -971,7 +1046,9 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
     else if (flow === "feedback") feedbacks++;
   }
 
-  return { totalCost, totalInputTokens, totalOutputTokens, waMessages, webMessages, newSpots, topIntent, topIntentCount, contributions, feedbacks };
+  const reviewQueueCount = reviewResult.count ?? 0;
+
+  return { totalCost, totalInputTokens, totalOutputTokens, waMessages, webMessages, newSpots, topIntent, topIntentCount, contributions, feedbacks, reviewQueueCount };
 }
 
 export async function hasDailyDigestRunToday(): Promise<boolean> {

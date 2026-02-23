@@ -462,6 +462,18 @@ async function collectInfo(
 
   // Check if we have enough to show a summary
   if (isReady(merged)) {
+    // Validate quality before showing summary — catch bad categories early
+    const { errors: earlyErrors, warnings: earlyWarnings } = validateSpotData(merged);
+    if (earlyErrors.length > 0) {
+      // Hard validation failure — ask contributor to correct
+      await updateConversation(phoneNumber, {
+        flow_state: { stage: "collecting", extracted: merged, source: state.source, messagesReceived, webSourcedFields, areaConflict, webMatchDenied },
+      });
+      return samSays(`There's an issue with this spot: ${earlyErrors[0]}. Ask the contributor to correct it. One sentence.`);
+    }
+    // Soft warnings annotated into the summary
+    const areaWarning = earlyWarnings.length > 0 ? `\n\n⚠️ ${earlyWarnings.join(" ")}` : "";
+
     // P1.B: If web returned useful data, ask disambiguation before showing the full summary
     if ((webSourcedFields.length > 0 || areaConflict) && !webMatchDenied) {
       const webMatchQuestion = buildWebMatchQuestion(merged);
@@ -491,7 +503,7 @@ async function collectInfo(
         areaConflict,
       },
     });
-    return formatSummary(merged, webSourcedFields, areaConflict);
+    return formatSummary(merged, webSourcedFields, areaConflict) + areaWarning;
   }
 
   // Not ready — save progress and ask a follow-up
@@ -541,6 +553,53 @@ export function smartMerge(
   }
 
   return merged;
+}
+
+const VALID_CATEGORIES = new Set([
+  "breakfast", "lunch", "dinner", "cafe", "activity", "nightlife", "market",
+]);
+
+interface ValidationResult {
+  errors: string[];
+  warnings: string[];
+}
+
+/** Validate extracted spot data — errors block save, warnings are surfaced to contributor */
+export function validateSpotData(data: Partial<ExtractedSpot>, knownAreas?: string[]): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Name length guard
+  if (data.name !== undefined) {
+    if (data.name.trim().length < 2) errors.push("name is too short (minimum 2 characters)");
+    if (data.name.trim().length > 100) errors.push("name is too long (maximum 100 characters)");
+  }
+
+  // Category enum check + count + duplicates
+  if (data.categories !== undefined) {
+    const invalidCats = data.categories.filter(c => !VALID_CATEGORIES.has(c));
+    if (invalidCats.length > 0) {
+      errors.push(`unknown categories: ${invalidCats.join(", ")} (valid: breakfast, lunch, dinner, cafe, activity, nightlife, market)`);
+    }
+    const unique = new Set(data.categories);
+    if (unique.size < data.categories.length) {
+      errors.push("duplicate categories — list each category once");
+    }
+    if (data.categories.length > 3) {
+      errors.push("too many categories (maximum 3) — pick the 1-3 that best describe this spot");
+    }
+  }
+
+  // Area soft-check: warn if area is not recognized for this city
+  if (data.area && knownAreas && knownAreas.length > 0) {
+    const areaLower = data.area.toLowerCase();
+    const isKnown = knownAreas.some(a => a.toLowerCase().includes(areaLower) || areaLower.includes(a.toLowerCase()));
+    if (!isKnown) {
+      warnings.push(`"${data.area}" isn't a recognized area in my map yet — double-check the spelling`);
+    }
+  }
+
+  return { errors, warnings };
 }
 
 /** Check if extracted data has the minimum required fields to insert into DB */
@@ -695,6 +754,17 @@ async function saveSpot(
       flow_state: { stage: "collecting", extracted: data, source, messagesReceived: 0 },
     });
     return samSays(`You're trying to save a spot to the knowledge graph but it's missing: ${missing}. Ask the contributor to provide what's missing before you can add it. One sentence.`);
+  }
+
+  // Data quality validation — block on hard errors (bad category, name length)
+  const { errors: validationErrors } = validateSpotData(data);
+  if (validationErrors.length > 0) {
+    console.error("[saveSpot] Blocked: validation errors", validationErrors);
+    await updateConversation(phoneNumber, {
+      current_flow: "contribution",
+      flow_state: { stage: "collecting", extracted: data, source, messagesReceived: 0 },
+    });
+    return samSays(`There's an issue with this spot submission: ${validationErrors[0]}. Ask the contributor to correct it before saving. One sentence.`);
   }
 
   const contributor = await getOrCreateContributor(phoneNumber);

@@ -46,3 +46,4 @@ npm run migrate
 | `20260222_030000_spot_corrections.sql` | Add is_closed boolean to spots (filters closed venues from all queries); add spot_corrections attribution table | applied via MCP |
 | `20260222_040000_spot_review_queue.sql` | Add needs_review boolean to spots (sparse index); new contributor spots land here until admin approves | applied via MCP |
 | `20260222_050000_add_last_verified.sql` | Re-add last_verified timestamptz to spots; backfill from created_at for verified spots; sparse index for staleness queries | applied via MCP |
+| `20260223_000000_add_happenings_table.sql` | New happenings table for temporal events (festivals, pop-ups, recurring markets); date-range index + RLS | applied via MCP |

@@ -14,6 +14,7 @@ import {
   getStaleSpotsForVerification,
   trackEvent,
   updateConversation,
+  getOrCreateConversation,
   type Traveler,
 } from "./database.js";
 import { getCurrentWeather } from "./weather.js";
@@ -55,6 +56,7 @@ interface CandidateInfo {
   dietary_restrictions?: string[];
   travel_party?: string;
   current_city?: string;
+  preferences?: Record<string, any>;
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -108,10 +110,10 @@ async function tick(): Promise<void> {
 // P1.A — DAILY DIGEST
 // ============================================
 
-/** Send the admin a daily metrics digest at 9:00–9:05am KL time */
+/** Send a daily metrics digest to Slack at 9:00–9:05am KL time */
 async function maybeRunDailyDigest(): Promise<void> {
-  const ADMIN_PHONE = process.env.ADMIN_PHONE_NUMBER;
-  if (!ADMIN_PHONE) return;
+  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!slackWebhookUrl) return;
 
   const now = new Date();
   const klHour = getKLHour(now);
@@ -125,11 +127,9 @@ async function maybeRunDailyDigest(): Promise<void> {
 
   const dateStr = formatKLDate(now);
   const dayName = new Date(now.getTime() + KL_OFFSET_HOURS * 60 * 60 * 1000)
-    .toLocaleDateString("en-US", { weekday: "short" });
+    .toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
 
   const totalMessages = data.waMessages + data.webMessages;
-  const totalTokens = data.totalInputTokens + data.totalOutputTokens;
-  const tokenStr = totalTokens > 1000 ? `${Math.round(totalTokens / 1000)}K` : `${totalTokens}`;
   const costStr = `$${data.totalCost.toFixed(2)}`;
 
   // Spots by city
@@ -138,26 +138,27 @@ async function maybeRunDailyDigest(): Promise<void> {
     const k = s.city ?? "unknown";
     byCityMap[k] = (byCityMap[k] ?? 0) + 1;
   }
-  const spotCityLine = Object.entries(byCityMap).map(([c, n]) => `  ${c}: ${n}`).join(" · ");
-  const uniqueCountries = [...new Set(data.newSpots.map(s => s.country).filter(Boolean))];
+  const spotCount = data.newSpots.length;
+  const spotDetail = spotCount > 0
+    ? ` — ${Object.entries(byCityMap).map(([c, n]) => `${c}: ${n}`).join(" · ")}`
+    : "";
 
-  const lines = [
-    `📊 Sam Daily — ${dayName} ${dateStr}`,
+  const text = [
+    `📊 Sam — ${dayName}`,
     ``,
-    `Messages: ${totalMessages} (${data.waMessages} WhatsApp · ${data.webMessages} web)`,
-    `Cost: ${costStr} (${tokenStr} tokens)`,
-    ``,
-    `New spots: ${data.newSpots.length}`,
-    data.newSpots.length > 0 ? spotCityLine : `  (none)`,
-    uniqueCountries.length > 0 ? `Countries: ${uniqueCountries.length} (${uniqueCountries.join(", ")})` : null,
-    ``,
-    `Top intent: ${data.topIntent} (${data.topIntentCount})`,
-    `Contributions: ${data.contributions} · Feedback: ${data.feedbacks}`,
-  ].filter(l => l !== null).join("\n");
+    `Messages: ${totalMessages} (${data.waMessages} WA · ${data.webMessages} web)`,
+    `Cost: ${costStr}`,
+    `New spots: ${spotCount}${spotDetail}`,
+  ].join("\n");
 
-  await sendMessage(ADMIN_PHONE, lines);
-  trackEvent(ADMIN_PHONE, "whatsapp", "daily_digest", { date: dateStr });
-  console.log("[scheduler] Daily digest sent");
+  await fetch(slackWebhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+  trackEvent("system", "whatsapp", "daily_digest", { date: dateStr });
+  console.log("[scheduler] Daily digest sent to Slack");
 }
 
 // ============================================
@@ -239,6 +240,8 @@ export function evaluateCandidate(
     dietaryRestrictions: candidate.dietary_restrictions,
     city: candidate.current_city ?? "Kuala Lumpur",
     klHour,
+    preferences: candidate.preferences,
+    spotsRecommendedCount: candidate.spots_recommended?.length ?? 0,
   });
 
   // Priority 1: TRIP_WELCOME — day 1, never proactively messaged
@@ -278,6 +281,9 @@ export function buildProactiveContext(params: {
   dietaryRestrictions?: string[];
   city: string;
   klHour: number;
+  preferences?: Record<string, any>;
+  spotsRecommendedCount?: number;
+  recentMessages?: string;
 }): string {
   const lines: string[] = [];
   if (params.name) lines.push(`Name: ${params.name}`);
@@ -287,6 +293,17 @@ export function buildProactiveContext(params: {
   if (params.travelParty) lines.push(`Travel party: ${params.travelParty}`);
   if (params.dietaryRestrictions?.length) {
     lines.push(`Dietary restrictions: ${params.dietaryRestrictions.join(", ")}`);
+  }
+  // Traveler preferences — used for personalized nudges
+  const prefs = params.preferences ?? {};
+  if (prefs.budget) lines.push(`Budget style: ${prefs.budget}`);
+  if (prefs.interests?.length) lines.push(`Interests: ${(prefs.interests as string[]).join(", ")}`);
+  if (prefs.pace) lines.push(`Pace: ${prefs.pace}`);
+  if (params.spotsRecommendedCount != null) {
+    lines.push(`Spots recommended so far this trip: ${params.spotsRecommendedCount}`);
+  }
+  if (params.recentMessages) {
+    lines.push(`\nRecent conversation (last few messages):\n${params.recentMessages}`);
   }
   return lines.join("\n");
 }
@@ -331,6 +348,38 @@ async function sendProactiveMessage(
     return;
   }
 
+  // Fetch recent conversation context for personalization (last 3 messages)
+  let recentMessages = "";
+  try {
+    const convo = await getOrCreateConversation(phone);
+    const lastMsgs = (convo.messages ?? []).slice(-3);
+    if (lastMsgs.length > 0) {
+      recentMessages = lastMsgs
+        .map(m => `${m.role === "user" ? "Traveler" : "Sam"}: ${m.content.slice(0, 120)}`)
+        .join("\n");
+    }
+  } catch {
+    // Non-fatal — proceed without conversation context
+  }
+
+  // Re-build context with recent messages included
+  const tripDates = traveler.trip_dates;
+  const tripDay = tripDates ? calculateTripDay(tripDates, new Date()) : 1;
+  const totalDays = tripDates ? calculateTotalDays(tripDates) : 1;
+  const klHour = getKLHour(new Date());
+  const enrichedContext = buildProactiveContext({
+    name: (traveler as any).name,
+    tripDay,
+    totalDays,
+    travelParty: traveler.travel_party,
+    dietaryRestrictions: traveler.dietary_restrictions,
+    city: traveler.current_city ?? "Kuala Lumpur",
+    klHour,
+    preferences: traveler.preferences,
+    spotsRecommendedCount: traveler.spots_recommended?.length ?? 0,
+    recentMessages: recentMessages || undefined,
+  });
+
   // LLM-generated message
   // MORNING_NUDGE: use forecast so Sam can hint at afternoon weather
   let weatherLine = "";
@@ -350,7 +399,7 @@ async function sendProactiveMessage(
 
   const prompt = PROACTIVE_PROMPT
     .replace("{{MESSAGE_TYPE}}", result.type)
-    .replace("{{CONTEXT}}", result.context + weatherLine);
+    .replace("{{CONTEXT}}", enrichedContext + weatherLine);
 
   const message = await chat(prompt, [{ role: "user", content: "Generate the proactive message." }], {
     temperature: 0.8,

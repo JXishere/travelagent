@@ -11,13 +11,15 @@ import {
   trackEvent,
   getAreaCentroid,
   getDistinctAreas,
+  queryHappenings,
   type Spot,
   type Traveler,
+  type Happening,
 } from "../database.js";
 import { getCurrentWeather, getDayForecast } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getCityDefaults, getDefaultCity, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
-import { formatSpotsForLLM, extractListCount } from "./query.js";
+import { formatSpotsForLLM, extractListCount, mapBudgetToPriceRange } from "./query.js";
 import { parseCoordinates, filterByDistance, haversineKm, type SpotWithDistance } from "../utils/geo.js";
 import { parseAreas } from "../utils/area-extractor.js";
 
@@ -440,18 +442,79 @@ export async function buildDayPlanPrompt(
 
   const dislikedIds = traveler.spots_disliked ?? [];
 
+  // ── Phase 2a: Time awareness ──────────────────────────────────────
+  // Skip meal categories that are no longer relevant at the current local time.
+  const cityDefaults = getCityDefaults(traveler.current_city);
+  const klHour = (new Date().getUTCHours() + cityDefaults.utcOffset) % 24;
+  const skipBreakfast = klHour >= 12 || /\b(already ate|had breakfast|just woke up late|skip breakfast)\b/i.test(message + " " + (conversationHistory ?? ""));
+  const skipLunch = klHour >= 15 || /\b(already (had|ate) lunch|skip lunch)\b/i.test(message + " " + (conversationHistory ?? ""));
+  const isBrunchRequest = /\bbrunch\b/i.test(message);
+
+  // Time-of-day label for the LLM
+  const timeOfDayLabel =
+    klHour < 11 ? "morning" :
+    klHour < 15 ? "afternoon" :
+    klHour < 20 ? "evening" : "late night";
+
+  const timeContextNote = `Current local time: ${klHour}:00 (${timeOfDayLabel}).${skipBreakfast ? " Breakfast has passed — do not suggest breakfast spots." : ""}${skipLunch ? " Lunch has passed — do not suggest lunch spots." : ""}`;
+
+  // ── Phase 2c: Preference integration ────────────────────────────
+  const budgetSignal = traveler.preferences?.budget as string | undefined;
+  const priceRange = mapBudgetToPriceRange(budgetSignal);
+
+  // Pace signal → vibe hint for LLM (no hard filter — just guidance)
+  const pace = traveler.preferences?.pace as string | undefined;
+  const paceNote = pace === "chill"
+    ? "They prefer a relaxed pace — favour chill, casual vibes and avoid chaotic spots."
+    : pace === "fast"
+    ? "They want to pack a lot in — skip weather-dependent outdoor spots that might slow things down."
+    : "";
+
+  // Interest signal → boost certain categories
+  const interests = traveler.preferences?.interests as string[] | undefined ?? [];
+  const boostCafe = interests.some(i => /coffee|cafe/i.test(i));
+  const boostMarket = interests.some(i => /market|shop/i.test(i));
+
+  // ── Phase 2d: Flexible meal structure ───────────────────────────
+  const alreadyAteBreakfast = /\b(already (ate|had) breakfast|just ate|had something)\b/i.test(message);
+  const alreadyAteLunch = /\b(already (ate|had) lunch)\b/i.test(message);
+  const effectiveSkipBreakfast = skipBreakfast || alreadyAteBreakfast;
+  const effectiveSkipLunch = skipLunch || alreadyAteLunch;
+
   // Detect family/kids context to filter out chaotic/adult vibes and evening-only spots
   const isFamilyContext = /\b(kids?|children|family|toddler|baby|babies|child)\b/i.test(message);
   const vibeExclude = isFamilyContext ? ["chaotic", "nightlife"] : [];
   const timeExclude = isFamilyContext ? ["evening", "late-night"] : [];
 
-  // Get a mix of spots for the day
-  const [breakfastSpots, lunchSpots, activitySpots, dinnerSpots] = await Promise.all([
-    querySpots({ city, cities, categories: ["breakfast", "cafe"], excludeIds: dislikedIds, limit: 3 }),
-    querySpots({ city, cities, categories: ["lunch"], excludeIds: dislikedIds, limit: 3 }),
-    querySpots({ city, cities, categories: ["activity", "market"], excludeIds: dislikedIds, limit: 3 }),
-    querySpots({ city, cities, categories: ["dinner"], excludeIds: dislikedIds, limit: 3 }),
-  ]);
+  // Build category queries — skip meals already had or past time
+  const breakfastCategories = isBrunchRequest ? ["breakfast", "cafe", "lunch"] : ["breakfast", "cafe"];
+  const lunchCategories = isBrunchRequest ? [] : ["lunch"]; // brunch merges with breakfast query
+
+  const spotQueries: Promise<Spot[]>[] = [];
+  const slotLabels: string[] = [];
+
+  if (!effectiveSkipBreakfast) {
+    spotQueries.push(querySpots({ city, cities, categories: breakfastCategories, priceRange, excludeIds: dislikedIds, limit: 3 }));
+    slotLabels.push("breakfast");
+  }
+  if (!effectiveSkipLunch && lunchCategories.length > 0) {
+    spotQueries.push(querySpots({ city, cities, categories: lunchCategories, priceRange, excludeIds: dislikedIds, limit: 3 }));
+    slotLabels.push("lunch");
+  }
+  spotQueries.push(querySpots({ city, cities, categories: ["activity", "market"], priceRange, excludeIds: dislikedIds, limit: 3 }));
+  slotLabels.push("activities");
+  spotQueries.push(querySpots({ city, cities, categories: ["dinner"], priceRange, excludeIds: dislikedIds, limit: 3 }));
+  slotLabels.push("dinner");
+  if (boostCafe) {
+    spotQueries.push(querySpots({ city, cities, categories: ["cafe"], priceRange, excludeIds: dislikedIds, limit: 2 }));
+    slotLabels.push("cafe");
+  }
+  if (boostMarket) {
+    spotQueries.push(querySpots({ city, cities, categories: ["market"], priceRange, excludeIds: dislikedIds, limit: 2 }));
+    slotLabels.push("market");
+  }
+
+  const slotResults = await Promise.all(spotQueries);
 
   // Filter out family-unfriendly vibes and evening-only spots for family context
   const filterFamilyVibes = (spots: Spot[]) =>
@@ -459,23 +522,57 @@ export async function buildDayPlanPrompt(
       ? spots.filter(s => !vibeExclude.includes(s.vibe ?? "") && !timeExclude.includes(s.best_time_of_day ?? ""))
       : spots;
 
-  const allDaySpots = [
-    ...filterFamilyVibes(breakfastSpots),
-    ...filterFamilyVibes(lunchSpots),
-    ...filterFamilyVibes(activitySpots),
-    ...filterFamilyVibes(dinnerSpots),
-  ];
+  // ── Phase 2b: Geographic clustering ─────────────────────────────
+  // If the user specified an area, prefer spots within 3km of its centroid.
+  const requestedArea = details.area;
+  let areaCentroid: { lat: number; lng: number } | undefined;
+  if (requestedArea) {
+    areaCentroid = await getAreaCentroid(requestedArea).catch(() => undefined);
+  }
+
+  const clusterSpots = (spots: Spot[]): Spot[] => {
+    if (!areaCentroid) return spots;
+    // Separate into "nearby" (<3km) and "elsewhere"
+    const nearby = spots.filter(s =>
+      s.latitude != null && s.longitude != null &&
+      haversineKm(areaCentroid!.lat, areaCentroid!.lng, s.latitude!, s.longitude!) <= 3
+    );
+    const elsewhere = spots.filter(s => !nearby.includes(s));
+    // Prefer nearby spots — append elsewhere as fallback
+    return [...nearby, ...elsewhere];
+  };
+
+  const allDaySpots: Spot[] = [];
+  for (const rawSlot of slotResults) {
+    const filtered = filterFamilyVibes(rawSlot);
+    const clustered = clusterSpots(filtered);
+    allDaySpots.push(...clustered);
+  }
+
+  // De-duplicate by id (cafe boost may overlap with activity slots)
+  const seenIds = new Set<string>();
+  const dedupedSpots = allDaySpots.filter(s => {
+    if (seenIds.has(s.id)) return false;
+    seenIds.add(s.id);
+    return true;
+  });
+
   const familyNote = isFamilyContext
     ? "\nThis is a family day with kids — only include spots that are child-friendly. No chaotic hawker markets, loud spots, or adult-only venues."
     : "";
-  const spotsContext = formatSpotsForLLM(allDaySpots);
+  const spotsContext = formatSpotsForLLM(dedupedSpots);
+
+  // Build geographic cluster hint for LLM
+  const areaClusterNote = areaCentroid && requestedArea
+    ? `Geographic focus: spots near ${requestedArea} are listed first. Where possible, suggest a logical flow through nearby spots before venturing further.`
+    : "";
 
   // Mark all recommended spots
-  await markSpotsRecommended(phoneNumber, allDaySpots.map(s => s.id));
-  if (allDaySpots.length > 0) {
+  await markSpotsRecommended(phoneNumber, dedupedSpots.map(s => s.id));
+  if (dedupedSpots.length > 0) {
     trackEvent(phoneNumber, options?.channel ?? "whatsapp", "recommendation", {
-      spot_ids: allDaySpots.map(s => s.id),
-      spot_names: allDaySpots.map(s => s.name),
+      spot_ids: dedupedSpots.map(s => s.id),
+      spot_names: dedupedSpots.map(s => s.name),
       intent: "day_plan",
       area: details.area,
     });
@@ -486,16 +583,33 @@ export async function buildDayPlanPrompt(
   // Use the resolved city name (first from cities, or defaultCity) for the system prompt
   const systemCity = (cities?.[0]) ?? defaultCity;
 
+  // ── Phase 4b: Happenings — what's on today ──────────────────────
+  const happenings = await queryHappenings(systemCity).catch(() => [] as Happening[]);
+  const happeningsContext = happenings.length > 0
+    ? happenings.map(h => {
+        const lines = [`Event: ${h.name}`];
+        if (h.area) lines.push(`  Area: ${h.area}`);
+        if (h.description) lines.push(`  Info: ${h.description}`);
+        if (h.recurring && h.recurrence_rule) lines.push(`  Recurring: ${h.recurrence_rule}`);
+        if (h.categories?.length) lines.push(`  Type: ${h.categories.join(", ")}`);
+        return lines.join("\n");
+      }).join("\n\n")
+    : "";
+
   return {
     systemPrompt: buildSystemPrompt(systemCity, channel) + langInstruction(message),
     userPrompt: `The user asks: "${message}"
 ${conversationHistory ? `\nRecent conversation:\n${conversationHistory}\n` : ""}
 ${forecast ? `Weather today: ${forecast.summary} Best outdoor window: ${forecast.best_window}.` : weather ? `Weather: ${weather.summary}` : ""}
+${timeContextNote}
 ${details.area ? `Area focus: ${details.area}` : ""}
 ${details.mood ? `Their energy/mood: ${details.mood}` : ""}
+${paceNote}
 ${prefContext}
+${areaClusterNote}
 Spots they've already seen: ${traveler.spots_recommended?.length ?? 0}
 
+${happeningsContext ? `What's on today:\n\n${happeningsContext}\n\nIf any event fits the day plan (a market, festival, or neighbourhood event), weave it in naturally. These are current events — not spots in your knowledge graph.\n` : ""}
 Available spots for building a day plan:
 
 ${spotsContext}
@@ -513,7 +627,7 @@ FORMAT OVERRIDE FOR DAY PLAN: This is a day itinerary. The 3-spot system rule DO
 - For culture + food: when the user says "cultural", they mean museums, temples, galleries, or heritage areas (Batu Caves, Thean Hou Temple, Ilham Gallery, Kampung Baru walking tour) — NOT markets or hawker centers. Lead with the cultural venue first, then food stops.
 - For family/kids: only include child-friendly spots (check the Vibe field — avoid "chaotic").
 Format: Name (Area) on line 1, what to order + one tip on line 2. Blank line between stops.${langUserNote(message)}`,
-    spotIds: allDaySpots.map(s => s.id),
+    spotIds: dedupedSpots.map(s => s.id),
     maxTokens: 1024,
   };
 }

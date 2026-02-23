@@ -310,7 +310,7 @@ export function sourceLabel(inputMethod: string | undefined): string {
 }
 
 /** Map traveler budget preference to price_range filter values */
-function mapBudgetToPriceRange(budget: string | undefined): string[] | undefined {
+export function mapBudgetToPriceRange(budget: string | undefined): string[] | undefined {
   if (!budget) return undefined;
   const b = budget.toLowerCase();
   if (b === "backpacker" || b === "tight" || b === "budget") return ["$"];
@@ -386,11 +386,16 @@ export function formatSpotsForLLM(spots: Spot[], distanceFromArea?: Map<string, 
         lines.push(`   Maps: https://maps.google.com/?q=${s.latitude},${s.longitude}`);
       if (s.best_time_of_day)
         lines.push(`   Best time: ${s.best_time_of_day}`);
+      // Discovery flag: verified spot with very few recommendations — under the radar
+      const isDiscovery = s.verified && !s.must_go &&
+        (s.recommendation_count == null || s.recommendation_count < 5);
       const takeLabel = s.must_go
         ? `must-go (${sourceLabel(s.input_method)})`
-        : s.verified
-          ? `verified (${sourceLabel(s.input_method)})`
-          : `unverified, treat as a lead, not a guarantee`;
+        : isDiscovery
+          ? `discovery pick — verified but rarely recommended, most people haven't found this one yet`
+          : s.verified
+            ? `verified (${sourceLabel(s.input_method)})`
+            : `unverified, treat as a lead, not a guarantee`;
       lines.push(`   Sam's take: ${takeLabel}`);
       if (s.avg_rating != null)
         lines.push(`   Traveler rating: ${s.avg_rating.toFixed(1)}/5`);

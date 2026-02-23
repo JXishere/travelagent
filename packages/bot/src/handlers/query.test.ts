@@ -118,10 +118,16 @@ describe("formatSpotsForLLM", () => {
     expect(result).toContain("must-go");
   });
 
-  it("includes source in Sam's take line for verified spots", () => {
-    const spot: Spot = { ...baseSpot, input_method: "voice", verified: true };
+  it("includes source in Sam's take line for verified spots with sufficient recommendations", () => {
+    const spot: Spot = { ...baseSpot, input_method: "voice", verified: true, recommendation_count: 10 };
     const result = formatSpotsForLLM([spot]);
     expect(result).toContain("Sam's take: verified (local contributor (voice note))");
+  });
+
+  it("shows discovery pick for verified spots with few recommendations", () => {
+    const spot: Spot = { ...baseSpot, input_method: "voice", verified: true, recommendation_count: 2 };
+    const result = formatSpotsForLLM([spot]);
+    expect(result).toContain("Sam's take: discovery pick");
   });
 
   it("shows unverified for spots with no must_go/verified", () => {

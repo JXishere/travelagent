@@ -48,12 +48,23 @@ export interface ConversationEval {
 
 // ── Data Fetching (exported for coach-auto) ──
 
-export async function fetchRecentConversations(limit: number): Promise<ConversationRow[]> {
-  const { data, error } = await supabase
+export async function fetchRecentConversations(
+  limit: number,
+  options?: { onlyNew?: boolean; since?: string }
+): Promise<ConversationRow[]> {
+  let q = supabase
     .from("conversations")
     .select("id, whatsapp_number, current_flow, messages, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(limit * 2); // fetch extra, then filter for 4+ messages
+    .order("updated_at", { ascending: false });
+
+  if (options?.onlyNew) {
+    q = q.is("coached_at", null);
+  }
+  if (options?.since) {
+    q = q.gt("updated_at", options.since);
+  }
+
+  const { data, error } = await q.limit(limit * 2); // fetch extra, then filter for 4+ messages
 
   if (error) throw new Error(`Failed to fetch conversations: ${error.message}`);
   return (data ?? [])

@@ -1,12 +1,17 @@
-// Automated self-coaching — runs coach, applies top suggestion to system.txt, validates with eval
-// Used by GitHub Action (weekly) or manually: npm run coach:auto
+// Automated self-coaching — runs coach, applies top suggestion to system.txt, validates with eval,
+// then commits directly to main (Railway auto-redeploys). Records every run in coach_runs.
 //
 // Flow:
-//   1. Run coach analysis (score conversations, find patterns)
-//   2. Ask Sonnet to rewrite system.txt based on top suggestion
-//   3. Run eval to validate no regressions
-//   4. If eval passes: keep changes, exit 0 (GitHub Action creates PR)
-//   5. If eval fails: revert, exit 1
+//   1. Fetch only uncoached conversations (coached_at IS NULL)
+//   2. Evaluate and synthesize issues
+//   3. Apply surgical edit to system.txt
+//   4. Validate with eval
+//   5. If eval passes: git commit + push to main, record run in DB, mark convos coached
+//   6. If eval fails or no change needed: record skipped/failed run in DB, exit 0
+//
+// Skip conditions (exit 0, still records a run):
+//   - Fewer than COACH_MIN_CONVOS uncoached conversations (default 3)
+//   - Overall avg > 4.2 AND zero issues detected
 
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -19,33 +24,47 @@ import {
   evaluateConversation,
   buildAggregationPrompt,
   type ConversationEval,
+  type ConversationRow,
 } from "./coach.js";
+import {
+  insertCoachRun,
+  getLatestCoachRun,
+  markConversationsCoached,
+} from "./database.js";
 
 const SYSTEM_PROMPT_PATH = join(__dirname, "prompts", "system.txt");
+const COACH_MIN_CONVOS = parseInt(process.env.COACH_MIN_CONVOS ?? "3", 10);
+const HEALTH_THRESHOLD = 4.2;
 
-// ── Phase 1 & 2: Reuse coach analysis ──
+// ── Phase 1 & 2: Analysis ──
 
-async function runCoachAnalysis(): Promise<{ evals: ConversationEval[]; synthesis: string } | null> {
-  const limit = 20;
-  console.log(`Analyzing ${limit} recent conversations...\n`);
+interface AnalysisResult {
+  conversations: ConversationRow[];
+  evals: ConversationEval[];
+  overallAvg: number;
+  avgScores: Record<string, number>;
+  synthesis: string;
+}
+
+async function runCoachAnalysis(): Promise<AnalysisResult | null> {
+  console.log(`Fetching uncoached conversations (min: ${COACH_MIN_CONVOS})...\n`);
 
   const [conversations, feedback, recEvents] = await Promise.all([
-    fetchRecentConversations(limit),
+    fetchRecentConversations(20, { onlyNew: true }),
     fetchRecentFeedback(),
     fetchRecommendationEvents(),
   ]);
 
-  console.log(`  ${conversations.length} conversations, ${feedback.length} feedback, ${recEvents.length} rec events`);
+  console.log(`  ${conversations.length} uncoached convos, ${feedback.length} feedback, ${recEvents.length} rec events`);
 
-  if (conversations.length === 0) {
-    console.log("No conversations to analyze. Skipping.");
+  if (conversations.length < COACH_MIN_CONVOS) {
+    console.log(`Skip: only ${conversations.length} uncoached conversations (need ${COACH_MIN_CONVOS}).`);
     return null;
   }
 
   const systemPrompt = loadPrompt("system").replaceAll("{{CITY}}", "Kuala Lumpur");
   const coachPrompt = loadPrompt("coach");
 
-  // Evaluate conversations
   const evals: ConversationEval[] = [];
   for (let i = 0; i < conversations.length; i++) {
     process.stdout.write(`  [${i + 1}/${conversations.length}] `);
@@ -54,24 +73,29 @@ async function runCoachAnalysis(): Promise<{ evals: ConversationEval[]; synthesi
       evals.push(evaluation);
       const avg = Object.values(evaluation.scores).reduce((a, b) => a + b, 0) / 6;
       console.log(`${avg.toFixed(1)}/5`);
-    } catch (err) {
+    } catch {
       console.log(`FAILED`);
     }
   }
 
   if (evals.length === 0) return null;
 
-  // Check if scores are already high — skip if average > 4.0
-  const allScores = evals.flatMap((e) => Object.values(e.scores));
-  const overallAvg = allScores.reduce((a, b) => a + b, 0) / allScores.length;
-  console.log(`\nOverall average: ${overallAvg.toFixed(1)}/5`);
+  // Compute average scores
+  const criteria = ["brevity", "personality", "operational_detail", "helpfulness", "tone_matching", "honesty"] as const;
+  const avgScores: Record<string, number> = {};
+  for (const c of criteria) {
+    const scores = evals.map((e) => e.scores[c]);
+    avgScores[c] = scores.reduce((a, b) => a + b, 0) / scores.length;
+  }
+  const overallAvg = Object.values(avgScores).reduce((a, b) => a + b, 0) / criteria.length;
+  console.log(`\nOverall average: ${overallAvg.toFixed(2)}/5`);
 
-  if (overallAvg > 4.0 && evals.flatMap((e) => e.issues).length === 0) {
-    console.log("Scores are healthy (>4.0, no issues). No changes needed.");
-    return null;
+  const allIssues = evals.flatMap((e) => e.issues);
+  if (overallAvg > HEALTH_THRESHOLD && allIssues.length === 0) {
+    console.log(`Healthy (>${HEALTH_THRESHOLD}, no issues). No changes needed.`);
+    return { conversations, evals, overallAvg, avgScores, synthesis: "" };
   }
 
-  // Synthesize
   console.log("Synthesizing patterns...");
   const aggregationPrompt = buildAggregationPrompt(evals, feedback, recEvents, systemPrompt);
   const synthesis = await chat(
@@ -80,15 +104,15 @@ async function runCoachAnalysis(): Promise<{ evals: ConversationEval[]; synthesi
     { model: SONNET, maxTokens: 2048, temperature: 0.4 }
   );
 
-  return { evals, synthesis };
+  return { conversations, evals, overallAvg, avgScores, synthesis };
 }
 
 // ── Phase 3: Apply changes ──
 
 async function applyChanges(synthesis: string): Promise<string> {
   const currentPrompt = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
+  const charLimit = currentPrompt.length + 200;
 
-  const charLimit = currentPrompt.length + 200; // allow at most ~5 extra lines
   const rewriteInstruction = `You are making a SURGICAL edit to Sam's system prompt. Not a rewrite — a targeted fix.
 
 ## Current system.txt (${currentPrompt.length} characters)
@@ -106,13 +130,11 @@ ${synthesis}
 6. Keep {{CITY}} exactly as-is
 7. Output ONLY the updated system.txt — no explanation, no fences`;
 
-  const revised = await chat(
+  return await chat(
     "You are a careful prompt editor. Output only the revised prompt text.",
     [{ role: "user", content: rewriteInstruction }],
     { model: SONNET, maxTokens: 2048, temperature: 0.2 }
   );
-
-  return revised;
 }
 
 // ── Phase 4: Validate with eval ──
@@ -124,7 +146,7 @@ function runEval(): boolean {
       cwd: join(__dirname, ".."),
       stdio: "pipe",
       timeout: 120_000,
-      env: { ...process.env }, // inherit env vars (works in CI + locally)
+      env: { ...process.env },
     });
     console.log("Eval passed.");
     return true;
@@ -136,68 +158,131 @@ function runEval(): boolean {
   }
 }
 
+// ── Phase 5: Auto-commit to main ──
+
+function commitAndPush(issueDescription: string): void {
+  const msg = `coach(auto): ${issueDescription}`;
+  execSync("git config user.name 'Sam Self-Coach'", { stdio: "pipe" });
+  execSync("git config user.email 'noreply@samiseverywhere.com'", { stdio: "pipe" });
+  execSync("git add packages/bot/src/prompts/system.txt", { stdio: "pipe" });
+  execSync(`git commit -m "${msg.replace(/"/g, "'")}"`, { stdio: "pipe" });
+  execSync("git push origin main", { stdio: "pipe" });
+  console.log(`Committed and pushed: ${msg}`);
+}
+
+// ── Extract brief description from synthesis ──
+
+function extractIssueDescription(synthesis: string): string {
+  const match = synthesis.match(/###\s+\d+\.\s+(.+)/);
+  return match ? match[1].trim().slice(0, 60) : "improve system prompt";
+}
+
 // ── Main ──
 
 async function main() {
   console.log("=== Sam Self-Coach (Auto) ===\n");
 
+  // Fetch previous run's avg_scores for trend tracking
+  const prevRun = await getLatestCoachRun().catch(() => null);
+  const prevAvgScores = prevRun?.avg_scores ?? undefined;
+
   // Phase 1-2: Analyze
   const result = await runCoachAnalysis();
+
   if (!result) {
-    console.log("\nNo changes to propose.");
+    // Skip: not enough conversations
+    await insertCoachRun({
+      conversations_analyzed: 0,
+      change_applied: false,
+      reverted: false,
+      prev_avg_scores: prevAvgScores,
+    }).catch((e) => console.error("Failed to record skip run:", e));
+    console.log("\nSkipped — recorded in coach_runs.");
     process.exit(0);
   }
 
-  // Save original
-  const original = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
+  // Healthy: no issues found
+  if (!result.synthesis) {
+    await insertCoachRun({
+      conversations_analyzed: result.conversations.length,
+      avg_scores: result.avgScores,
+      prev_avg_scores: prevAvgScores,
+      change_applied: false,
+      reverted: false,
+      synthesis: "Healthy — no changes needed.",
+    }).catch((e) => console.error("Failed to record healthy run:", e));
+    await markConversationsCoached(result.conversations.map((c) => c.id)).catch(() => {});
+    console.log("\nHealthy — recorded in coach_runs, conversations marked coached.");
+    process.exit(0);
+  }
+
+  // Save original for DB record + safety revert
+  const systemBefore = readFileSync(SYSTEM_PROMPT_PATH, "utf-8");
 
   // Phase 3: Apply
   console.log("\nApplying top suggestion to system.txt...");
   const revised = await applyChanges(result.synthesis);
 
-  // Sanity check: don't write empty or drastically different prompts
-  if (revised.length < 200 || revised.length > original.length * 1.3) {
-    console.log(`Revised prompt looks wrong (${revised.length} chars vs ${original.length} original). Skipping.`);
+  // Sanity check
+  if (revised.length < 200 || revised.length > systemBefore.length * 1.3) {
+    console.log(`Revised prompt looks wrong (${revised.length} chars vs ${systemBefore.length} original). Skipping.`);
+    await insertCoachRun({
+      conversations_analyzed: result.conversations.length,
+      avg_scores: result.avgScores,
+      prev_avg_scores: prevAvgScores,
+      change_applied: false,
+      reverted: false,
+      synthesis: result.synthesis,
+    }).catch((e) => console.error("Failed to record run:", e));
     process.exit(0);
   }
 
   writeFileSync(SYSTEM_PROMPT_PATH, revised);
-  console.log(`Written revised system.txt (${original.length} -> ${revised.length} chars)`);
+  console.log(`Written revised system.txt (${systemBefore.length} → ${revised.length} chars)`);
 
   // Phase 4: Validate
   const evalPassed = runEval();
 
   if (!evalPassed) {
-    console.log("\nEval failed — reverting system.txt (change was too aggressive)");
-    writeFileSync(SYSTEM_PROMPT_PATH, original);
-    console.log("No PR will be created. System prompt unchanged.");
-    process.exit(0); // not an error — eval rejection is expected sometimes
+    console.log("\nEval failed — reverting system.txt");
+    writeFileSync(SYSTEM_PROMPT_PATH, systemBefore);
+    await insertCoachRun({
+      conversations_analyzed: result.conversations.length,
+      avg_scores: result.avgScores,
+      prev_avg_scores: prevAvgScores,
+      change_applied: false,
+      reverted: false,
+      synthesis: result.synthesis,
+    }).catch((e) => console.error("Failed to record run:", e));
+    console.log("System prompt unchanged.");
+    process.exit(0);
   }
 
-  // Write report for PR body
-  const criteria = ["brevity", "personality", "operational_detail", "helpfulness", "tone_matching", "honesty"] as const;
-  const avgs: Record<string, string> = {};
-  for (const c of criteria) {
-    const scores = result.evals.map((e) => e.scores[c]);
-    avgs[c] = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  // Phase 5: Commit + push to main
+  const issueDescription = extractIssueDescription(result.synthesis);
+  try {
+    commitAndPush(issueDescription);
+  } catch (err) {
+    console.error("Git push failed:", err);
+    writeFileSync(SYSTEM_PROMPT_PATH, systemBefore);
+    process.exit(1);
   }
 
-  const report = `## Self-Coach Report
+  // Phase 6: Record run in DB
+  await insertCoachRun({
+    conversations_analyzed: result.conversations.length,
+    avg_scores: result.avgScores,
+    prev_avg_scores: prevAvgScores,
+    change_applied: true,
+    reverted: false,
+    system_prompt_before: systemBefore,
+    system_prompt_after: revised,
+    synthesis: result.synthesis,
+  }).catch((e) => console.error("Failed to record coach run:", e));
 
-Analyzed ${result.evals.length} conversations.
+  await markConversationsCoached(result.conversations.map((c) => c.id)).catch(() => {});
 
-| Criterion | Score |
-|-----------|-------|
-${criteria.map((c) => `| ${c} | ${avgs[c]}/5 |`).join("\n")}
-
-### Changes Applied
-${result.synthesis.split("\n").slice(0, 30).join("\n")}
-
----
-*Auto-generated by \`npm run coach:auto\`. Review the system.txt diff carefully before merging.*`;
-
-  writeFileSync(join(__dirname, "..", "coach-report.md"), report);
-  console.log("\nDone. system.txt updated, eval passed, report written to coach-report.md");
+  console.log("\nDone. system.txt updated, eval passed, committed to main, recorded in DB.");
 }
 
 main().catch((err) => {

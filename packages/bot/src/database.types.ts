@@ -41,8 +41,48 @@ export type Database = {
         }
         Relationships: []
       }
+      coach_runs: {
+        Row: {
+          id: string
+          run_at: string
+          conversations_analyzed: number
+          avg_scores: Json | null
+          prev_avg_scores: Json | null
+          change_applied: boolean
+          reverted: boolean
+          system_prompt_before: string | null
+          system_prompt_after: string | null
+          synthesis: string | null
+        }
+        Insert: {
+          id?: string
+          run_at?: string
+          conversations_analyzed?: number
+          avg_scores?: Json | null
+          prev_avg_scores?: Json | null
+          change_applied?: boolean
+          reverted?: boolean
+          system_prompt_before?: string | null
+          system_prompt_after?: string | null
+          synthesis?: string | null
+        }
+        Update: {
+          id?: string
+          run_at?: string
+          conversations_analyzed?: number
+          avg_scores?: Json | null
+          prev_avg_scores?: Json | null
+          change_applied?: boolean
+          reverted?: boolean
+          system_prompt_before?: string | null
+          system_prompt_after?: string | null
+          synthesis?: string | null
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
+          coached_at: string | null
           created_at: string | null
           current_flow: string | null
           flow_state: Json | null
@@ -53,6 +93,7 @@ export type Database = {
           whatsapp_number: string
         }
         Insert: {
+          coached_at?: string | null
           created_at?: string | null
           current_flow?: string | null
           flow_state?: Json | null
@@ -63,6 +104,7 @@ export type Database = {
           whatsapp_number: string
         }
         Update: {
+          coached_at?: string | null
           created_at?: string | null
           current_flow?: string | null
           flow_state?: Json | null

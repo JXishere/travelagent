@@ -1123,7 +1123,7 @@ function getKLDayBounds(offsetDays = -1): { start: string; end: string } {
   const klToday = new Date(klNow);
   klToday.setUTCHours(0, 0, 0, 0);
   const start = new Date(klToday.getTime() + offsetDays * 24 * 60 * 60 * 1000 - klOffsetMs);
-  const end   = new Date(klToday.getTime() - klOffsetMs);
+  const end   = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
@@ -1255,4 +1255,70 @@ export async function getStaleSpotsForVerification(
 /** Refresh last_verified timestamp on a spot — resets the 180-day staleness clock */
 export async function markSpotVerified(spotId: string): Promise<void> {
   await supabase.from("spots").update({ last_verified: new Date().toISOString() }).eq("id", spotId);
+}
+
+// ============================================
+// COACH RUNS — autonomous self-coaching state
+// ============================================
+
+export interface CoachRun {
+  id: string;
+  run_at: string;
+  conversations_analyzed: number;
+  avg_scores?: Record<string, number>;
+  prev_avg_scores?: Record<string, number>;
+  change_applied: boolean;
+  reverted: boolean;
+  system_prompt_before?: string;
+  system_prompt_after?: string;
+  synthesis?: string;
+}
+
+export async function insertCoachRun(
+  run: Omit<CoachRun, "id" | "run_at">
+): Promise<string> {
+  const { data, error } = await supabase
+    .from("coach_runs")
+    .insert(run)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return (data as any).id as string;
+}
+
+/** Most recent run (any kind) — used by Slack digest */
+export async function getLatestCoachRun(): Promise<CoachRun | null> {
+  const { data } = await supabase
+    .from("coach_runs")
+    .select("*")
+    .order("run_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? cast<CoachRun>(data) : null;
+}
+
+/** Most recent run where a change was applied and not yet reverted — used by revert check */
+export async function getLatestUnrevertedChange(): Promise<CoachRun | null> {
+  const { data } = await supabase
+    .from("coach_runs")
+    .select("*")
+    .eq("change_applied", true)
+    .eq("reverted", false)
+    .order("run_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? cast<CoachRun>(data) : null;
+}
+
+export async function markCoachRunReverted(id: string): Promise<void> {
+  await supabase.from("coach_runs").update({ reverted: true }).eq("id", id);
+}
+
+/** Stamp coached_at on all analyzed conversations so they're skipped next run */
+export async function markConversationsCoached(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await supabase
+    .from("conversations")
+    .update({ coached_at: new Date().toISOString() })
+    .in("id", ids);
 }

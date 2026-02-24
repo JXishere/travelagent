@@ -12,6 +12,7 @@ import {
   hasDailyDigestRunToday,
   hasStalenessCheckRunToday,
   getStaleSpotsForVerification,
+  getLatestCoachRun,
   trackEvent,
   updateConversation,
   getOrCreateConversation,
@@ -123,37 +124,75 @@ async function maybeRunDailyDigest(): Promise<void> {
   if (klHour !== 9 || klMinute > 5) return;
   if (await hasDailyDigestRunToday()) return;
 
-  const data = await getDailyDigestData();
+  const [data, latestCoachRun] = await Promise.all([
+    getDailyDigestData(),
+    getLatestCoachRun().catch(() => null),
+  ]);
 
   const dateStr = formatKLDate(now);
   const dayName = new Date(now.getTime() + KL_OFFSET_HOURS * 60 * 60 * 1000)
     .toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
 
   const totalMessages = data.waMessages + data.webMessages;
-  const costStr = `$${data.totalCost.toFixed(2)}`;
+  const costStr = `$${data.totalCost.toFixed(2)} (${Math.round(data.totalInputTokens / 1000)}k in · ${Math.round(data.totalOutputTokens / 1000)}k out)`;
 
-  // Spots by city
-  const byCityMap: Record<string, number> = {};
+  // Spots by area (fall back to city if area is null)
+  const byAreaMap: Record<string, number> = {};
   for (const s of data.newSpots) {
-    const k = s.city ?? "unknown";
-    byCityMap[k] = (byCityMap[k] ?? 0) + 1;
+    const k = s.area ?? s.city ?? "unknown";
+    byAreaMap[k] = (byAreaMap[k] ?? 0) + 1;
   }
   const spotCount = data.newSpots.length;
   const spotDetail = spotCount > 0
-    ? ` — ${Object.entries(byCityMap).map(([c, n]) => `${c}: ${n}`).join(" · ")}`
+    ? ` — ${Object.entries(byAreaMap).map(([a, n]) => `${a}: ${n}`).join(" · ")}`
     : "";
 
-  const reviewNote = data.reviewQueueCount > 0
-    ? `\nReview queue: ${data.reviewQueueCount} spot(s) pending ⚠️`
-    : "";
-
-  const text = [
+  const lines = [
     `📊 Sam — ${dayName}`,
     ``,
     `Messages: ${totalMessages} (${data.waMessages} WA · ${data.webMessages} web)`,
+    `Top intent: ${data.topIntent} × ${data.topIntentCount}`,
     `Cost: ${costStr}`,
-    `New spots: ${spotCount}${spotDetail}${reviewNote}`,
-  ].join("\n");
+    ``,
+    `Contributions: ${data.contributions} new spot${data.contributions !== 1 ? "s" : ""}`,
+    `Feedback: ${data.feedbacks} rating${data.feedbacks !== 1 ? "s" : ""} received`,
+    `New spots in DB: ${spotCount}${spotDetail}`,
+  ];
+
+  if (data.reviewQueueCount > 0) {
+    lines.push(`Review queue: ${data.reviewQueueCount} pending ⚠️`);
+  }
+
+  // Coaching status
+  if (latestCoachRun) {
+    const cr = latestCoachRun;
+    const overallAvg = cr.avg_scores
+      ? (Object.values(cr.avg_scores as Record<string, number>).reduce((a, b) => a + b, 0) /
+          Object.keys(cr.avg_scores).length).toFixed(1)
+      : null;
+
+    let coachLine: string;
+    if (cr.reverted) {
+      coachLine = `⚠️ Self-coach reverted last change — scores dropped. Prompt restored.`;
+    } else if (cr.change_applied) {
+      const prevAvg = cr.prev_avg_scores
+        ? (Object.values(cr.prev_avg_scores as Record<string, number>).reduce((a, b) => a + b, 0) /
+            Object.keys(cr.prev_avg_scores).length).toFixed(1)
+        : null;
+      const trend = prevAvg && overallAvg ? `${prevAvg}→${overallAvg}/5` : overallAvg ? `${overallAvg}/5` : "";
+      coachLine = `🧠 Self-coach: change deployed (${cr.conversations_analyzed} convos${trend ? ", " + trend : ""}). Live.`;
+    } else if (cr.conversations_analyzed === 0) {
+      coachLine = `🧠 Self-coach: skipped — not enough new convos.`;
+    } else if (overallAvg) {
+      coachLine = `🧠 Self-coach: all healthy (${overallAvg}/5). No changes.`;
+    } else {
+      coachLine = `🧠 Self-coach: ran, no changes.`;
+    }
+
+    lines.push(``, coachLine);
+  }
+
+  const text = lines.join("\n");
 
   await fetch(slackWebhookUrl, {
     method: "POST",

@@ -90,6 +90,22 @@ async function runCoachAnalysis(): Promise<AnalysisResult | null> {
   const overallAvg = Object.values(avgScores).reduce((a, b) => a + b, 0) / criteria.length;
   console.log(`\nOverall average: ${overallAvg.toFixed(2)}/5`);
 
+  // Alert on bugs and stuck conversations immediately — separate from quality coaching
+  const bugs = evals
+    .map((e, i) => ({ eval: e, convo: conversations[i] }))
+    .filter(({ eval: e }) => e.bug || e.stuck);
+  if (bugs.length > 0) {
+    const lines = bugs.map(({ eval: e, convo: c }) => {
+      const label = e.bug ? `🐛 Bug: ${e.bug}` : `🔄 Stuck`;
+      const preview = c.messages.slice(-2).map(m => `${m.role === "user" ? "User" : "Sam"}: ${m.content.slice(0, 80)}`).join(" → ");
+      return `${label}\n  ${preview}`;
+    });
+    await notifySlack(
+      `🚨 Sam coach found ${bugs.length} problem conversation${bugs.length > 1 ? "s" : ""} (${conversations.length} analyzed)\n\n${lines.join("\n\n")}`
+    );
+    console.log(`Alerted Slack: ${bugs.length} bug/stuck conversation(s).`);
+  }
+
   const allIssues = evals.flatMap((e) => e.issues);
   if (overallAvg > HEALTH_THRESHOLD && allIssues.length === 0) {
     console.log(`Healthy (>${HEALTH_THRESHOLD}, no issues). No changes needed.`);

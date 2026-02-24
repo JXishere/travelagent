@@ -40,6 +40,8 @@ export interface ConversationScores {
 }
 
 export interface ConversationEval {
+  stuck: boolean;
+  bug: string | null;
   scores: ConversationScores;
   issues: string[];
   bright_spots: string[];

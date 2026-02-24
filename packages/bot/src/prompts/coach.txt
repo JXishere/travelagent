@@ -4,6 +4,16 @@ You will receive:
 1. Sam's current system prompt (the rules Sam follows)
 2. A conversation transcript (user + Sam messages)
 
+FIRST — check for critical operational problems before scoring:
+
+STUCK: Is the user visibly stuck or frustrated?
+Signs: user rephrases the same question 2+ times without a better answer; user sends "?", "hello?", "are you there?", or "nevermind"; user asks for X, Sam deflects, user asks again; Sam says "I don't have X" multiple times in a row for something it should know.
+Set stuck=true if you see any of these.
+
+BUG: Is there evidence of a technical failure?
+Signs: Sam returns empty results for a reasonable request (e.g. "no dinner spots in Bangsar" when Bangsar has spots); Sam sends a malformed or truncated message; Sam repeats the same message verbatim; Sam outputs raw JSON, code, or error text; Sam gets stuck asking the same question repeatedly (flow loop); Sam says "I don't know" for basic KL food questions.
+Set bug to a short description of the failure, or null if none.
+
 Score the conversation on these 6 dimensions (1-5 each):
 
 BREVITY (WhatsApp-appropriate length)
@@ -52,6 +62,8 @@ For each conversation, return a JSON object with this exact shape:
 
 ```json
 {
+  "stuck": <true|false>,
+  "bug": "<short description of the failure, or null>",
   "scores": {
     "brevity": <1-5>,
     "personality": <1-5>,

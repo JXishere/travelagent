@@ -33,7 +33,7 @@ import {
   isVagueQuery, getClarifyingQuestion,
   isUnclearQuery, UNCLEAR_CLARIFYING_QUESTION,
 } from "@sam/bot/handlers/ontrip";
-import { buildHappeningsPayload } from "@sam/bot/handlers/happenings";
+import { buildHappeningsPayload, handleHappenings } from "@sam/bot/handlers/happenings";
 import { handleFeedback, startFeedbackCollection } from "@sam/bot/handlers/feedback";
 import { handleSpotCorrection } from "@sam/bot/handlers/spot-correction";
 import { maybeExtractProfile } from "@sam/bot/handlers/continuous-profile";
@@ -248,8 +248,26 @@ async function routeToFlow(
   }
 
   switch (flow) {
-    case "contribution":
+    case "contribution": {
+      const stage = conversation.flow_state?.stage;
+      // Only intercept in confirming/asking_must_go — collecting stage handles food queries inline
+      if (stage && stage !== "collecting") {
+        const recentCtxC = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+        const { intent: ci, details: cd } = await classifyIntent(message, recentCtxC);
+        const escapeIntentsC = ["hungry", "day_plan", "nearby", "happenings", "weather", "profile", "feedback"];
+        if (escapeIntentsC.includes(ci)) {
+          await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
+          switch (ci) {
+            case "hungry": return handleHungry(sessionId, message, cd, recentCtxC, { channel: "web" });
+            case "day_plan": return handleDayPlan(sessionId, message, cd, recentCtxC, { channel: "web" });
+            case "nearby": return handleNearby(sessionId, message, cd, recentCtxC, { channel: "web" });
+            case "happenings": return handleHappenings(sessionId, message, recentCtxC, { channel: "web" });
+            default: return handleGeneral(sessionId, message, conversation);
+          }
+        }
+      }
       return handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
+    }
 
     case "profile_learning":
       return handleProfile(sessionId, message, conversation, { channel: "web" });
@@ -270,8 +288,19 @@ async function routeToFlow(
       const { pending_query, pending_details } = conversation.flow_state;
       const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
       await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
-      // Re-classify the clarifying answer to capture fresh signals (area, meal_type, etc.)
-      const { details: freshDetails } = await classifyIntent(message, recentCtx);
+      // Re-classify to capture full intent — user may have pivoted entirely
+      const { intent: qci, details: freshDetails } = await classifyIntent(message, recentCtx);
+      // If user pivoted to a different intent, route there instead of treating as clarification
+      const escapeIntentsQC = ["happenings", "weather", "contribute", "profile", "feedback", "spot_info", "spot_correction"];
+      if (escapeIntentsQC.includes(qci)) {
+        switch (qci) {
+          case "happenings": return handleHappenings(sessionId, message, recentCtx, { channel: "web" });
+          case "spot_info": { const { getDefaultCity: gdc } = await import("@sam/bot/utils/city-defaults"); return handleSpotInfo(sessionId, message, freshDetails.spot_name ?? message, gdc(), { channel: "web" }); }
+          case "contribute": return handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
+          default: return handleGeneral(sessionId, message, conversation);
+        }
+      }
+      // Otherwise merge and treat as clarification answer
       const mergedDetails = { ...pending_details, ...freshDetails };
       return handleHungry(sessionId, `${pending_query}. ${message}`, mergedDetails, recentCtx, { channel: "web" });
     }

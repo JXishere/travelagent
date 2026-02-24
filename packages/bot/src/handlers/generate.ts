@@ -76,6 +76,12 @@ export async function handleGenerate(
 ): Promise<string> {
   const state = conversation.flow_state;
 
+  // Allow admin to exit the generate session with common exit phrases
+  if (/\b(exit|quit|cancel|later|pause)\b/i.test(message)) {
+    await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+    return "Generate session paused. Resume anytime with /generate.";
+  }
+
   if (state.stage !== "reviewing") {
     await updateConversation(phoneNumber, {
       current_flow: "general",

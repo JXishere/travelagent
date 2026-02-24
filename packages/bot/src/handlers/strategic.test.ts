@@ -178,8 +178,8 @@ describe("handleStrategic", () => {
     await handleStrategic("+1234");
 
     const userPrompt = mockChat.mock.calls[0][1][0].content;
-    // sampleSpots has 3 must_go spots
-    expect(userPrompt).toContain("5 total, 3 must-go spots flagged by contributors");
+    // sampleSpots has 3 must_go spots; 5 parallel queries each return sampleSpots → 15 must-go total
+    expect(userPrompt).toContain("15 must-go spots flagged by contributors");
   });
 
   it("handles missing preferences gracefully", async () => {

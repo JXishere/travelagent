@@ -46,15 +46,21 @@ export async function handleProfile(
   // (same guard as in startProfileLearning, but catches mid-interview food signals)
   if (FOOD_SIGNALS.test(message)) {
     const { classifyIntent } = await import("../llm.js");
-    const { handleHungry } = await import("./ontrip.js");
-    const { details } = await classifyIntent(message);
+    const { handleHungry, handleDayPlan } = await import("./ontrip.js");
     // Pass conversation history so the "local or just visiting?" new-user note is suppressed
     // (we're already mid-conversation — no need to ask again). Use actual history if present,
     // otherwise a sentinel that marks the profile question as already asked.
     const recentHistory = conversation.messages.length > 0
       ? conversation.messages.slice(-4).map(m => `${m.role}: ${m.content}`).join("\n")
       : "assistant: local or just visiting?";
-    return handleHungry(phoneNumber, message, details, recentHistory);
+    // Re-classify with conversation context so day-plan signals in prior turns are honoured.
+    // If the user said "planning 1 day in KL" earlier and now says "love street food",
+    // classifyIntent with that context should return day_plan — route there, not hungry.
+    const { intent, details } = await classifyIntent(message, recentHistory);
+    if (intent === "day_plan") {
+      return handleDayPlan(phoneNumber, message, details, recentHistory, options);
+    }
+    return handleHungry(phoneNumber, message, details, recentHistory, options);
   }
 
   // Build the conversation history for Claude
@@ -149,12 +155,16 @@ export async function startProfileLearning(
   initialMessage?: string
 ): Promise<string> {
   // Safety net: if the message contains a food/dining request, route to handleHungry
-  // instead of trapping the user in profile questions. The classifier should catch
-  // most cases, but this guard handles misclassifications.
+  // (or handleDayPlan for multi-day/full-day requests) instead of trapping the user
+  // in profile questions. The classifier should catch most cases, but this guard
+  // handles misclassifications.
   if (initialMessage && FOOD_SIGNALS.test(initialMessage)) {
     const { classifyIntent } = await import("../llm.js");
-    const { handleHungry } = await import("./ontrip.js");
-    const { details } = await classifyIntent(initialMessage);
+    const { handleHungry, handleDayPlan } = await import("./ontrip.js");
+    const { intent, details } = await classifyIntent(initialMessage);
+    if (intent === "day_plan") {
+      return handleDayPlan(phoneNumber, initialMessage, details);
+    }
     return handleHungry(phoneNumber, initialMessage, details);
   }
 

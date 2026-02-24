@@ -17,6 +17,7 @@ vi.mock("../llm.js", () => ({
 }));
 vi.mock("./ontrip.js", () => ({
   handleHungry: vi.fn().mockResolvedValue("Here are some great Japanese spots in KL!"),
+  handleDayPlan: vi.fn().mockResolvedValue("Here's your full day plan for KL!"),
 }));
 
 import { handleProfile, startProfileLearning, FOOD_SIGNALS } from "./profile.js";
@@ -26,7 +27,7 @@ import {
   updateConversation,
 } from "../database.js";
 import { chat, chatAsSam, extractJSON, classifyIntent } from "../llm.js";
-import { handleHungry } from "./ontrip.js";
+import { handleHungry, handleDayPlan } from "./ontrip.js";
 import type { Conversation } from "../database.js";
 
 const mockChat = chat as ReturnType<typeof vi.fn>;
@@ -37,6 +38,7 @@ const mockUpdateTraveler = updateTraveler as ReturnType<typeof vi.fn>;
 const mockUpdateConversation = updateConversation as ReturnType<typeof vi.fn>;
 const mockClassifyIntent = classifyIntent as ReturnType<typeof vi.fn>;
 const mockHandleHungry = handleHungry as ReturnType<typeof vi.fn>;
+const mockHandleDayPlan = handleDayPlan as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();

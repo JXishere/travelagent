@@ -425,6 +425,8 @@ Examples:
 - "you don't actually know KL" → general (challenge/frustration, not spot feedback)
 - "i went to one of your spots and it was terrible" → feedback (they visited a specific spot and had a bad experience)
 - "grab some ramen tonight" → hungry
+- "I'm looking for Thai food in PJ" → hungry, cuisine: "thai", area: "PJ"
+- "Korean BBQ in Bangsar" → hungry, cuisine: "korean bbq", area: "Bangsar"
 - "I'm vegetarian and want dinner in Bangsar" → hungry (dietary info + food request)
 - "I just want to eat all day in KL, plan it out" → day_plan (multi-meal day plan, rule 0 applies)
 - "take me on a food tour of KL" → day_plan (multi-meal tour)
@@ -452,7 +454,7 @@ Examples:
 Extract relevant details with these exact field names:
 - area: neighbourhood(s) or district(s) they want — if multiple, comma-separated (e.g. "Bangsar", "SS2", "SS2, SS23, Bangsar, Taman Megah")
 - meal_type: category of food/drink — only use known categories: breakfast, brunch, lunch, dinner, coffee, cafe, dessert, drinks, bar, supper
-- cuisine: specific dish or food type they want (e.g. "roti canai", "laksa", "sushi", "nasi lemak") — use this when it's NOT a meal category
+- cuisine: specific dish or food type they want (e.g. "roti canai", "laksa", "sushi", "nasi lemak") — use this when it's NOT a meal category. IMPORTANT: nationality adjectives used before "food" or in a cuisine context (Thai, Japanese, Korean, Indian, Italian, Chinese, etc.) are CUISINE types, NOT locations. "Thai food in PJ" → cuisine: "thai", area: "PJ". Never put a cuisine adjective into area.
 - time_of_day: morning, afternoon, evening, late-night
 - specific_place: a landmark or venue they're currently AT (not where they want to eat)
 - mood: chill, adventurous, tired, celebratory

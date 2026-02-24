@@ -820,7 +820,7 @@ async function saveSpot(
     }).catch(err => console.error("[attribution] Failed to save contribution:", err));
     incrementSpotContributionCount(duplicate.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
-    await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
+    await incrementContributorCount(phoneNumber, data.city || getDefaultCity(), duplicate.area ?? data.area ?? undefined);
 
     trackEvent(phoneNumber, channel, "flow_complete", {
       flow: "contribution",
@@ -882,7 +882,7 @@ async function saveSpot(
   }).catch(err => console.error("[attribution] Failed to save contribution:", err));
   incrementSpotContributionCount(newSpot.id).catch(err => console.error("[contribution_count] Failed to increment:", err));
 
-  await incrementContributorCount(phoneNumber, data.city || getDefaultCity());
+  await incrementContributorCount(phoneNumber, data.city || getDefaultCity(), spotData.area ?? data.area ?? undefined);
 
   await updateConversation(phoneNumber, {
     current_flow: "general",

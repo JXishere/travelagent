@@ -2,6 +2,13 @@
 i need to make sure what every session is doing.
 
 
+plan for the daily report:
+-total messages
+-total cost
+-total websearch
+
+
+-remove cash or card..
 
 -each spot should be able to hold multiple categories. (store as a list)
 

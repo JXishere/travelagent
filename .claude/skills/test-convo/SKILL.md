@@ -53,11 +53,32 @@ Based on the scenario `$ARGUMENTS`, design 2-5 test messages that probe Sam's be
 - A regression check (e.g. pure profile message should still work)
 
 If no specific scenario is given, run these default tests:
+
+**Group A — Basic routing (regression)**
 1. "i need a place to go for my birthday. thinking some place chill. i wanna grab some japanese food with my close friend"
 2. (follow-up in same session) "maybe around PJ or KL"
 3. (new session) "I'm planning a trip to KL next week" — should start profile, not food recs
 4. (new session) "where's good for ramen near bangsar?"
 5. (new session) "I know a great spot in TTDI" — should start contribution flow
+
+**Group B — Flow escape hatches (multi-turn)**
+
+Test B1 — contribution confirming escape (2-turn, same session):
+- Turn 1: "I want to add a spot — Guan Heong in Pudu, amazing bak kut teh, cash only, opens at 7am" → Sam should enter contribution collecting/confirming stage
+- Turn 2 (same session): "Actually, what's good for dinner in Bangsar?" → **must NOT treat this as a spot correction**; Sam should escape the contribution flow and return dinner recommendations
+
+Test B2 — query_clarifying pivot (2-turn, same session):
+- Turn 1: "food" (vague, should trigger clarifying question)
+- Turn 2 (same session): "actually what's on this weekend?" → **must NOT call handleHungry**; Sam should route to happenings/events
+
+Test B3 — contribution flow stays intact for legit follow-ups (2-turn, same session):
+- Turn 1: "I want to add a spot — Fatty Crab in Taman Megah, best crab curry, dinner only" → Sam enters contribution flow
+- Turn 2 (same session): "It's cash only and closes at midnight" → **must stay in contribution flow** and accept this as additional spot detail, not escape
+
+For Group B tests, in your analysis note the **flow state behavior** specifically:
+- Did the flow escape when it should? (B1, B2)
+- Did the flow stay when it should? (B3)
+- Was the response appropriate for the new intent after escaping?
 
 ### 2. Send Messages and Collect Responses
 
@@ -88,6 +109,11 @@ For each response, evaluate:
 **Flow continuity**: For multi-turn conversations:
 - Does Sam remember context from previous messages?
 - Do follow-up answers (like area preferences) get handled correctly?
+
+**Flow escape** (Group B tests only):
+- When the user pivots mid-flow, does Sam break out correctly?
+- Is `current_flow` reset? (verify by checking if the *next* message routes cleanly to general)
+- For B3: does Sam correctly stay in the flow for a legit follow-up?
 
 ### 4. Report Findings
 
@@ -125,6 +151,8 @@ Common issues and where to fix them:
 - **Bad response tone**: `packages/bot/src/prompts/system.txt`
 - **Profile trap**: `packages/bot/src/handlers/profile.ts` → `startProfileLearning()` guard
 - **Wrong city mapping**: `packages/bot/src/prompts/extraction.txt` → area-to-city mapping
+- **Flow not escaping** (B1/B2 fail): `packages/bot/src/index.ts` → `routeToCurrentFlow()` escape hatch for the relevant case
+- **Flow escaping when it shouldn't** (B3 fail): `packages/bot/src/index.ts` → check `escapeIntents` list or stage guard logic for `contribution` case
 
 After fixing, re-run the full test suite to confirm no regressions:
 ```bash

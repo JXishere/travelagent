@@ -177,6 +177,28 @@ function extractIssueDescription(synthesis: string): string {
   return match ? match[1].trim().slice(0, 60) : "improve system prompt";
 }
 
+// ── Compute a human-readable line diff ──
+
+function lineDiff(before: string, after: string): string {
+  const bLines = before.split("\n");
+  const aLines = after.split("\n");
+  const removed = bLines.filter((l) => !aLines.includes(l)).map((l) => `- ${l}`);
+  const added = aLines.filter((l) => !bLines.includes(l)).map((l) => `+ ${l}`);
+  return [...removed, ...added].slice(0, 20).join("\n");
+}
+
+// ── Slack notification ──
+
+async function notifySlack(msg: string): Promise<void> {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url) return;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: msg }),
+  }).catch(() => {});
+}
+
 // ── Main ──
 
 async function main() {
@@ -268,7 +290,29 @@ async function main() {
     process.exit(1);
   }
 
-  // Phase 6: Record run in DB
+  // Phase 6: Slack notification
+  const prevOverall = prevAvgScores
+    ? (Object.values(prevAvgScores as Record<string, number>).reduce((a, b) => a + b, 0) /
+        Object.keys(prevAvgScores).length).toFixed(1)
+    : null;
+  const newOverall = (Object.values(result.avgScores).reduce((a, b) => a + b, 0) /
+    Object.keys(result.avgScores).length).toFixed(1);
+  const trend = prevOverall ? `${prevOverall}→${newOverall}/5` : `${newOverall}/5`;
+  const diff = lineDiff(systemBefore, revised);
+  const slackMsg = [
+    `🧠 Sam self-coached (${result.conversations.length} convos, ${trend})`,
+    ``,
+    `*Issue:* ${issueDescription}`,
+    ``,
+    `*Prompt diff:*`,
+    "```",
+    diff || "(no line-level diff detected)",
+    "```",
+    `Revert check runs at 9am UTC (5pm MYT).`,
+  ].join("\n");
+  await notifySlack(slackMsg);
+
+  // Phase 7: Record run in DB
   await insertCoachRun({
     conversations_analyzed: result.conversations.length,
     avg_scores: result.avgScores,

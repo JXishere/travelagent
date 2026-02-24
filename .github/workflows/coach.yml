@@ -41,6 +41,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           COACH_MIN_CONVOS: ${{ vars.COACH_MIN_CONVOS || '3' }}
         run: npx tsx packages/bot/src/coach-auto.ts
 

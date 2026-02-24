@@ -1041,6 +1041,50 @@ export function trackEvent(
     });
 }
 
+/** Fire-and-forget error event — thin wrapper around trackEvent */
+export function trackError(
+  sessionId: string,
+  channel: "web" | "whatsapp",
+  errorType: "process_crash" | "zero_results",
+  details: { handler: string; message: string; context?: Record<string, any> }
+): void {
+  trackEvent(sessionId, channel, "error", {
+    error_type: errorType,
+    handler: details.handler,
+    message: details.message,
+    context: details.context ?? {},
+  });
+}
+
+export interface ErrorEvent {
+  id: string;
+  session_id: string;
+  channel: string;
+  event_data: {
+    error_type: string;
+    handler: string;
+    message: string;
+    context: Record<string, any>;
+  };
+  created_at: string;
+}
+
+/** Query error events written in the last N minutes */
+export async function getRecentErrors(withinMinutes: number): Promise<ErrorEvent[]> {
+  const since = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("events")
+    .select("id, session_id, channel, event_data, created_at")
+    .eq("event_type", "error")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[analytics] getRecentErrors failed:", error.message);
+    return [];
+  }
+  return cast<ErrorEvent[]>(data ?? []);
+}
+
 // ============================================
 // SPOT CONTRIBUTIONS — per-contributor attribution
 // ============================================

@@ -13,6 +13,7 @@ import {
   hasStalenessCheckRunToday,
   getStaleSpotsForVerification,
   getLatestCoachRun,
+  getRecentErrors,
   trackEvent,
   updateConversation,
   getOrCreateConversation,
@@ -62,6 +63,10 @@ interface CandidateInfo {
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
+// In-memory dedup for bug alerts — keyed by "errorType:contextKey", value = last alerted ms
+const alertedAt = new Map<string, number>();
+const ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour per key
+
 /** Start the proactive message scheduler */
 export function startScheduler(): void {
   console.log("[scheduler] Starting proactive message scheduler (5-min interval)");
@@ -105,6 +110,7 @@ async function tick(): Promise<void> {
   // Run maintenance jobs — fire-and-forget so proactive messaging isn't affected
   maybeRunDailyDigest().catch(err => console.error("[scheduler] Daily digest error:", err));
   maybeRunStalenessCheck().catch(err => console.error("[scheduler] Staleness check error:", err));
+  maybeAlertBugs().catch(err => console.error("[scheduler] Bug alert error:", err));
 }
 
 // ============================================
@@ -239,6 +245,73 @@ async function maybeRunStalenessCheck(): Promise<void> {
       console.log(`[scheduler] Staleness ping → ${spot.contributor_phone} for "${spot.name}"`);
     } catch (err) {
       console.error(`[scheduler] Staleness ping failed for spot ${spot.id}:`, err);
+    }
+  }
+}
+
+// ============================================
+// BUG ALERTER
+// ============================================
+
+/** Fire Slack if error events cross alert thresholds in the last 5 minutes */
+async function maybeAlertBugs(): Promise<void> {
+  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!slackWebhookUrl) return;
+
+  const errors = await getRecentErrors(5);
+  if (errors.length === 0) return;
+
+  const now = Date.now();
+
+  // Group process_crash events — any 1+ triggers an alert
+  const crashes = errors.filter(e => e.event_data?.error_type === "process_crash");
+  if (crashes.length > 0) {
+    const key = "process_crash:webhook";
+    const last = alertedAt.get(key) ?? 0;
+    if (now - last > ALERT_COOLDOWN_MS) {
+      alertedAt.set(key, now);
+      const lines = crashes.map(e =>
+        `  ${e.event_data.handler} | ${e.event_data.message}`
+      );
+      await fetch(slackWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🚨 Sam bug — process_crash × ${crashes.length} (last 5 min)\n${lines.join("\n")}`,
+        }),
+      });
+      console.log(`[scheduler] Bug alert: ${crashes.length} process_crash(es)`);
+    }
+  }
+
+  // Group zero_results by city+categories — alert if 3+ for same combo
+  const zeroResults = errors.filter(e => e.event_data?.error_type === "zero_results");
+  const comboCounts = new Map<string, typeof zeroResults>();
+  for (const e of zeroResults) {
+    const ctx = e.event_data.context ?? {};
+    const comboKey = `${ctx.city ?? "unknown"}:${(ctx.categories ?? []).join(",")}`;
+    const group = comboCounts.get(comboKey) ?? [];
+    group.push(e);
+    comboCounts.set(comboKey, group);
+  }
+
+  for (const [comboKey, group] of comboCounts) {
+    if (group.length < 3) continue;
+    const alertKey = `zero_results:${comboKey}`;
+    const last = alertedAt.get(alertKey) ?? 0;
+    if (now - last > ALERT_COOLDOWN_MS) {
+      alertedAt.set(alertKey, now);
+      const sample = group[0].event_data;
+      const ctx = sample.context ?? {};
+      const detail = `${sample.handler} | city: ${ctx.city ?? "?"}, categories: ${(ctx.categories ?? []).join(", ")}${ctx.area ? `, area: ${ctx.area}` : ""}`;
+      await fetch(slackWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🚨 Sam bug — zero_results × ${group.length} (last 5 min)\n  ${detail}`,
+        }),
+      });
+      console.log(`[scheduler] Bug alert: ${group.length} zero_results for ${comboKey}`);
     }
   }
 }

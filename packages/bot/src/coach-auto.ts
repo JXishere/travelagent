@@ -30,6 +30,7 @@ import {
   insertCoachRun,
   getLatestCoachRun,
   markConversationsCoached,
+  getRecentErrors,
 } from "./database.js";
 
 const SYSTEM_PROMPT_PATH = join(__dirname, "prompts", "system.txt");
@@ -49,10 +50,11 @@ interface AnalysisResult {
 async function runCoachAnalysis(): Promise<AnalysisResult | null> {
   console.log(`Fetching uncoached conversations (min: ${COACH_MIN_CONVOS})...\n`);
 
-  const [conversations, feedback, recEvents] = await Promise.all([
+  const [conversations, feedback, recEvents, recentErrors] = await Promise.all([
     fetchRecentConversations(20, { onlyNew: true }),
     fetchRecentFeedback(),
     fetchRecommendationEvents(),
+    getRecentErrors(24 * 60),
   ]);
 
   console.log(`  ${conversations.length} uncoached convos, ${feedback.length} feedback, ${recEvents.length} rec events`);
@@ -113,7 +115,7 @@ async function runCoachAnalysis(): Promise<AnalysisResult | null> {
   }
 
   console.log("Synthesizing patterns...");
-  const aggregationPrompt = buildAggregationPrompt(evals, feedback, recEvents, systemPrompt);
+  const aggregationPrompt = buildAggregationPrompt(evals, feedback, recEvents, systemPrompt, recentErrors);
   const synthesis = await chat(
     "You are a coaching analyst. Be specific and actionable.",
     [{ role: "user", content: aggregationPrompt }],

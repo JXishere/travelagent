@@ -1,7 +1,7 @@
 // Query flow — "I'm hungry near Bangsar" → spot recommendations from knowledge graph
 
 import { chat, buildSystemPrompt, HAIKU, langInstruction, langUserNote, samSays } from "../llm.js";
-import { querySpots, semanticSearchSpots, incrementRecommendationCount, markSpotsRecommended, getOrCreateTraveler, getSpotContributions, trackEvent, getAreaCentroid, getDistinctAreas, type Spot, type SpotContribution } from "../database.js";
+import { querySpots, semanticSearchSpots, incrementRecommendationCount, markSpotsRecommended, getOrCreateTraveler, getSpotContributions, trackEvent, trackError, getAreaCentroid, getDistinctAreas, type Spot, type SpotContribution } from "../database.js";
 import { getCurrentWeather } from "../weather.js";
 import { resolveCategories, DEFAULT_CATEGORIES } from "../utils/categories.js";
 import { getDefaultCity, getCityDefaults, isSupportedCity, getSupportedCities, resolveCityFromArea, resolveCitiesFromArea, CITY_LEVEL_ALIASES, AREA_CITY_MAP_KEYS } from "../utils/city-defaults.js";
@@ -12,7 +12,7 @@ import { parseAreas } from "../utils/area-extractor.js";
  *  Each entry lists terms that confirm a spot belongs to that cuisine,
  *  including cuisine-origin city/country names and signature dish names. */
 const CUISINE_SYNONYMS: Record<string, string[]> = {
-  thai:       ["thai", "thailand", "bangkok", "isan", "tom yum", "pad thai", "green curry", "massaman", "som tam", "larb"],
+  thai:       ["thai", "thailand", "isan", "tom yum", "pad thai", "green curry", "massaman", "som tam", "larb"],
   japanese:   ["japanese", "japan", "tokyo", "osaka", "sushi", "ramen", "izakaya", "tempura", "tonkatsu", "yakitori", "omakase"],
   korean:     ["korean", "korea", "seoul", "galbi", "bibimbap", "kimchi", "jjigae", "tteok"],
   chinese:    ["chinese", "china", "cantonese", "hokkien", "teochew", "dim sum", "yum cha"],
@@ -251,6 +251,11 @@ export async function handleQuery(
     if (effectiveArea) {
       trackEvent(phoneNumber, channel, "unsupported_area_request", { area: effectiveArea, city: queryCity ?? city });
     }
+    trackError(phoneNumber, channel, "zero_results", {
+      handler: "query",
+      message: `0 results for ${(categories ?? [details.meal_type ?? details.cuisine ?? "unknown"]).join(",")} in ${queryCity ?? city}`,
+      context: { city: queryCity ?? city, categories, area: effectiveArea, meal_type: details.meal_type, cuisine: details.cuisine },
+    });
     const cuisineGap = details.cuisine
       ? ` Be honest that you don't have solid ${details.cuisine} coverage${effectiveArea ? ` in ${effectiveArea}` : ""} yet. Do NOT recommend any restaurants — not even as alternatives. Just acknowledge the gap honestly in 1-2 sentences, then ask if they want to widen the area or try a different cuisine.`
       : effectiveArea

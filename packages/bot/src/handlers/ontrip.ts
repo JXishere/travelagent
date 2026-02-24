@@ -9,6 +9,7 @@ import {
   incrementRecommendationCount,
   markSpotsRecommended,
   trackEvent,
+  trackError,
   getAreaCentroid,
   getDistinctAreas,
   queryHappenings,
@@ -277,6 +278,11 @@ export async function buildHungryPrompt(
     if (details.area) {
       trackEvent(phoneNumber, options?.channel ?? "whatsapp", "unsupported_area_request", { area: details.area, city: queryCity ?? cityDefaults.name });
     }
+    trackError(phoneNumber, channel ?? "whatsapp", "zero_results", {
+      handler: "hungry",
+      message: `0 results for ${(categories ?? [details.meal_type ?? details.cuisine ?? "unknown"]).join(",")} in ${queryCity ?? cityDefaults.name}`,
+      context: { city: queryCity ?? cityDefaults.name, categories, area: details.area, meal_type: details.meal_type, cuisine: details.cuisine },
+    });
     return {
       systemPrompt: buildSystemPrompt(cityDefaults.name, channel) + langInstruction(message),
       userPrompt: `The user says: "${message}"

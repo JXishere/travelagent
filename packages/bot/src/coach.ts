@@ -126,11 +126,25 @@ export async function evaluateConversation(
 
 // ── Phase 2: Aggregation & Synthesis ──
 
+function buildRuntimeErrorsSection(
+  errors: Array<{ event_data: { error_type: string; handler: string; message: string; context: Record<string, any> } }>
+): string {
+  // Summarize by error_type + handler
+  const counts = new Map<string, number>();
+  for (const e of errors) {
+    const key = `${e.event_data.error_type} — ${e.event_data.handler}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const lines = Array.from(counts.entries()).map(([key, n]) => `- ${key} × ${n}`);
+  return `\n## Runtime Errors (last 24h)\n${lines.join("\n")}\n`;
+}
+
 export function buildAggregationPrompt(
   evals: ConversationEval[],
   feedback: FeedbackRow[],
   recEvents: RecommendationEvent[],
-  systemPrompt: string
+  systemPrompt: string,
+  recentErrors?: Array<{ event_data: { error_type: string; handler: string; message: string; context: Record<string, any> }; created_at: string }>
 ): string {
   // Average scores
   const criteria = ["brevity", "personality", "operational_detail", "helpfulness", "tone_matching", "honesty"] as const;
@@ -181,7 +195,7 @@ ${feedbackSummary}
 ## Recommendation Diversity
 ${totalRecs} recommendation events, ${uniqueSpots} unique spots.
 Most recommended: ${top5 || "N/A"}
-
+${recentErrors && recentErrors.length > 0 ? buildRuntimeErrorsSection(recentErrors) : ""}
 ## Your Task
 
 1. Identify the top 3-5 failure PATTERNS (not individual issues — group similar ones)

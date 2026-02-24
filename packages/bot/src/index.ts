@@ -12,6 +12,7 @@ import {
   findDuplicateSpot,
   touchLastUserMessage,
   trackEvent,
+  trackError,
   getOrCreateTraveler,
   getSpotsByIds,
   getPendingCorrections,
@@ -78,6 +79,10 @@ app.post("/webhook", async (req, res) => {
     await processMessage(message);
   } catch (error) {
     console.error("Error processing message:", error);
+    trackError(message.from, "whatsapp", "process_crash", {
+      handler: "webhook",
+      message: (error as Error).message ?? String(error),
+    });
     try {
       await sendMessage(
         message.from,
@@ -495,8 +500,29 @@ async function routeToCurrentFlow(
   }
 
   switch (flow) {
-    case "contribution":
+    case "contribution": {
+      const stage = conversation.flow_state?.stage;
+      // Only intercept in confirming/asking_must_go — collecting stage handles food queries inline
+      if (stage && stage !== "collecting") {
+        const recentCtxC = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+        const { intent: ci, details: cd } = await classifyIntent(text, recentCtxC);
+        const escapeIntentsC = ["hungry", "day_plan", "nearby", "happenings", "weather", "profile", "feedback"];
+        if (escapeIntentsC.includes(ci)) {
+          await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+          switch (ci) {
+            case "hungry": return handleHungry(phoneNumber, text, cd, recentCtxC, { channel: "whatsapp" });
+            case "day_plan": return handleDayPlan(phoneNumber, text, cd, recentCtxC, { channel: "whatsapp" });
+            case "nearby": return handleNearby(phoneNumber, text, cd, recentCtxC, { channel: "whatsapp" });
+            default: return chatAsSam(
+              conversation.messages.slice(-10).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+              text,
+              { channel: "whatsapp" }
+            );
+          }
+        }
+      }
       return handleContribution(phoneNumber, text, audioId, conversation);
+    }
 
     case "profile_learning":
       return handleProfile(phoneNumber, text, conversation);
@@ -508,24 +534,94 @@ async function routeToCurrentFlow(
       }
       return handleProfile(phoneNumber, text, conversation);
 
-    case "feedback":
+    case "feedback": {
+      // If the message doesn't look like feedback, escape the flow and re-route
+      const recentCtxForFeedback = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      const { intent: feedbackIntent, details: feedbackDetails } = await classifyIntent(text, recentCtxForFeedback);
+      if (feedbackIntent !== "feedback") {
+        await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+        switch (feedbackIntent) {
+          case "hungry": return handleHungry(phoneNumber, text, feedbackDetails, recentCtxForFeedback, { channel: "whatsapp" });
+          case "day_plan": return handleDayPlan(phoneNumber, text, feedbackDetails, recentCtxForFeedback, { channel: "whatsapp" });
+          case "nearby": return handleNearby(phoneNumber, text, feedbackDetails, recentCtxForFeedback, { channel: "whatsapp" });
+          case "contribute": return handleContribution(phoneNumber, text, undefined, conversation);
+          case "spot_info": return handleSpotInfo(phoneNumber, text, feedbackDetails.spot_name ?? text, getDefaultCity(), { channel: "whatsapp" });
+          default: return chatAsSam(
+            conversation.messages.slice(-10).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+            text,
+            { channel: "whatsapp" }
+          );
+        }
+      }
       return handleFeedback(phoneNumber, text, conversation);
+    }
 
-    case "spot_correction":
+    case "spot_correction": {
+      const recentCtxSC = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      const { intent: sci, details: scd } = await classifyIntent(text, recentCtxSC);
+      const escapeIntentsSC = ["hungry", "day_plan", "nearby", "happenings", "weather", "profile", "feedback", "contribute"];
+      if (escapeIntentsSC.includes(sci)) {
+        await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+        switch (sci) {
+          case "hungry": return handleHungry(phoneNumber, text, scd, recentCtxSC, { channel: "whatsapp" });
+          case "day_plan": return handleDayPlan(phoneNumber, text, scd, recentCtxSC, { channel: "whatsapp" });
+          case "nearby": return handleNearby(phoneNumber, text, scd, recentCtxSC, { channel: "whatsapp" });
+          case "contribute": return handleContribution(phoneNumber, text, undefined, conversation);
+          default: return chatAsSam(
+            conversation.messages.slice(-10).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+            text,
+            { channel: "whatsapp" }
+          );
+        }
+      }
       return handleSpotCorrection(phoneNumber, text, {}, { channel: "whatsapp", conversation });
+    }
 
     case "generate":
       return handleGenerate(phoneNumber, text, conversation);
 
-    case "spot_verification":
+    case "spot_verification": {
+      const recentCtxSV = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      const { intent: svi, details: svd } = await classifyIntent(text, recentCtxSV);
+      const escapeIntentsSV = ["hungry", "day_plan", "nearby", "happenings", "weather", "profile", "feedback", "contribute"];
+      if (escapeIntentsSV.includes(svi)) {
+        await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
+        switch (svi) {
+          case "hungry": return handleHungry(phoneNumber, text, svd, recentCtxSV, { channel: "whatsapp" });
+          case "day_plan": return handleDayPlan(phoneNumber, text, svd, recentCtxSV, { channel: "whatsapp" });
+          case "nearby": return handleNearby(phoneNumber, text, svd, recentCtxSV, { channel: "whatsapp" });
+          case "contribute": return handleContribution(phoneNumber, text, undefined, conversation);
+          default: return chatAsSam(
+            conversation.messages.slice(-10).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+            text,
+            { channel: "whatsapp" }
+          );
+        }
+      }
       return handleSpotVerification(phoneNumber, text, conversation);
+    }
 
     case "query_clarifying": {
       const { pending_query, pending_details } = conversation.flow_state;
       const recentCtx = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
       await updateConversation(phoneNumber, { current_flow: "general", flow_state: {} });
-      // Re-classify the clarifying answer to capture fresh signals (area, meal_type, etc.)
-      const { details: freshDetails } = await classifyIntent(text, recentCtx);
+      // Re-classify to capture full intent — user may have pivoted entirely
+      const { intent: qci, details: freshDetails } = await classifyIntent(text, recentCtx);
+      // If user pivoted to a different intent, route there instead of treating as clarification
+      const escapeIntentsQC = ["happenings", "weather", "contribute", "profile", "feedback", "spot_info", "spot_correction"];
+      if (escapeIntentsQC.includes(qci)) {
+        switch (qci) {
+          case "happenings": return handleHappenings(phoneNumber, text, recentCtx, { channel: "whatsapp" });
+          case "spot_info": return handleSpotInfo(phoneNumber, text, freshDetails.spot_name ?? text, getDefaultCity(), { channel: "whatsapp" });
+          case "contribute": return handleContribution(phoneNumber, text, undefined, conversation);
+          default: return chatAsSam(
+            conversation.messages.slice(-10).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+            text,
+            { channel: "whatsapp" }
+          );
+        }
+      }
+      // Otherwise merge and treat as clarification answer
       const mergedDetails = { ...pending_details, ...freshDetails };
       return handleHungry(phoneNumber, `${pending_query}. ${text}`, mergedDetails, recentCtx, { channel: "whatsapp" });
     }

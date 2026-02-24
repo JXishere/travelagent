@@ -24,6 +24,7 @@ vi.mock("../database.js", () => ({
   getDistinctAreas: vi.fn().mockResolvedValue([]),
   getAreaCentroid: vi.fn().mockResolvedValue(undefined),
   trackEvent: vi.fn(),
+  trackError: vi.fn(),
 }));
 vi.mock("../weather.js", () => ({
   getCurrentWeather: vi.fn().mockResolvedValue(null),

@@ -20,6 +20,24 @@ export const MEAL_TYPE_CATEGORIES: Record<string, string[]> = {
   bar: ["nightlife"],
   supper: ["nightlife", "dinner"],
   "late night": ["nightlife", "dinner"],
+
+  // Cuisine types — map to food categories; semantic ranking surfaces the best match
+  thai: ["dinner", "lunch"],
+  chinese: ["dinner", "lunch"],
+  japanese: ["dinner", "lunch"],
+  korean: ["dinner", "lunch"],
+  indian: ["dinner", "lunch"],
+  malay: ["breakfast", "lunch", "dinner"],
+  western: ["dinner", "lunch"],
+  italian: ["dinner", "lunch"],
+  french: ["dinner", "lunch"],
+  mediterranean: ["dinner", "lunch"],
+  mexican: ["dinner", "lunch"],
+  vietnamese: ["dinner", "lunch"],
+  hawker: ["lunch", "dinner"],
+  mamak: ["breakfast", "lunch", "dinner"],
+  vegetarian: ["breakfast", "lunch", "dinner", "cafe"],
+  vegan: ["breakfast", "lunch", "dinner", "cafe"],
 };
 
 /** Time of day → spot categories */

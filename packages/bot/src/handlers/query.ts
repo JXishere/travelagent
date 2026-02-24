@@ -8,6 +8,23 @@ import { getDefaultCity, getCityDefaults, isSupportedCity, getSupportedCities, r
 import { filterByDistance, haversineKm } from "../utils/geo.js";
 import { parseAreas } from "../utils/area-extractor.js";
 
+/** Cuisine synonym map — used to match spots against a requested cuisine type.
+ *  Each entry lists terms that confirm a spot belongs to that cuisine,
+ *  including cuisine-origin city/country names and signature dish names. */
+const CUISINE_SYNONYMS: Record<string, string[]> = {
+  thai:       ["thai", "thailand", "bangkok", "isan", "tom yum", "pad thai", "green curry", "massaman", "som tam", "larb"],
+  japanese:   ["japanese", "japan", "tokyo", "osaka", "sushi", "ramen", "izakaya", "tempura", "tonkatsu", "yakitori", "omakase"],
+  korean:     ["korean", "korea", "seoul", "galbi", "bibimbap", "kimchi", "jjigae", "tteok"],
+  chinese:    ["chinese", "china", "cantonese", "hokkien", "teochew", "dim sum", "yum cha"],
+  indian:     ["indian", "india", "kerala", "tandoor", "curry", "roti canai", "naan", "biryani", "dhal"],
+  italian:    ["italian", "italy", "pasta", "pizza", "risotto", "trattoria"],
+  vietnamese: ["vietnamese", "vietnam", "pho", "banh mi", "bun cha"],
+  mexican:    ["mexican", "mexico", "taco", "burrito", "quesadilla"],
+  western:    ["western", "steak", "burger", "grill"],
+  malay:      ["malay", "malaysia", "nasi lemak", "rendang", "satay", "laksa"],
+  mamak:      ["mamak", "roti canai", "teh tarik", "mee goreng"],
+};
+
 /** Extract the number of spots the user explicitly requested, clamped 1–10.
  *  Returns 3 (default) when no explicit count is found. */
 export function extractListCount(message: string): number {
@@ -206,17 +223,45 @@ export async function handleQuery(
     }
   }
 
+  // Cuisine hard filter — when a specific cuisine was requested, keep only spots that
+  // genuinely match it (by name, what_to_order, or pro_tips). This prevents the LLM from
+  // presenting, e.g., char kuey teow stalls as "Thai-adjacent" when the user asked for Thai.
+  // Soft: if cuisine filter would eliminate everything, fall through to the no-results path.
+  if (details.cuisine && !isDishQuery && spots.length > 0) {
+    const cuisineLower = details.cuisine.toLowerCase();
+    const synonyms = CUISINE_SYNONYMS[cuisineLower] ?? [cuisineLower];
+    const cuisineMatched = spots.filter(s => {
+      const haystack = [
+        s.name ?? "",
+        ...(s.what_to_order ?? []),
+        ...(s.pro_tips ?? []),
+      ].join(" ").toLowerCase();
+      return synonyms.some(kw => haystack.includes(kw));
+    });
+    if (cuisineMatched.length > 0) {
+      spots = cuisineMatched;
+    } else {
+      // No spots match the cuisine — treat as a no-results scenario
+      spots = [];
+    }
+  }
+
   if (spots.length === 0) {
     console.warn(`[query] No results: intent=${details.meal_type || details.cuisine || 'unknown'}, area=${effectiveArea}, city=${queryCity || queryCities}`);
     if (effectiveArea) {
       trackEvent(phoneNumber, channel, "unsupported_area_request", { area: effectiveArea, city: queryCity ?? city });
     }
+    const cuisineGap = details.cuisine
+      ? ` Be honest that you don't have solid ${details.cuisine} coverage${effectiveArea ? ` in ${effectiveArea}` : ""} yet. Do NOT recommend any restaurants — not even as alternatives. Just acknowledge the gap honestly in 1-2 sentences, then ask if they want to widen the area or try a different cuisine.`
+      : effectiveArea
+        ? ` Be honest that you don't have coverage in ${effectiveArea} yet — name it specifically — then offer to check nearby areas.`
+        : " Be honest that you don't have intel on this yet.";
     return await chat(
       buildSystemPrompt(city, options?.channel) + langInstruction(message),
       [
         {
           role: "user",
-          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places.${effectiveArea ? ` Be honest that you don't have coverage in ${effectiveArea} yet — name it specifically — then offer to check nearby areas.` : " Be honest that you don't have intel on this yet."} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking.`,
+          content: `The user says: "${message}"\n\nYou have NO spots in your knowledge graph for this query. Do NOT make up or suggest any restaurants, cafes, or places.${cuisineGap} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking.`,
         },
       ],
       { maxTokens: 512, model: HAIKU }
@@ -292,7 +337,11 @@ export async function handleQuery(
       ? `\n\nNote: The user asked for spots near "${requestedArea}" but these picks are from other parts of the city. Mention the actual area for each spot so they can judge the distance. Use the Distance field if present — say "~Xkm away" not "a short drive". NEVER invent distances.`
       : "";
 
-  const budgetNote = priceRange ? `\nThe user wants budget-friendly options (${priceRange.join("/")}). Mention the price range when presenting spots (e.g. "$ — around RM15" or "$$ — mid-range").` : "";
+  const budgetNote = priceRange ? `\nThe user wants budget-friendly options (${priceRange.join("/")}). Mention the price range when presenting spots (e.g. "$ — around RM15" or "$$ – mid-range").` : "";
+
+  // At this point, cuisine-mismatched spots have already been filtered out in the hard filter
+  // above. Any spots remaining that pass the cuisine filter are guaranteed to match.
+  // (No cuisine note needed — the hard filter handles it upstream.)
 
   const prompt = `The user asked: "${message}"
 ${travelerContext ? `\nAdditional context: ${travelerContext}` : ""}

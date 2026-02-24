@@ -112,7 +112,6 @@ export async function buildHungryPrompt(
   const channel = options?.channel;
   const listCount = extractListCount(message);
   const traveler = await getOrCreateTraveler(phoneNumber);
-  const weather = await getCurrentWeather(traveler.current_city);
 
   // Detect unsupported city — return honest "no coverage" before querying with wrong defaults
   if (traveler.current_city && !isSupportedCity(traveler.current_city)) {
@@ -143,6 +142,13 @@ export async function buildHungryPrompt(
   // semantic search is used instead of a time-of-day category fallback.
   const categories = resolveCategories(details.meal_type ?? details.cuisine, timeOfDay);
   const isDishQuery = categories === null;
+
+  // Parallelize weather fetch + embedding generation (both are external I/O)
+  // Dish queries already use trySemanticSearch — skip embedding for them
+  const [weather, queryEmbedding] = await Promise.all([
+    getCurrentWeather(traveler.current_city),
+    isDishQuery ? Promise.resolve(undefined) : getQueryEmbedding(message),
+  ]);
 
   // Resolve city from area — "PJ" maps to "Petaling Jaya", etc.
   const areaCities = resolveCitiesFromArea(details.area);
@@ -206,6 +212,7 @@ export async function buildHungryPrompt(
       exclude_weather_dependent: weather?.is_raining ?? false,
       excludeIds: dislikedIds,
       limit: Math.max(5, listCount),
+      queryEmbedding,
     });
     // If empty and area was filtered, retry without area constraint
     if (spots.length === 0 && areaList) {
@@ -218,6 +225,7 @@ export async function buildHungryPrompt(
         exclude_weather_dependent: weather?.is_raining ?? false,
         excludeIds: dislikedIds,
         limit: Math.max(5, listCount),
+        queryEmbedding,
       });
     }
     if (spots.length === 0) {
@@ -266,11 +274,14 @@ export async function buildHungryPrompt(
 
   // No spots in DB — be honest
   if (toRecommend.length === 0) {
+    if (details.area) {
+      trackEvent(phoneNumber, options?.channel ?? "whatsapp", "unsupported_area_request", { area: details.area, city: queryCity ?? cityDefaults.name });
+    }
     return {
       systemPrompt: buildSystemPrompt(cityDefaults.name, channel) + langInstruction(message),
       userPrompt: `The user says: "${message}"
 
-You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places. Be honest that you don't have intel on this yet.${details.area ? ` Offer to search other areas of the city instead.` : ""} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
+You have NO spots in your knowledge graph yet for this query. Do NOT make up or suggest any restaurants, cafes, or places.${details.area ? ` Be honest that you don't have coverage in ${details.area} yet — name it specifically — then offer to check nearby areas.` : " Be honest that you don't have intel on this yet."} Keep it short — this is WhatsApp. Never tell them to "ask locals" — you're the one they're asking. Don't suggest specific neighborhoods or areas to try — you don't have verified data there either.`,
       spotIds: [],
       maxTokens: 512,
     };
@@ -940,5 +951,15 @@ async function trySemanticSearch(
     return await semanticSearchSpots(embedding, { city });
   } catch {
     return [];
+  }
+}
+
+/** Generate a query embedding, silently returning undefined on failure */
+async function getQueryEmbedding(text: string): Promise<number[] | undefined> {
+  try {
+    const { generateEmbedding } = await import("../embeddings.js");
+    return await generateEmbedding(text);
+  } catch {
+    return undefined;
   }
 }

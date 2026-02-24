@@ -46,7 +46,12 @@ export async function handleQuery(
   const isDishQuery = categories === null;
   const traveler = await getOrCreateTraveler(phoneNumber);
   const city = traveler.current_city ?? getDefaultCity();
-  const weather = await getCurrentWeather(traveler.current_city);
+  // Parallelize weather fetch + embedding generation (both are external I/O)
+  // Dish queries already use trySemanticSearch — skip embedding for them
+  const [weather, queryEmbedding] = await Promise.all([
+    getCurrentWeather(traveler.current_city),
+    isDishQuery ? Promise.resolve(undefined) : getQueryEmbedding(message),
+  ]);
 
   // Gracefully handle unsupported cities — track for product signal, respond honestly
   // Bypass if the query's explicit area resolves to a supported city — the user may be asking
@@ -138,6 +143,7 @@ export async function handleQuery(
       exclude_weather_dependent: weather?.is_raining ?? false,
       priceRange,
       limit: Math.max(5, listCount),
+      queryEmbedding,
     });
     // If empty and area was filtered, retry without area constraint then apply proximity filter
     if (spots.length === 0 && areaList) {
@@ -149,6 +155,7 @@ export async function handleQuery(
         indoor_outdoor: weather?.is_raining ? "indoor" : undefined,
         exclude_weather_dependent: weather?.is_raining ?? false,
         limit: 20, // fetch larger pool so proximity filter has something to work with
+        queryEmbedding,
       });
       // Proximity filter: keep only spots within 3km of the user's area centroid.
       // Centroid is computed from actual spot coordinates in the DB — no hardcoded list to maintain.
@@ -373,6 +380,16 @@ async function trySemanticSearch(
   } catch {
     // Semantic search unavailable (missing API key, no embeddings, etc.)
     return [];
+  }
+}
+
+/** Generate a query embedding, silently returning undefined on failure */
+async function getQueryEmbedding(text: string): Promise<number[] | undefined> {
+  try {
+    const { generateEmbedding } = await import("../embeddings.js");
+    return await generateEmbedding(text);
+  } catch {
+    return undefined;
   }
 }
 

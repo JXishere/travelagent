@@ -502,6 +502,53 @@ export type Database = {
         Args: { p_spot_id: string }
         Returns: undefined
       }
+      match_spots_hybrid: {
+        Args: {
+          query_embedding: string
+          filter_city?: string
+          filter_cities?: string[]
+          filter_areas?: string[]
+          filter_categories?: string[]
+          filter_indoor_outdoor?: string
+          filter_exclude_weather_dependent?: boolean
+          filter_price_ranges?: string[]
+          filter_exclude_ids?: string[]
+          match_limit?: number
+          match_threshold?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          city: string
+          country: string
+          area: string
+          categories: string[]
+          address: string
+          price_range: string
+          latitude: number
+          longitude: number
+          what_to_order: string[]
+          what_to_skip: string[]
+          pro_tips: string[]
+          vibe: string
+          indoor_outdoor: string
+          best_time_of_day: string
+          weather_dependent: boolean
+          contributor_id: string
+          recommendation_count: number
+          contribution_count: number
+          input_method: string
+          must_go: boolean
+          verified: boolean
+          avg_rating: number
+          is_closed: boolean
+          needs_review: boolean
+          last_verified: string
+          created_at: string
+          embedding: string
+          similarity: number
+        }[]
+      }
       match_spots: {
         Args: {
           filter_categories?: string[]

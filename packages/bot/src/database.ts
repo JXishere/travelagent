@@ -191,6 +191,7 @@ export interface Spot {
   needs_review?: boolean;
   last_verified?: string;
   isStale?: boolean; // computed at query time — not a DB column
+  similarity?: number; // set by match_spots_hybrid; not a DB column
 }
 
 /** Strip app-only fields before writing to the spots table */
@@ -210,7 +211,12 @@ export async function querySpots(filters: {
   priceRange?: string[];
   excludeIds?: string[];
   limit?: number;
+  queryEmbedding?: number[];
 }): Promise<Spot[]> {
+  if (filters.queryEmbedding) {
+    return querySpotsSemantic(filters, filters.queryEmbedding);
+  }
+
   const requestedLimit = filters.limit ?? 5;
   // Fetch a larger pool so we can shuffle within tiers — prevents same spots dominating every response
   const poolSize = Math.min(requestedLimit * 4, 20);
@@ -294,6 +300,101 @@ export async function querySpots(filters: {
   const finalSpots = (thick.length > 0 ? thick : thin).slice(0, requestedLimit);
 
   // P2.C: Discovery boost — 30% chance to inject a verified but under-exposed spot at position 2
+  if (finalSpots.length >= 2 && Math.random() < 0.3) {
+    const alreadyIncluded = new Set(finalSpots.map(s => s.id));
+    const discoveryCandidate = sorted.find(s =>
+      s.verified === true &&
+      s.must_go !== true &&
+      (s.recommendation_count == null || s.recommendation_count < 5) &&
+      (s.avg_rating == null || s.avg_rating >= 3.0) &&
+      !alreadyIncluded.has(s.id)
+    );
+    if (discoveryCandidate) {
+      finalSpots.splice(1, 0, discoveryCandidate);
+      if (finalSpots.length > requestedLimit) finalSpots.pop();
+    }
+  }
+
+  return finalSpots;
+}
+
+/**
+ * Hybrid semantic + structured query via match_spots_hybrid RPC.
+ * Called when queryEmbedding is provided — runs pgvector cosine similarity
+ * ranking inside the same structured filter constraints as querySpots.
+ * Post-processing (staleness, tiering, quality score, discovery boost) is identical.
+ */
+async function querySpotsSemantic(
+  filters: Parameters<typeof querySpots>[0],
+  queryEmbedding: number[]
+): Promise<Spot[]> {
+  const requestedLimit = filters.limit ?? 5;
+  const poolSize = Math.min(requestedLimit * 4, 20);
+  const embeddingStr = `[${queryEmbedding.join(",")}]`;
+
+  const { data, error } = await supabase.rpc("match_spots_hybrid", {
+    query_embedding: embeddingStr,
+    filter_city: filters.city ?? undefined,
+    filter_cities: (filters.cities && filters.cities.length > 0 ? filters.cities : undefined) as string[] | undefined,
+    filter_areas: (filters.areas && filters.areas.length > 0 ? filters.areas : undefined) as string[] | undefined,
+    filter_categories: filters.categories ?? undefined,
+    filter_indoor_outdoor: filters.indoor_outdoor ?? undefined,
+    filter_exclude_weather_dependent: filters.exclude_weather_dependent ?? false,
+    filter_price_ranges: (filters.priceRange && filters.priceRange.length > 0 ? filters.priceRange : undefined) as string[] | undefined,
+    filter_exclude_ids: (filters.excludeIds && filters.excludeIds.length > 0 ? filters.excludeIds : undefined) as string[] | undefined,
+    match_limit: poolSize,
+    match_threshold: 0.1,
+  } as any);
+
+  if (error) {
+    console.error("[querySpotsSemantic] RPC error:", error);
+    // Fall back to structured query on RPC failure
+    const { queryEmbedding: _embedding, ...fallbackFilters } = filters;
+    return querySpots(fallbackFilters);
+  }
+
+  const pool = cast<(Spot & { similarity: number })[]>(data ?? []);
+
+  // Compute staleness: no created_at, or created_at older than 180 days
+  const staleThreshold = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+  const withStaleness = pool.map(s => ({
+    ...s,
+    isStale: !s.created_at || s.created_at < staleThreshold,
+  }));
+
+  const isPoorlyRated = (s: typeof withStaleness[0]) =>
+    s.avg_rating != null && s.avg_rating < 2.5;
+
+  // Quality score: richness (77%) + semantic similarity (23%) + jitter
+  const qualityScore = (s: typeof withStaleness[0]): number => {
+    let score = 0;
+    if (s.what_to_order && s.what_to_order.length > 0) score += 0.28;
+    if (s.pro_tips && s.pro_tips.length > 0)           score += 0.20;
+    if (s.avg_rating != null && s.avg_rating >= 3.5)   score += 0.15;
+    if (s.recommendation_count != null && s.recommendation_count >= 3) score += 0.07;
+    if (!s.isStale)                                     score += 0.07;
+    if (s.similarity != null)                           score += s.similarity * 0.23;
+    score += (Math.random() - 0.5) * 0.2;
+    return score;
+  };
+
+  const byQuality = (a: typeof withStaleness[0], b: typeof withStaleness[0]) =>
+    qualityScore(b) - qualityScore(a);
+
+  const mustGo   = withStaleness.filter(s =>  s.must_go && !isPoorlyRated(s)).sort(byQuality);
+  const verified = withStaleness.filter(s => !s.must_go && s.verified && !isPoorlyRated(s)).sort(byQuality);
+  const rest     = withStaleness.filter(s => (!s.must_go && !s.verified) || isPoorlyRated(s)).sort(byQuality);
+
+  const isThinSpot = (s: typeof withStaleness[0]) =>
+    (!s.what_to_order || s.what_to_order.length === 0) &&
+    (!s.pro_tips || s.pro_tips.length === 0);
+
+  const sorted = [...mustGo, ...verified, ...rest];
+  const thick  = sorted.filter(s => !isThinSpot(s));
+  const thin   = sorted.filter(s =>  isThinSpot(s));
+  const finalSpots = (thick.length > 0 ? thick : thin).slice(0, requestedLimit);
+
+  // Discovery boost — 30% chance to inject a verified under-exposed spot at position 2
   if (finalSpots.length >= 2 && Math.random() < 0.3) {
     const alreadyIncluded = new Set(finalSpots.map(s => s.id));
     const discoveryCandidate = sorted.find(s =>
@@ -729,6 +830,7 @@ export interface Contributor {
   name?: string;
   contribution_count: number;
   cities_contributed?: string[];
+  areas_contributed?: string[];
   created_at?: string;
 }
 
@@ -755,16 +857,20 @@ export async function getOrCreateContributor(
 
 export async function incrementContributorCount(
   phoneNumber: string,
-  city: string = getDefaultCity()
+  city: string = getDefaultCity(),
+  area?: string
 ): Promise<void> {
   const contributor = await getOrCreateContributor(phoneNumber);
-  const existing: string[] = contributor.cities_contributed ?? [];
-  const cities = existing.includes(city) ? existing : [...existing, city];
+  const existingCities: string[] = contributor.cities_contributed ?? [];
+  const cities = existingCities.includes(city) ? existingCities : [...existingCities, city];
+  const existingAreas: string[] = contributor.areas_contributed ?? [];
+  const areas = area && !existingAreas.includes(area) ? [...existingAreas, area] : existingAreas;
   await supabase
     .from("contributors")
     .update({
       contribution_count: contributor.contribution_count + 1,
       cities_contributed: cities,
+      areas_contributed: areas,
     })
     .eq("whatsapp_number", phoneNumber);
 }
@@ -1001,7 +1107,7 @@ export interface DailyDigestData {
   totalOutputTokens: number;
   waMessages: number;
   webMessages: number;
-  newSpots: Array<{ city: string; country?: string }>;
+  newSpots: Array<{ city: string; country?: string; area?: string }>;
   topIntent: string;
   topIntentCount: number;
   contributions: number;
@@ -1034,7 +1140,7 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
       .gte("created_at", start).lt("created_at", end),
     supabase.from("events").select("channel, event_data").eq("event_type", "message")
       .gte("created_at", start).lt("created_at", end),
-    supabase.from("spots").select("city, country").gte("created_at", start).lt("created_at", end),
+    supabase.from("spots").select("city, country, area").gte("created_at", start).lt("created_at", end),
     supabase.from("events").select("event_data").eq("event_type", "flow_complete")
       .gte("created_at", start).lt("created_at", end),
     supabase.from("spots").select("*", { count: "exact", head: true })
@@ -1063,7 +1169,7 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
   const topIntent = topEntry?.[0] ?? "—";
   const topIntentCount = topEntry?.[1] ?? 0;
 
-  const newSpots = cast<Array<{ city: string; country?: string }>>(spotResult.data ?? []);
+  const newSpots = cast<Array<{ city: string; country?: string; area?: string }>>(spotResult.data ?? []);
 
   let contributions = 0;
   let feedbacks = 0;

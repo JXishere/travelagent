@@ -1,17 +1,4 @@
-What Sam Cannot Do (Hard Limits)
-
-  - No bookings or reservations
-  - No real-time venue availability
-  - No image analysis (captions only)
-  - No multi-city itineraries
-  - No cross-device identity linking (web UUID ≠
-   WhatsApp phone)
-  - No transport/directions
-  - No group size or occasion-aware filtering
-  - No comparison intent ("X vs Y")
-
-
-
+recheck the plan for Sam in regards to Open Claw
 
 i need to make sure what every session is doing.
 

@@ -5,11 +5,21 @@ import { getAllSpots, updateSpot, deleteSpot, getPendingCorrections, approveCorr
 import { SpotFilters } from "../../components/spot-filters";
 import { SpotCard } from "../../components/spot-card";
 
+interface ValidateProgress {
+  done: number;
+  total: number;
+  name: string;
+}
+
 export default function ReviewPage() {
   const [spots, setSpots] = useState<Spot[]>([]);
   const [corrections, setCorrections] = useState<PendingCorrection[]>([]);
   const [showCorrections, setShowCorrections] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showValidateModal, setShowValidateModal] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validateProgress, setValidateProgress] = useState<ValidateProgress | null>(null);
+  const [validateDone, setValidateDone] = useState<{ count: number; ts: string } | null>(null);
   const [filters, setFilters] = useState({
     category: "",
     area: "",
@@ -135,6 +145,49 @@ export default function ReviewPage() {
     if (ok) setCorrections((prev) => prev.filter((c) => c.spot_id !== spotId));
   }, []);
 
+  const handleStartValidation = useCallback(async () => {
+    setShowValidateModal(false);
+    setValidating(true);
+    setValidateProgress({ done: 0, total: 0, name: "" });
+    setValidateDone(null);
+
+    try {
+      const res = await fetch("/api/batch-validate?thin_only=true&unverified_only=true");
+      if (!res.ok || !res.body) throw new Error("Validation request failed");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const data = JSON.parse(line) as ValidateProgress;
+            setValidateProgress(data);
+          } catch { /* skip malformed lines */ }
+        }
+      }
+
+      // Refresh spot list after validation completes
+      const updated = await getAllSpots();
+      setSpots(updated);
+      setValidateDone({
+        count: validateProgress?.total ?? 0,
+        ts: new Date().toLocaleTimeString(),
+      });
+    } catch (err) {
+      console.error("Batch validation failed:", err);
+    } finally {
+      setValidating(false);
+    }
+  }, [validateProgress?.total]);
+
   if (loading) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
@@ -158,13 +211,129 @@ export default function ReviewPage() {
       <h1 style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>
         spot review
       </h1>
-      <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        {stats.total} total &middot; {stats.approved} approved &middot; {stats.needsReviewCount > 0 && <span style={{ color: "var(--red)" }}>{stats.needsReviewCount} needs review &middot; </span>}{stats.thinCount} thin &middot;{" "}
-        {Object.entries(stats.byCat)
-          .sort(([, a], [, b]) => b - a)
-          .map(([cat, n]) => `${cat} ${n}`)
-          .join(" · ")}
-      </p>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: 0 }}>
+          {stats.total} total &middot; {stats.approved} approved &middot; {stats.needsReviewCount > 0 && <span style={{ color: "var(--red)" }}>{stats.needsReviewCount} needs review &middot; </span>}{stats.thinCount} thin &middot;{" "}
+          {Object.entries(stats.byCat)
+            .sort(([, a], [, b]) => b - a)
+            .map(([cat, n]) => `${cat} ${n}`)
+            .join(" · ")}
+        </p>
+        {stats.thinCount > 0 && (
+          <button
+            onClick={() => setShowValidateModal(true)}
+            disabled={validating}
+            style={{
+              padding: "0.25rem 0.65rem",
+              fontSize: "0.75rem",
+              borderRadius: "4px",
+              border: "1px solid var(--muted)",
+              background: "transparent",
+              color: validating ? "var(--muted)" : "var(--fg)",
+              cursor: validating ? "not-allowed" : "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {validating
+              ? `Validating ${validateProgress?.done ?? 0} / ${validateProgress?.total ?? "..."}`
+              : validateDone
+              ? `Validated ${validateDone.count} spots ✓`
+              : `Web-validate ${stats.thinCount} thin spots`}
+          </button>
+        )}
+      </div>
+
+      {/* Progress bar while validating */}
+      {validating && validateProgress && validateProgress.total > 0 && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <div
+            style={{
+              height: "4px",
+              background: "var(--bg)",
+              borderRadius: "2px",
+              overflow: "hidden",
+              marginBottom: "0.3rem",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.round((validateProgress.done / validateProgress.total) * 100)}%`,
+                background: "var(--green)",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: 0 }}>
+            {validateProgress.name ? `Checking: ${validateProgress.name}` : "Starting..."}
+            {" "}({validateProgress.done}/{validateProgress.total})
+          </p>
+        </div>
+      )}
+
+      {/* Validate modal */}
+      {showValidateModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+          }}
+          onClick={() => setShowValidateModal(false)}
+        >
+          <div
+            style={{
+              background: "var(--bar-bg)",
+              border: "1px solid var(--border, #333)",
+              borderRadius: "8px",
+              padding: "1.5rem",
+              maxWidth: "380px",
+              width: "90%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Web-validate thin spots</h2>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginBottom: "1rem" }}>
+              {stats.thinCount} unverified thin spots will be enriched via web search.
+              Est. time: ~{Math.ceil((stats.thinCount * 1.5) / 60)} min. Existing data is never overwritten.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                onClick={handleStartValidation}
+                style={{
+                  padding: "0.4rem 0.9rem",
+                  fontSize: "0.85rem",
+                  borderRadius: "4px",
+                  border: "none",
+                  background: "var(--green)",
+                  color: "var(--bg)",
+                  cursor: "pointer",
+                }}
+              >
+                Start
+              </button>
+              <button
+                onClick={() => setShowValidateModal(false)}
+                style={{
+                  padding: "0.4rem 0.9rem",
+                  fontSize: "0.85rem",
+                  borderRadius: "4px",
+                  border: "1px solid var(--muted)",
+                  background: "transparent",
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab toggle */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>

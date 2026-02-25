@@ -278,11 +278,41 @@ async function routeToFlow(
       }
       return handleProfile(sessionId, message, conversation, { channel: "web" });
 
-    case "feedback":
+    case "feedback": {
+      const recentCtxForFeedback = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      const { intent: feedbackIntent, details: feedbackDetails } = await classifyIntent(message, recentCtxForFeedback);
+      if (feedbackIntent !== "feedback") {
+        await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
+        switch (feedbackIntent) {
+          case "hungry": return handleHungry(sessionId, message, feedbackDetails, recentCtxForFeedback, { channel: "web" });
+          case "day_plan": return handleDayPlan(sessionId, message, feedbackDetails, recentCtxForFeedback, { channel: "web" });
+          case "nearby": return handleNearby(sessionId, message, feedbackDetails, recentCtxForFeedback, { channel: "web" });
+          case "happenings": return handleHappenings(sessionId, message, recentCtxForFeedback, { channel: "web" });
+          case "contribute": return handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
+          case "spot_info": { const { getDefaultCity: gdc } = await import("@sam/bot/utils/city-defaults"); return handleSpotInfo(sessionId, message, feedbackDetails.spot_name ?? message, gdc(), { channel: "web" }); }
+          default: return handleGeneral(sessionId, message, conversation);
+        }
+      }
       return handleFeedback(sessionId, message, conversation, { channel: "web" });
+    }
 
-    case "spot_correction":
+    case "spot_correction": {
+      const recentCtxSC = conversation.messages.slice(-6).map(m => `${m.role}: ${m.content}`).join("\n");
+      const { intent: sci, details: scd } = await classifyIntent(message, recentCtxSC);
+      const escapeIntentsSC = ["hungry", "day_plan", "nearby", "happenings", "weather", "profile", "feedback", "contribute"];
+      if (escapeIntentsSC.includes(sci)) {
+        await updateConversation(sessionId, { current_flow: "general", flow_state: {} });
+        switch (sci) {
+          case "hungry": return handleHungry(sessionId, message, scd, recentCtxSC, { channel: "web" });
+          case "day_plan": return handleDayPlan(sessionId, message, scd, recentCtxSC, { channel: "web" });
+          case "nearby": return handleNearby(sessionId, message, scd, recentCtxSC, { channel: "web" });
+          case "happenings": return handleHappenings(sessionId, message, recentCtxSC, { channel: "web" });
+          case "contribute": return handleContribution(sessionId, message, undefined, conversation, { channel: "web" });
+          default: return handleGeneral(sessionId, message, conversation);
+        }
+      }
       return handleSpotCorrection(sessionId, message, {}, { channel: "web", conversation });
+    }
 
     case "query_clarifying": {
       const { pending_query, pending_details } = conversation.flow_state;
@@ -510,8 +540,10 @@ function flushAndTrackUsage(sessionId: string, intent: string) {
   const usage = flushUsage(sessionId);
   if (usage && usage.calls > 0) {
     trackEvent(sessionId, "web", "llm_usage", {
-      input_tokens: usage.input_tokens,
-      output_tokens: usage.output_tokens,
+      haiku_input_tokens: usage.haiku_input,
+      haiku_output_tokens: usage.haiku_output,
+      sonnet_input_tokens: usage.sonnet_input,
+      sonnet_output_tokens: usage.sonnet_output,
       calls: usage.calls,
       intent,
     });

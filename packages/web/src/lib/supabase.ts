@@ -25,6 +25,7 @@ export interface Spot {
   contribution_count: number | null;
   created_at: string;
   needs_review: boolean | null;
+  confidence_score: number | null;
 }
 
 function getClient(): SupabaseClient | null {

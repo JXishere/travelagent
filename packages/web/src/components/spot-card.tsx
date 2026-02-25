@@ -47,6 +47,14 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublis
   const isThin = (!spot.what_to_order || spot.what_to_order.length === 0)
     && (!spot.pro_tips || spot.pro_tips.length === 0);
 
+  const score = spot.confidence_score ?? null;
+  const confidenceDotColor =
+    score === null ? null :
+    score >= 75 ? "#22c55e" :
+    score >= 40 ? "#eab308" :
+    "#ef4444";
+  const highConfidence = score !== null && score >= 75;
+
   const handleParseAndSave = async () => {
     if (!notes.trim()) return;
     setParsing(true);
@@ -172,7 +180,22 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublis
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontWeight: "bold", flex: "1 1 auto" }}>{spot.name}</span>
+        <span style={{ fontWeight: "bold", flex: "1 1 auto", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          {spot.name}
+          {confidenceDotColor && (
+            <span
+              title={`Confidence: ${score}%`}
+              style={{
+                display: "inline-block",
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: confidenceDotColor,
+                flexShrink: 0,
+              }}
+            />
+          )}
+        </span>
         <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
           {spot.area}
         </span>
@@ -204,6 +227,23 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublis
         </span>
         {approved && (
           <span style={{ color: "var(--green)", fontSize: "0.8rem" }}>✓</span>
+        )}
+        {!approved && highConfidence && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onApprove(spot.id); }}
+            style={{
+              padding: "0.2rem 0.6rem",
+              fontSize: "0.75rem",
+              borderRadius: "4px",
+              border: "1px solid var(--green)",
+              background: "transparent",
+              color: "var(--green)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            Verify
+          </button>
         )}
       </div>
 

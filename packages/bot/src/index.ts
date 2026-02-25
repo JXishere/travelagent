@@ -472,8 +472,10 @@ async function processMessage(message: ReturnType<typeof parseWebhook>) {
     const usage = flushUsage(from);
     if (usage && usage.calls > 0) {
       trackEvent(from, "whatsapp", "llm_usage", {
-        input_tokens: usage.input_tokens,
-        output_tokens: usage.output_tokens,
+        haiku_input_tokens: usage.haiku_input,
+        haiku_output_tokens: usage.haiku_output,
+        sonnet_input_tokens: usage.sonnet_input,
+        sonnet_output_tokens: usage.sonnet_output,
         calls: usage.calls,
         intent: usageIntent,
       });

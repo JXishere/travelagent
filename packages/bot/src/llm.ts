@@ -31,16 +31,18 @@ export function langUserNote(message: string): string {
 }
 
 // --- Per-request token tracking ---
-interface UsageBucket {
-  input_tokens: number;
-  output_tokens: number;
+export interface UsageBucket {
+  haiku_input: number;
+  haiku_output: number;
+  sonnet_input: number;
+  sonnet_output: number;
   calls: number;
 }
 const _usage = new Map<string, UsageBucket>();
 
 /** Start tracking tokens for a session (call at start of processMessage) */
 export function startUsageTracking(sessionId: string): void {
-  _usage.set(sessionId, { input_tokens: 0, output_tokens: 0, calls: 0 });
+  _usage.set(sessionId, { haiku_input: 0, haiku_output: 0, sonnet_input: 0, sonnet_output: 0, calls: 0 });
 }
 
 /** Flush accumulated usage and return it (call at end of processMessage) */
@@ -50,12 +52,17 @@ export function flushUsage(sessionId: string): UsageBucket | null {
   return bucket ?? null;
 }
 
-/** Internal: accumulate tokens for the active session */
+/** Internal: accumulate tokens for the active session, routed by model */
 function recordUsage(model: string, usage: { input_tokens: number; output_tokens: number }): void {
-  // Accumulate into all active buckets (typically just one)
+  const isHaiku = model.includes("haiku");
   for (const bucket of _usage.values()) {
-    bucket.input_tokens += usage.input_tokens;
-    bucket.output_tokens += usage.output_tokens;
+    if (isHaiku) {
+      bucket.haiku_input += usage.input_tokens;
+      bucket.haiku_output += usage.output_tokens;
+    } else {
+      bucket.sonnet_input += usage.input_tokens;
+      bucket.sonnet_output += usage.output_tokens;
+    }
     bucket.calls += 1;
   }
 }

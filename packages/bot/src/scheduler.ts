@@ -140,7 +140,20 @@ async function maybeRunDailyDigest(): Promise<void> {
     .toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
 
   const totalMessages = data.waMessages + data.webMessages;
-  const costStr = `$${data.totalCost.toFixed(2)} (${Math.round(data.totalInputTokens / 1000)}k in · ${Math.round(data.totalOutputTokens / 1000)}k out)`;
+
+  // Intent breakdown — one line per intent, sorted by count
+  const intentEntries = Object.entries(data.intentCounts);
+  const intentLines = intentEntries.map(([intent, count]) => `  ${intent}: ${count}`);
+
+  // Cost — exact token numbers, per-model breakdown
+  const n = (v: number) => v.toLocaleString("en-US");
+  const costLines: string[] = [`Cost: $${data.totalCost.toFixed(4)}`];
+  if (data.haikuInputTokens > 0 || data.haikuOutputTokens > 0) {
+    costLines.push(`  Haiku:  ${n(data.haikuInputTokens)} in · ${n(data.haikuOutputTokens)} out`);
+  }
+  if (data.sonnetInputTokens > 0 || data.sonnetOutputTokens > 0) {
+    costLines.push(`  Sonnet: ${n(data.sonnetInputTokens)} in · ${n(data.sonnetOutputTokens)} out`);
+  }
 
   // Spots by area (fall back to city if area is null)
   const byAreaMap: Record<string, number> = {};
@@ -157,8 +170,11 @@ async function maybeRunDailyDigest(): Promise<void> {
     `📊 Sam — ${dayName}`,
     ``,
     `Messages: ${totalMessages} (${data.waMessages} WA · ${data.webMessages} web)`,
-    `Top intent: ${data.topIntent} × ${data.topIntentCount}`,
-    `Cost: ${costStr}`,
+    ``,
+    `Intents:`,
+    ...(intentLines.length > 0 ? intentLines : [`  —`]),
+    ``,
+    ...costLines,
     ``,
     `Contributions: ${data.contributions} new spot${data.contributions !== 1 ? "s" : ""}`,
     `Feedback: ${data.feedbacks} rating${data.feedbacks !== 1 ? "s" : ""} received`,

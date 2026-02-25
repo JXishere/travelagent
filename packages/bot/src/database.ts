@@ -1147,13 +1147,14 @@ export async function getRecentlyRecommendedSpots(
 
 export interface DailyDigestData {
   totalCost: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
+  haikuInputTokens: number;
+  haikuOutputTokens: number;
+  sonnetInputTokens: number;
+  sonnetOutputTokens: number;
   waMessages: number;
   webMessages: number;
   newSpots: Array<{ city: string; country?: string; area?: string }>;
-  topIntent: string;
-  topIntentCount: number;
+  intentCounts: Record<string, number>;
   contributions: number;
   feedbacks: number;
   reviewQueueCount: number;
@@ -1171,9 +1172,14 @@ function getKLDayBounds(offsetDays = -1): { start: string; end: string } {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-/** Approximate cost from token counts (Haiku rates: $0.80/M in, $3.00/M out) */
-function estimateCost(inputTokens: number, outputTokens: number): number {
-  return inputTokens * 0.0000008 + outputTokens * 0.000003;
+/**
+ * Per-model cost estimate.
+ * Haiku 4.5: $0.80/M in, $4.00/M out
+ * Sonnet 4.6: $3.00/M in, $15.00/M out
+ */
+function estimateCost(haikuIn: number, haikuOut: number, sonnetIn: number, sonnetOut: number): number {
+  return haikuIn * 0.0000008 + haikuOut * 0.000004
+       + sonnetIn * 0.000003  + sonnetOut * 0.000015;
 }
 
 export async function getDailyDigestData(): Promise<DailyDigestData> {
@@ -1191,14 +1197,23 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
       .eq("needs_review", true).not("is_closed", "eq", true),
   ]);
 
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
+  let haikuInputTokens = 0;
+  let haikuOutputTokens = 0;
+  let sonnetInputTokens = 0;
+  let sonnetOutputTokens = 0;
   for (const row of costResult.data ?? []) {
     const d = row.event_data as any;
-    if (d?.input_tokens)  totalInputTokens  += d.input_tokens;
-    if (d?.output_tokens) totalOutputTokens += d.output_tokens;
+    if (d?.haiku_input_tokens)  haikuInputTokens  += d.haiku_input_tokens;
+    if (d?.haiku_output_tokens) haikuOutputTokens += d.haiku_output_tokens;
+    if (d?.sonnet_input_tokens)  sonnetInputTokens  += d.sonnet_input_tokens;
+    if (d?.sonnet_output_tokens) sonnetOutputTokens += d.sonnet_output_tokens;
+    // Backward compat: old events stored flat input_tokens/output_tokens — treat as Haiku
+    if (!d?.haiku_input_tokens && !d?.sonnet_input_tokens) {
+      if (d?.input_tokens)  haikuInputTokens  += d.input_tokens;
+      if (d?.output_tokens) haikuOutputTokens += d.output_tokens;
+    }
   }
-  const totalCost = estimateCost(totalInputTokens, totalOutputTokens);
+  const totalCost = estimateCost(haikuInputTokens, haikuOutputTokens, sonnetInputTokens, sonnetOutputTokens);
 
   let waMessages = 0;
   let webMessages = 0;
@@ -1209,9 +1224,10 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
     const intent = (row.event_data as any)?.intent;
     if (intent) intentCounts[intent] = (intentCounts[intent] ?? 0) + 1;
   }
-  const topEntry = Object.entries(intentCounts).sort(([, a], [, b]) => b - a)[0];
-  const topIntent = topEntry?.[0] ?? "—";
-  const topIntentCount = topEntry?.[1] ?? 0;
+  // Sort by count descending
+  const sortedIntentCounts = Object.fromEntries(
+    Object.entries(intentCounts).sort(([, a], [, b]) => b - a)
+  );
 
   const newSpots = cast<Array<{ city: string; country?: string; area?: string }>>(spotResult.data ?? []);
 
@@ -1225,7 +1241,7 @@ export async function getDailyDigestData(): Promise<DailyDigestData> {
 
   const reviewQueueCount = reviewResult.count ?? 0;
 
-  return { totalCost, totalInputTokens, totalOutputTokens, waMessages, webMessages, newSpots, topIntent, topIntentCount, contributions, feedbacks, reviewQueueCount };
+  return { totalCost, haikuInputTokens, haikuOutputTokens, sonnetInputTokens, sonnetOutputTokens, waMessages, webMessages, newSpots, intentCounts: sortedIntentCounts, contributions, feedbacks, reviewQueueCount };
 }
 
 export async function hasDailyDigestRunToday(): Promise<boolean> {

@@ -43,20 +43,27 @@ Spots are added by local contributors via voice notes or text, verified by admin
 |---|---|
 | **Food recommendations** | "I'm hungry" → filters by area, meal type, weather, dietary restrictions. Returns 3 unvisited spots with full operational details. Supports pgvector semantic search. |
 | **Day planning** | "What should I do today?" → builds a loose day structure across breakfast, lunch, activities, dinner from the knowledge graph. |
-| **Nearby spots** | "What's near KLCC?" → filters by area. Supports text and location pins. |
+| **Nearby spots** | "What's near KLCC?" → filters by area. Supports text and location pins (WhatsApp). |
+| **Spot deep-dive** | "Tell me about Jalan Alor" → full operational detail for a specific spot. |
+| **Happenings** | "Anything on this weekend?" → surfaces events, markets, and time-sensitive activity spots. |
 | **Weather awareness** | Live OpenWeather data. When it's raining, Sam prefers indoor spots automatically. |
 | **Profile learning** | New users get a conversational interview. Background extraction silently captures preferences from every message going forward. |
 | **Pre-trip strategic plan** | After learning your profile, Sam generates a personalized trip guide with anchor spots, what to expect, and what to book ahead. |
 | **Knowledge contribution** | Locals add spots via voice notes (Whisper transcription) or text. Multi-turn interview with web search enrichment for operational fields, duplicate detection, and auto-merge. |
 | **Feedback loop** | Sam asks about visited spots, collects ratings + tips. Ratings adjust spot confidence scores. Tips get added to the knowledge graph. |
+| **Spot correction** | "That place is closed" → flags a spot with correction type, queues for admin review. |
 | **Proactive messaging** | During your trip, Sam texts you — welcome on day 1, morning/dinner nudges on day 2+, feedback checks for visited spots. Respects WhatsApp 24h window and 8h cooldown. |
 
 ### What Sam does NOT do
 
 - **No bookings or reservations** — Sam tells you where to go, not how to secure a table
+- **No real-time availability** — hours come from contributors, not live venue feeds
 - **No image understanding** — photos get a polite "I can't process images yet"
-- **No group coordination** — one traveler, one conversation
+- **No multi-city itineraries** — city context is single-city per session
+- **No directions or transport routing** — Sam tells you where to go, not how to get there
 - **No fabrication** — if a spot isn't in the database, Sam says so
+
+For a full capabilities reference see [`docs/sam-v1.md`](docs/sam-v1.md).
 
 ## Stack
 
@@ -94,12 +101,15 @@ packages/
 │   │   │   └── scenarios/             — JSONL test scenarios per prompt
 │   │   ├── handlers/
 │   │   │   ├── query.ts              — Spot recommendations
-│   │   │   ├── ontrip.ts             — Hungry, day plan, nearby handlers
+│   │   │   ├── ontrip.ts             — Hungry, day plan, nearby, spot info handlers
+│   │   │   ├── happenings.ts         — Events and time-sensitive spots
 │   │   │   ├── contribution.ts       — Voice/text spot ingestion with web enrichment
 │   │   │   ├── profile.ts            — Conversational profile interview
 │   │   │   ├── continuous-profile.ts — Background preference extraction
 │   │   │   ├── strategic.ts          — Pre-trip guide generation
 │   │   │   ├── feedback.ts           — Post-visit spot validation
+│   │   │   ├── spot-correction.ts    — User-reported corrections (closed, wrong info)
+│   │   │   ├── spot-verification.ts  — Staleness re-verification flow
 │   │   │   └── generate.ts           — Admin: LLM candidate spot generation
 │   │   ├── prompts/
 │   │   │   ├── system.txt             — Sam's personality + core rules
@@ -260,6 +270,10 @@ Gated behind the `ADMIN_PHONE_NUMBER` env var:
 
 - **`add: <spot details>`** — Rapid-add a spot via text. Example: `add: Fatty Crab, Taman Megah, dinner. Cash only. Order the chilli crab.`
 - **`/generate <area> <category>`** — LLM suggests candidate spots for admin review and verification.
+- **`/corrections`** — List pending user-reported corrections grouped by spot.
+- **`/approve <spot name>`** — Mark a spot as closed, hide it from recommendations.
+- **`/reject <spot name>`** — Dismiss a correction, restore spot to verified.
+- **`/publish <spot name>`** — Publish a spot from the review queue to live recommendations.
 
 ## Database schema
 

@@ -247,7 +247,7 @@ Query the `events` table in Supabase dashboard to analyze usage patterns.
 |---------|-------------|----------|-----|
 | `@sam/bot` | production | Railway | `https://sambot-production-6ab1.up.railway.app` |
 | `@sam/bot` | development | Railway | `https://sambot-development.up.railway.app` |
-| `@sam/web` | production | Railway | See Railway dashboard |
+| `@sam/web` | production | Vercel | Auto-deploys from `main` via GitHub integration |
 | Health check | | | `GET /health` → `{"status":"ok","service":"sam-bot","city":"Kuala Lumpur"}` |
 | WhatsApp webhook | | | `POST /webhook` — registered with Meta |
 | Webhook verify token | | | `sam-webhook-secret-2026` |

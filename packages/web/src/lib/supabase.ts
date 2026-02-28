@@ -28,11 +28,15 @@ export interface Spot {
   confidence_score: number | null;
 }
 
+let _client: SupabaseClient | null = null;
+
 function getClient(): SupabaseClient | null {
+  if (_client) return _client;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
   if (!url || !key) return null;
-  return createClient(url, key);
+  _client = createClient(url, key);
+  return _client;
 }
 
 export async function getAllSpots(): Promise<Spot[]> {

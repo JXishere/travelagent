@@ -188,15 +188,8 @@ export default function ReviewPage() {
     }
   }, [validateProgress?.total]);
 
-  if (loading) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
-        Loading spots...
-      </div>
-    );
-  }
-
   // Deduplicate corrections by spot for the approve/reject handlers (one action per spot)
+  // Must be before the early return — hooks cannot be called conditionally
   const correctionsBySpot = useMemo(() => {
     const seen = new Set<string>();
     return corrections.filter((c) => {
@@ -205,6 +198,14 @@ export default function ReviewPage() {
       return true;
     });
   }, [corrections]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)" }}>
+        Loading spots...
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem" }}>

@@ -1,3 +1,30 @@
+---
+## PROJECT PAUSED — 2026-03-23
+
+Pausing the project to stop ongoing costs. All data is safe.
+
+**State at pause:**
+- 738 spots in DB (KL 504, PJ 169, Penang 65, Taipei 1)
+- Railway bot services suspended (prod + dev)
+- Supabase project paused
+- Vercel web left running (free tier, no cost)
+
+**To resume:**
+1. Unpause Supabase project (dashboard → Settings → Restore)
+2. Unsuspend Railway services (dashboard → fortunate-friendship)
+3. `npm run build:bot && railway up --service "@sam/bot"`
+4. Verify: `GET https://sambot-production-6ab1.up.railway.app/health`
+
+**Last things on my mind before pausing:**
+
+---
+
+sam should be more detailed than google. everytime google will show the same best 2-3 restaurants only.
+
+
+feels like sam cannot understand food category context because the DB only has the name of the spot and possibly some intel about what to order and stuff but not really understanding the nature of the query
+
+
 recheck the plan for Sam in regards to Open Claw
 
 i need to make sure what every session is doing.

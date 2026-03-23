@@ -12,6 +12,7 @@ interface SpotFiltersProps {
     thin_only: boolean;
     input_method: string;
     search: string;
+    sortBy: "name" | "manual_first" | "confidence";
   };
   onChange: (filters: SpotFiltersProps["filters"]) => void;
   totalCount: number;
@@ -124,6 +125,16 @@ export function SpotFilters({
             {s}
           </option>
         ))}
+      </select>
+
+      <select
+        value={filters.sortBy}
+        onChange={(e) => onChange({ ...filters, sortBy: e.target.value as "name" | "manual_first" | "confidence" })}
+        style={selectStyle}
+      >
+        <option value="manual_first">My spots first</option>
+        <option value="confidence">Confidence ↓</option>
+        <option value="name">Name A–Z</option>
       </select>
 
       <span style={{ color: "var(--muted)", fontSize: "0.8rem", marginLeft: "auto" }}>

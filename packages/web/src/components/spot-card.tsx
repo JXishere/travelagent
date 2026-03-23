@@ -10,6 +10,9 @@ interface SpotCardProps {
   onDelete: (id: string) => void;
   onSave: (id: string, updates: Partial<Spot>) => void;
   onPublish?: (id: string) => void;
+  focused?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 const CATEGORIES = [
@@ -23,8 +26,10 @@ const CATEGORIES = [
 ];
 const VIBES = ["casual", "upscale", "chaotic", "chill", "local", "touristy"];
 
-export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublish }: SpotCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublish, focused, expanded, onToggleExpand }: SpotCardProps) {
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isExpanded = expanded !== undefined ? expanded : internalExpanded;
+  const handleToggle = onToggleExpand ?? (() => setInternalExpanded(!internalExpanded));
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notes, setNotes] = useState("");
@@ -164,13 +169,13 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublis
       style={{
         backgroundColor: "var(--bar-bg)",
         borderRadius: "8px",
-        border: approved ? "1px solid var(--green)" : "1px solid transparent",
+        border: focused ? "2px solid var(--accent, #4a9eff)" : (approved ? "1px solid var(--green)" : "1px solid transparent"),
         overflow: "hidden",
       }}
     >
       {/* Summary row */}
       <div
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleToggle}
         style={{
           display: "flex",
           alignItems: "center",
@@ -248,7 +253,7 @@ export function SpotCard({ spot, onApprove, onMustGo, onDelete, onSave, onPublis
       </div>
 
       {/* Expanded details */}
-      {expanded && (
+      {isExpanded && (
         <div
           style={{
             padding: "0 1rem 1rem",

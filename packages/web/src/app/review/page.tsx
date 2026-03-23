@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { getAllSpots, updateSpot, deleteSpot, getPendingCorrections, approveCorrection, rejectCorrection, type Spot, type PendingCorrection } from "../../lib/supabase";
 import { SpotFilters } from "../../components/spot-filters";
 import { SpotCard } from "../../components/spot-card";
+
+const SORT_ORDER: Record<string, number> = { manual: 0, voice: 1, text: 2, generate: 3, seed: 4 };
 
 interface ValidateProgress {
   done: number;
@@ -20,7 +22,16 @@ export default function ReviewPage() {
   const [validating, setValidating] = useState(false);
   const [validateProgress, setValidateProgress] = useState<ValidateProgress | null>(null);
   const [validateDone, setValidateDone] = useState<{ count: number; ts: string } | null>(null);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    category: string;
+    area: string;
+    must_go: boolean;
+    verified: boolean;
+    thin_only: boolean;
+    input_method: string;
+    search: string;
+    sortBy: "name" | "manual_first" | "confidence";
+  }>({
     category: "",
     area: "",
     must_go: false,
@@ -28,7 +39,11 @@ export default function ReviewPage() {
     thin_only: false,
     input_method: "",
     search: "",
+    sortBy: "manual_first",
   });
+  const [focusedIdx, setFocusedIdx] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     Promise.all([getAllSpots(), getPendingCorrections()]).then(([spotsData, correctionsData]) => {
@@ -74,6 +89,27 @@ export default function ReviewPage() {
       return true;
     });
   }, [spots, filters]);
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    if (filters.sortBy === "manual_first") {
+      arr.sort((a, b) => (SORT_ORDER[a.input_method ?? "seed"] ?? 4) - (SORT_ORDER[b.input_method ?? "seed"] ?? 4));
+    } else if (filters.sortBy === "confidence") {
+      arr.sort((a, b) => (b.confidence_score ?? 0) - (a.confidence_score ?? 0));
+    } else {
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return arr;
+  }, [filtered, filters.sortBy]);
 
   const stats = useMemo(() => {
     const byCat: Record<string, number> = {};
@@ -187,6 +223,69 @@ export default function ReviewPage() {
       setValidating(false);
     }
   }, [validateProgress?.total]);
+
+  // Reset focus when filters change so the index doesn't point to the wrong spot
+  useEffect(() => {
+    setFocusedIdx(null);
+  }, [filters]);
+
+  // Scroll focused card into view
+  useEffect(() => {
+    if (focusedIdx === null) return;
+    cardRefs.current[focusedIdx]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusedIdx]);
+
+  // Keyboard shortcuts (Spots tab only)
+  useEffect(() => {
+    if (showCorrections) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      switch (e.key) {
+        case "j": {
+          e.preventDefault();
+          setFocusedIdx((prev) => (prev === null ? 0 : Math.min(prev + 1, sorted.length - 1)));
+          break;
+        }
+        case "k": {
+          e.preventDefault();
+          setFocusedIdx((prev) => (prev === null ? 0 : Math.max(prev - 1, 0)));
+          break;
+        }
+        case "v": {
+          if (focusedIdx === null) break;
+          const spot = sorted[focusedIdx];
+          if (spot && !spot.verified) handleApprove(spot.id);
+          break;
+        }
+        case "m": {
+          if (focusedIdx === null) break;
+          const spot = sorted[focusedIdx];
+          if (spot) handleMustGo(spot.id, spot.must_go);
+          break;
+        }
+        case "d": {
+          if (focusedIdx === null) break;
+          const spot = sorted[focusedIdx];
+          if (spot) {
+            handleDelete(spot.id);
+            setFocusedIdx((prev) => (prev !== null ? Math.min(prev, sorted.length - 2) : null));
+          }
+          break;
+        }
+        case "Enter":
+        case " ": {
+          if (focusedIdx === null) break;
+          e.preventDefault();
+          const spot = sorted[focusedIdx];
+          if (spot) toggleExpanded(spot.id);
+          break;
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showCorrections, focusedIdx, sorted, handleApprove, handleMustGo, handleDelete, toggleExpanded]);
 
   // Deduplicate corrections by spot for the approve/reject handlers (one action per spot)
   // Must be before the early return — hooks cannot be called conditionally
@@ -461,20 +560,24 @@ export default function ReviewPage() {
           />
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {filtered.map((spot) => (
-              <SpotCard
-                key={spot.id}
-                spot={spot}
-                onApprove={handleApprove}
-                onMustGo={handleMustGo}
-                onDelete={handleDelete}
-                onSave={handleSave}
-                onPublish={handlePublishSpot}
-              />
+            {sorted.map((spot, idx) => (
+              <div key={spot.id} ref={(el) => { cardRefs.current[idx] = el; }}>
+                <SpotCard
+                  spot={spot}
+                  focused={focusedIdx === idx}
+                  expanded={expandedIds.has(spot.id)}
+                  onToggleExpand={() => toggleExpanded(spot.id)}
+                  onApprove={handleApprove}
+                  onMustGo={handleMustGo}
+                  onDelete={handleDelete}
+                  onSave={handleSave}
+                  onPublish={handlePublishSpot}
+                />
+              </div>
             ))}
           </div>
 
-          {filtered.length === 0 && (
+          {sorted.length === 0 && (
             <div style={{ textAlign: "center", color: "var(--muted)", padding: "3rem" }}>
               No spots match filters
             </div>

@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   coach:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'coach' || github.event_name == 'schedule' && github.event.schedule == '0 1 * * *'
+    if: false  # disabled during project pause
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -46,7 +46,7 @@ jobs:
         run: npx tsx packages/bot/src/coach-auto.ts
 
   revert:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'revert' || github.event_name == 'schedule' && github.event.schedule == '0 9 * * *'
+    if: false  # disabled during project pause
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

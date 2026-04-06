@@ -1,5 +1,5 @@
 # Sam Overhaul — Strategic Direction
-_Discussion: 2026-04-05 | Status: Vision locked, implementation pending_
+_Discussion: 2026-04-05 | Architecture refined: 2026-04-06 | Status: Vision locked, implementation pending_
 
 ---
 
@@ -95,25 +95,42 @@ This is the difference between following a travel influencer and texting a frien
 
 ## The Overhaul: What Sam Becomes
 
-### The New Surface Stack
+### The Architecture: Two Surfaces, Two Jobs
+
+Not competing. Complementary.
 
 ```
-samiseverywhere.com      ← canonical home (replaces WhatsApp as primary surface)
+WhatsApp  ←  INTAKE + ON-TRIP COMPANION
+             The universal input pipe. Any format, anything you encounter.
+             ├── Forward a URL (TikTok, IG, YouTube, any link)
+             │     → fetch page → extract venue → knowledge graph lookup
+             ├── Send a photo (restaurant sign, dish, interior)
+             │     → Claude vision → read sign / identify spot → intel or contribute
+             ├── Forward a video
+             │     → extract keyframe → vision → identify spot
+             ├── Voice note → Whisper → contribution flow (already works)
+             ├── Location pin → nearby spots (already works)
+             └── "I'm hungry near KLCC" → recommendations (already works)
 
-Browser extension        ← ambient desktop presence
-                           badges on TikTok, Google Maps, travel blogs
+samiseverywhere.com  ←  VISUAL OUTPUT + DISCOVERY
+                         Everything absorbed via WhatsApp becomes visible here.
+                         ├── City map → all verified spots as pins
+                         ├── Discovery feed → scroll spot cards
+                         ├── Spot card → photo, Sam's voice, contributor intel
+                         ├── Collections → shareable URLs, SEO-able
+                         └── Contributor profiles → public attribution
 
-PWA + share target       ← mobile entry point, no app install required
-                           appears in iOS/Android share sheet
-
-WhatsApp                 ← on-trip quick access only, demoted not deprecated
+Browser extension  ←  DESKTOP AMBIENT LAYER
+                       Badges on TikTok, Google Maps, travel blogs
+                       Same mechanic as WhatsApp URL intake, no API dependency
 ```
+
+WhatsApp is **not demoted** — it is elevated and repositioned. It's no longer the front door to discovery (that's the web). But universal intake + on-trip companion are bigger jobs, not smaller ones.
 
 Each surface has one job:
-- **Web**: discovery, browsing, depth — the visual product
-- **Extension**: ambient intel while you're already browsing
-- **PWA/share target**: the moment you see something and want to save it
-- **WhatsApp**: 9pm in a hawker stall, need a quick rec, no browser open
+- **Web**: discovery, browsing, depth, SEO — the visual product
+- **WhatsApp**: intake of anything you encounter + real-time on-trip guidance
+- **Extension**: ambient intel while browsing on desktop
 
 ### The Visual Product (`samiseverywhere.com`)
 
@@ -131,18 +148,28 @@ Each surface has one job:
 
 The conversational AI doesn't disappear — it becomes a layer on top of the visual product, not the front door to it.
 
-### The Share Mechanic (Sam's Version of YaaY's Best Feature)
+### The Share Mechanic (WhatsApp as the Share Target)
 
-YaaY: forward reel → VideoMatching AI (inaccurate, API-dependent) → pin on map → maybe book someday
+YaaY: install their app → forward reel → VideoMatching AI (misidentifies locations) → pin on map
 
-**Sam**: forward reel → extract venue name from caption text → web search + knowledge graph lookup → **immediate visual card with contributor-verified intel**
+**Sam**: forward anything to Sam on WhatsApp (already in everyone's share sheet, no install) → Sam processes it → immediate reply with contributor-verified intel
 
-No VideoMatching. No API dependency. More accurate. Already half-built (`webSearchSpot()` in `packages/bot/src/llm.ts` does the web extraction).
+No new app. No VideoMatching. No API dependency. The mechanic is more reliable because Sam searches the knowledge graph by name, not by attempting to extract location from video pixels.
 
-When Sam knows the place: full contributor intel, cover photo, what to order.
-When Sam doesn't: "I haven't verified this yet — want to add it?" → contribution flow.
+**Three formats, one result:**
 
-Every reel forwarded to Sam is a potential knowledge graph contribution. That's the viral loop YaaY doesn't have.
+| What you send | What Sam does |
+|--------------|---------------|
+| A URL (TikTok, IG, any link) | Fetches page, extracts venue from caption/og:tags, queries knowledge graph |
+| A photo (sign, dish, interior) | Claude vision reads the sign / identifies the cuisine, queries knowledge graph |
+| A video | Extracts keyframe, runs vision, same path as photo |
+
+When Sam knows the place: full contributor intel, what to order, pro tips, hours.
+When Sam doesn't: "Haven't verified this yet — want to add it?" → contribution flow.
+
+Every share is a potential knowledge graph contribution. That's the viral loop YaaY doesn't have.
+
+**The image analysis capability is a superpower.** No other travel product does this via WhatsApp. Someone sends a photo of a restaurant sign they walked past → Sam reads the sign → returns full intel. YaaY's VideoMatching can't do this; they match from video metadata, not from vision.
 
 ### The OpenClaw Layer: Sam as Agent
 
@@ -202,15 +229,28 @@ _Turn samiseverywhere.com from a landing page into a discovery product_
 
 **Reusable existing code**: `live-feed.tsx` (real-time feed pattern), `getAllSpots()` in `packages/web/src/lib/supabase.ts`
 
-### Phase 2 — The Share Mechanic
-_Absorb YaaY's best feature, done better and without API risk_
+### Phase 2 — WhatsApp as Universal Intake
+_Close three gaps in `packages/bot/src/index.ts` that make WhatsApp a full intake pipe_
 
-- PWA manifest with `share_target` (Android share sheet integration, no app install)
-- `/api/share` endpoint: receive URL → extract venue from caption text → `webSearchSpot()` → knowledge graph lookup → return visual card
-- Result states: "Sam knows this" / "Sam hasn't verified this — add it?"
-- Safari extension for iOS desktop (covers the Apple gap)
+**Gap 1: URL/link handling**
+- Detect URL in incoming text message
+- Fetch page → extract venue name from title/og:tags/caption
+- Run `webSearchSpot()` → knowledge graph lookup
+- Reply: "Sam knows this — [full intel]" OR "Haven't verified this yet — want to add it?"
 
-**Reusable existing code**: `webSearchSpot()` in `packages/bot/src/llm.ts`
+**Gap 2: Image analysis** ← the superpower
+- `imageId` is already extracted in `whatsapp.ts` but never used downstream
+- New: download image via WhatsApp media API → Claude vision API
+- Prompt: identify restaurant name from sign, menu board, interior, or dish
+- Cross-reference knowledge graph → return intel or open contribution flow
+- Turns "What is this place?" + a photo into a real feature
+
+**Gap 3: Video handling**
+- Videos currently silently dropped — not even parsed by the webhook
+- New: download video → extract keyframe → Claude vision → same path as image
+- Covers forwarded TikToks, WhatsApp-native videos, YouTube Shorts
+
+**Reusable existing code**: `webSearchSpot()` in `packages/bot/src/llm.ts`, media download pattern from `packages/bot/src/transcription.ts`
 
 ### Phase 3 — Contributor Identity
 _Make the trust network visible — turn anonymous DB records into public profiles_
@@ -288,13 +328,22 @@ No App Store. No 30% cut. No platform dependency.
 ## Files to Touch When Ready
 
 ```
+# Phase 1 — Visual surface
 packages/web/src/app/page.tsx              ← overhaul into city discovery UI
 packages/web/src/components/live-feed.tsx  ← reuse pattern for discovery feed
 packages/web/src/lib/supabase.ts           ← extend getAllSpots() for map/feed queries
-packages/bot/src/llm.ts                    ← webSearchSpot() for share mechanic
-packages/bot/src/handlers/contribution.ts ← extend for contributor profiles
+
+# Phase 2 — WhatsApp universal intake
+packages/bot/src/index.ts                  ← URL detection, image routing, video routing
+packages/bot/src/whatsapp.ts               ← imageId already extracted, needs to be used
+packages/bot/src/llm.ts                    ← webSearchSpot() reused for URL/image extraction
+
+# Phase 3 — Contributor identity
+packages/bot/src/handlers/contribution.ts ← foundation for public profiles
 packages/bot/src/database.ts              ← extend for collections, public profiles
-supabase/migrations/                       ← new migrations for photos, collections, profiles
+
+# Phase 4 — Agent layer
+supabase/migrations/                       ← latent_intents column, photos, collections
 docs/openclaw-plan.md                      ← latent_intents schema already designed
 ```
 
